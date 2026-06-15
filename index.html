@@ -3205,12 +3205,12 @@
                 <label style="font-size:11px; font-weight:bold;">メモ</label>
                 <textarea id="memo-${item.rowNumber}" rows="2" style="width:100%; font-size:12px;" readonly onpointerdown="this.removeAttribute('readonly')">${escHtml(item.特記事項 || '')}</textarea>
                 <div class="btn-row detail-only">
-                    <button class="save-btn" style="background:#9E3B4A; border-color:#9E3B4A; color:#fff;" onclick="saveMemo(${item.rowNumber})">メモ保存</button>
+                    <button class="save-btn" onclick="saveMemo(${item.rowNumber})">メモ保存</button>
                     <button class="clear-btn" onclick="clearMemo(${item.rowNumber})">メモ削除</button>
                     <button class="clear-btn" style="background:#7f8c8d;" onclick="confirmClearHistory(${item.rowNumber}, false)">履歴クリア</button>
                 </div>
             </div>
-            <button class="clear-btn detail-only" style="width:100%; margin-top:8px;" onclick="confirmDelete(${item.rowNumber})">🗑 このピンを削除</button>
+            <button class="clear-btn detail-only" style="width:100%; margin-top:8px; background:#9E3B4A;" onclick="confirmDelete(${item.rowNumber})">🗑 このピンを削除</button>
             <button class="detail-toggle" onclick="togglePopupDetail(this)">▼ 詳細を表示</button>
         `;
     }
@@ -3266,13 +3266,13 @@
                 <label style="font-size:11px; font-weight:bold;">メモ</label>
                 <textarea id="memo-${first.rowNumber}" rows="1" style="width:100%; font-size:11px;" readonly onpointerdown="this.removeAttribute('readonly')">${escHtml(memoText)}</textarea>
                 <div class="btn-row detail-only">
-                    <button class="save-btn" style="background:#9E3B4A; border-color:#9E3B4A; color:#fff;" onclick="saveMemo(${first.rowNumber})">メモ保存</button>
+                    <button class="save-btn" onclick="saveMemo(${first.rowNumber})">メモ保存</button>
                     <button class="clear-btn" onclick="clearMemo(${first.rowNumber})">メモ削除</button>
                     <button class="clear-btn" style="background:#7f8c8d;" onclick="confirmClearHistory(${first.rowNumber}, true)">履歴クリア</button>
                 </div>
             </div>
             <button class="save-btn detail-only" style="background:#34495e; width:100%; margin-top:8px;" onclick="confirmShugaEdit(${first.rowNumber}, this)">✏️ 建物情報を編集</button>
-            <button class="clear-btn detail-only" style="width:100%; margin-top:6px;" onclick="confirmDelete(${first.rowNumber})">🗑 このピンを削除</button>
+            <button class="clear-btn detail-only" style="width:100%; margin-top:6px; background:#9E3B4A;" onclick="confirmDelete(${first.rowNumber})">🗑 このピンを削除</button>
             <button class="detail-toggle" onclick="togglePopupDetail(this)">▼ 詳細を表示</button>
         `;
     }
