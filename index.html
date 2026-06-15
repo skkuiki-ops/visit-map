@@ -1153,7 +1153,7 @@
     // ※ pointercancel はモバイルの長押し（コールアウト）開始時に誤発火するため使わず、
     //   touch / mouse イベントで実装。スクロール（移動）でキャンセル、touchendはpreventDefaultで合成clickを抑止。
     function attachLongPress(el, onTap, onLong) {
-        let timer = null, longFired = false, sx = 0, sy = 0, moved = false;
+        let timer = null, longFired = false, sx = 0, sy = 0, moved = false, lastTouch = 0;
         try { el.style.userSelect = 'none'; el.style.webkitUserSelect = 'none'; el.style.webkitTouchCallout = 'none'; } catch (e) {} // 長押し対象の文字選択・コールアウトを抑止
         const begin = (x, y) => {
             longFired = false; moved = false; sx = x; sy = y;
@@ -1164,12 +1164,15 @@
             if (Math.abs(x - sx) > 10 || Math.abs(y - sy) > 10) { moved = true; clearTimeout(timer); }
         };
         const finish = () => { clearTimeout(timer); if (!longFired && !moved) onTap(); };
-        el.addEventListener('touchstart', (e) => { const t = e.touches[0]; begin(t.clientX, t.clientY); }, { passive: true });
-        el.addEventListener('touchmove', (e) => { const t = e.touches[0]; if (t) movecheck(t.clientX, t.clientY); }, { passive: true });
-        el.addEventListener('touchend', (e) => { if (longFired) e.preventDefault(); finish(); }); // 長押し時のみ既定動作を止める（タップ/横スクロールは妨げない）
-        el.addEventListener('mousedown', (e) => begin(e.clientX, e.clientY));
+        // touch直後はAndroid Chromeが合成mouse(mousedown→mouseup→click)を発火し、mouseup経由でfinish()が再度onTapを呼ぶ二重発火を起こす。
+        // touch操作の時刻を記録し、直後の合成mouse系は無視する（地図側のsuppressMapTapUntilと同型の時刻ガード。PCはtouch非発火で常にlastTouch=0→ガード無効）。
+        const synthMouse = () => Date.now() - lastTouch < 600;
+        el.addEventListener('touchstart', (e) => { lastTouch = Date.now(); const t = e.touches[0]; begin(t.clientX, t.clientY); }, { passive: true });
+        el.addEventListener('touchmove', (e) => { lastTouch = Date.now(); const t = e.touches[0]; if (t) movecheck(t.clientX, t.clientY); }, { passive: true });
+        el.addEventListener('touchend', (e) => { lastTouch = Date.now(); if (longFired) e.preventDefault(); finish(); }); // 長押し時のみ既定動作を止める（タップ/横スクロールは妨げない）
+        el.addEventListener('mousedown', (e) => { if (synthMouse()) return; begin(e.clientX, e.clientY); });
         el.addEventListener('mousemove', (e) => { if (timer) movecheck(e.clientX, e.clientY); });
-        el.addEventListener('mouseup', finish);
+        el.addEventListener('mouseup', () => { if (synthMouse()) return; finish(); });
         el.addEventListener('mouseleave', () => clearTimeout(timer));
         el.addEventListener('contextmenu', (e) => e.preventDefault()); // 長押しメニューを抑止
     }
