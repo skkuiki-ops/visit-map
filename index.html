@@ -1152,8 +1152,11 @@
     // タップと長押しを区別してハンドラを割り当てる。
     // ※ pointercancel はモバイルの長押し（コールアウト）開始時に誤発火するため使わず、
     //   touch / mouse イベントで実装。スクロール（移動）でキャンセル、touchendはpreventDefaultで合成clickを抑止。
+    // 直近のtouch時刻（全 attachLongPress で共有＝グローバル）。renderRoomGrid 等の再描画でセルが
+    // 作り直されても合成mouse(ゴーストクリック)抑止が効くよう、attachLongPress のローカルにはしない。
+    let lastTouch = 0;
     function attachLongPress(el, onTap, onLong) {
-        let timer = null, longFired = false, sx = 0, sy = 0, moved = false, lastTouch = 0;
+        let timer = null, longFired = false, sx = 0, sy = 0, moved = false;
         try { el.style.userSelect = 'none'; el.style.webkitUserSelect = 'none'; el.style.webkitTouchCallout = 'none'; } catch (e) {} // 長押し対象の文字選択・コールアウトを抑止
         const begin = (x, y) => {
             longFired = false; moved = false; sx = x; sy = y;
