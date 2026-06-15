@@ -1874,9 +1874,9 @@
                 <div class="building-title">📍 戸建てを新規登録</div>
                 <input type="hidden" id="new-attribute-k" value="通常">
                 ${newAddrRowHtml(attrLineHtml('通常', `pickNewAndSubmit('new-attribute-k', '%v', ${latVal}, ${lngVal})`, false))}
-                <input type="hidden" id="new-status" value="不在">
-                <div style="font-weight:bold; font-size:14px; margin:2px 0 4px;">訪問結果（タップで登録）</div>
-                ${resultChoiceHtml('不在', `pickNewAndSubmit('new-status', '%v', ${latVal}, ${lngVal})`)}
+                <input type="hidden" id="new-status" value="">
+                <div style="font-weight:bold; font-size:14px; margin:2px 0 4px;">訪問結果（タップで登録。未選択なら未訪問）</div>
+                ${resultChoiceHtml('', `pickNewAndSubmit('new-status', '%v', ${latVal}, ${lngVal})`)}
                 <div class="form-group memo-empty"><label>メモ</label><textarea id="new-memo" rows="2"></textarea></div>
                 <button class="submit-btn detail-only" id="reg-btn" onclick="submitNewLocation(${latVal}, ${lngVal}, '戸建て')">登録</button>
                 <button class="detail-toggle" onclick="togglePopupDetail(this)">▼ 詳細を表示</button>
