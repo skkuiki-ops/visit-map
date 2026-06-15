@@ -2264,7 +2264,9 @@
             const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(false); } };
             okBtn.onclick = () => close(true);
             cancelBtn.onclick = () => close(false);
-            ov.onclick = (e) => { if (e.target === ov) close(false); }; // 枠外タップ＝キャンセル
+            // 表示直後はタップ由来の合成click(Android Chromeのゴーストクリック)が背景に着弾して即キャンセル閉じになるのを防ぐため、一定時間は背景タップを無視する。
+            const openedAt = Date.now();
+            ov.onclick = (e) => { if (e.target === ov && Date.now() - openedAt > 400) close(false); }; // 枠外タップ＝キャンセル（表示直後の合成clickは無視）
             document.addEventListener('keydown', onKey, true); // 既存のEsc処理（フォームを閉じる）より先に拾う
             ov.style.display = 'flex';
         });
