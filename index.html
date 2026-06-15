@@ -2016,7 +2016,9 @@
         }
         html += '</tbody></table></div>';
         const container = document.getElementById('setup-grid-container');
+        const prevLeft = (container.querySelector('.grid-scroll') || {}).scrollLeft || 0; // 再描画で横スクロールが左端に戻らないよう位置を退避
         container.innerHTML = html;
+        const scroller = container.querySelector('.grid-scroll'); if (scroller) scroller.scrollLeft = prevLeft; // 退避した横スクロール位置を復元
         // 各セルにタップ（部屋の有無切替）と長押し（マーク循環: 個人宅→会社→無し）を割り当てる
         for (let f = floors; f >= 1; f--) {
             for (let r = 1; r <= maxRoom; r++) {
