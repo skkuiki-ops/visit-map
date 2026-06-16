@@ -236,6 +236,17 @@
         #app-modal-head button { min-width: 48px; background: #f0f0f0; border: 1px solid #ccc; border-radius: 6px; padding: 4px 8px; font-size: 13px; cursor: pointer; }
         #app-modal-body { padding: 12px; overflow-y: auto; font-size: 14px; }
         #app-modal-body select, #app-modal-body input { box-sizing: border-box; padding: 8px; font-size: 15px; border: 1px solid #bbb; border-radius: 6px; }
+        /* アプリの使い方（ヘルプ）: ネイティブ details で開閉する節 */
+        #app-modal-body details.help-sec { border: 1px solid #d8e2e7; border-radius: 8px; margin-bottom: 8px; overflow: hidden; }
+        #app-modal-body details.help-sec > summary { cursor: pointer; padding: 10px 12px; font-weight: bold; background: #eef4f7; color: #2c5b6e; list-style: none; }
+        #app-modal-body details.help-sec > summary::-webkit-details-marker { display: none; }
+        #app-modal-body details.help-sec > summary::before { content: '▶ '; font-size: 11px; color: #5E9DB8; }
+        #app-modal-body details.help-sec[open] > summary::before { content: '▼ '; }
+        #app-modal-body .help-in { padding: 4px 14px 10px; }
+        #app-modal-body .help-in ul { margin: 6px 0; padding-left: 18px; }
+        #app-modal-body .help-in li { margin-bottom: 6px; line-height: 1.55; }
+        #app-modal-body .help-img { width: 100%; border: 1px solid #ccc; border-radius: 6px; margin: 2px 0 8px; }
+        #app-modal-body .help-cap { font-size: 12px; color: #888; margin-bottom: 8px; }
         /* 情報コピー（ピン吹き出しの長押しで開く小モーダル） */
         #info-copy-modal { position: absolute; inset: 0; z-index: 10007; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; padding: 16px; }
         #info-copy-card { background: #fff; border-radius: 10px; width: min(360px, 92vw); max-height: 84vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
@@ -358,6 +369,7 @@
     <button class="menu-item" onclick="closeMenu(); showMyAreas();">📋 個人・グループの区域</button>
     <button class="menu-item" onclick="closeMenu(); showSharedAreas();">👪 全体利用の区域</button>
     <button class="menu-item" onclick="event.stopPropagation(); closeMenu(); toggleLegend();">📖 凡例</button>
+    <button class="menu-item" onclick="closeMenu(); showHelp();">❓ アプリの使い方</button>
     <div class="menu-section">管理メニュー</div>
     <button class="menu-item need-lend" onclick="closeMenu(); showLendScreen();">🗂 区域の貸出・返却</button>
     <button class="menu-item need-lend pc-only" onclick="closeMenu(); showPrintView();">🖨 印刷用表示（PC/タブレット）</button>
@@ -2313,6 +2325,57 @@
     function closeAppModal() {
         document.getElementById('app-modal').style.display = 'none';
         document.getElementById('lend-preview-back').style.display = 'none';
+    }
+    // アプリの使い方（左下メニュー）。ネイティブ details で節を開閉。メンテナンス節はシステム管理者(level>=3)のみ表示。
+    // 地図サンプルは index.html と同じ場所に置いた help-map.png を表示（無ければ自動で非表示）。
+    function showHelp() {
+        openAppModal('❓ アプリの使い方');
+        const sec = (title, open, inner) => `<details class="help-sec"${open ? ' open' : ''}><summary>${title}</summary><div class="help-in">${inner}</div></details>`;
+        let html = '';
+        html += sec('🗺️ 地図の見方', true,
+            `<img src="help-map.png" alt="地図サンプル" class="help-img" onerror="this.style.display='none'">`
+            + `<div class="help-cap">↑サンプル。実際の地図でも見方は同じです。</div>`
+            + `<ul>`
+            + `<li><b>グレーの数字</b>＝その建物の<b>番地</b>（地図の下地。例「7」「16」）。<b>名前付きの建物</b>は集合住宅（例「ヘリオスコート」）。</li>`
+            + `<li><b>色つきアイコン</b>＝登録済みの地点。<b>形＝種別</b>（戸建て＝丸／集合住宅＝🏢）、<b>色＝訪問状況</b>（未訪問・不在・会えた・投函）。属性（訪問拒否／外国語／空き家／会社）は専用アイコンで固定です。</li>`
+            + `<li><b>オレンジ枠</b>＝いま選んでいる地点。</li>`
+            + `<li><b>赤枠</b>＝住所検索や区域表示で選んだ「番地」の範囲。</li>`
+            + `<li>色や記号の意味は、メニューの「📖 凡例」でいつでも確認できます。</li>`
+            + `</ul>`);
+        html += sec('✅ 基本操作（まずはこれだけでOK）', true,
+            `<ul>`
+            + `<li><b>地図を動かす</b>…指でドラッグ。2本指のピンチで拡大／縮小。</li>`
+            + `<li><b>情報を見る</b>…地点（アイコン）を<b>タップ</b>すると吹き出しが開きます。</li>`
+            + `<li><b>訪問結果を記録</b>…吹き出しのボタンで「不在／会えた／投函」などを選ぶだけ。集合住宅は<b>部屋をタップ</b>して記録します。</li>`
+            + `<li><b>新規登録</b>…地図の何もない所を <b>タップ＝戸建て</b>／<b>長押し＝集合住宅</b> で登録。</li>`
+            + `<li><b>現在地</b>…現在地ボタンで自分の位置へ移動。</li>`
+            + `</ul>`);
+        html += sec('⚙️ 応用操作', false,
+            `<ul>`
+            + `<li><b>住所で探す</b>…住所選択／検索から番地へ飛び、赤枠で表示。</li>`
+            + `<li><b>ピンを動かす</b>…アイコンを<b>長押し→ドラッグ</b>で位置を修正。</li>`
+            + `<li><b>属性を変える</b>…戸建ては吹き出しの属性ボタンで「訪問拒否／外国語／空き家／会社」。集合住宅は<b>部屋を長押し</b>で「個人宅🏠／会社🏢」を切替。</li>`
+            + `<li><b>メモ</b>…吹き出しの特記事項を編集して保存／削除。</li>`
+            + `<li><b>履歴</b>…吹き出しで履歴を確認。1件だけ削除や、まとめてクリアも可能。</li>`
+            + `<li><b>情報コピー</b>…吹き出し（戸建ては「戸建て」／集合は部屋）を<b>長押し</b>で場所情報をコピー。</li>`
+            + `<li><b>表示</b>…アイコンの大きさ（小／大）切替、凡例の表示。</li>`
+            + `</ul>`);
+        html += sec('🗂 区域の貸出方法', false,
+            `<ul>`
+            + `<li><b>貸し出す</b>（貸出係以上）…メニュー「🗂 区域の貸出・返却」で、区域を<b>個人／グループ／全体利用</b>へ割り当て、返却期日を設定。</li>`
+            + `<li><b>自分の区域</b>…メニュー「📋 個人・グループの区域」で確認・地図表示・返却。</li>`
+            + `<li><b>全体利用</b>…「👪 全体利用の区域」は全員が閲覧でき、共同で回れます。</li>`
+            + `<li><b>進捗</b>…「📈 進捗モニタリング」で地区ごとの訪問率を確認（貸出係以上）。</li>`
+            + `</ul>`);
+        if (typeof ME !== 'undefined' && ME && ME.level >= 3) {
+            html += sec('🧹 メンテナンス（システム管理者のみ）', false,
+                `<ul>`
+                + `<li>メニュー「🧹 メンテナンス」で、<b>期間を指定</b>して<b>訪問結果・履歴を一括リセット</b>できます（属性・住所・個人宅・建物情報は<b>保持</b>）。</li>`
+                + `<li>実行前に<b>自動バックアップ</b>（bkup1〜3）を取り、<b>二重確認</b>があります。期間未指定では実行できません（全消し防止）。</li>`
+                + `<li>新シーズンの開始時など、過去の訪問記録だけを区切ってリセットする用途に使います。</li>`
+                + `</ul>`);
+        }
+        document.getElementById('app-modal-body').innerHTML = html;
     }
     // 返却期日の警告クラス。超過=赤(due-over)、2週間以内=アンバー(due-soon)、それ以外は無印
     function dueClass(d) {
