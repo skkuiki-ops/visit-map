@@ -1858,7 +1858,7 @@
                 <div class="form-group"><label>建物名</label><input type="text" id="new-name" placeholder="例：ハイツ小岩" style="background:#FFF9DD;"></div>
                 <div class="form-row" style="display:flex; gap:4px;">
                     <div class="form-group" style="flex:1;"><label>階数</label>
-                        <select id="new-floors" class="numlist" size="5" onchange="generateSetupGrid()" style="background:#FFF9DD;">${[1,2,3,4,5,6,7,8,9,10].map(v=>`<option value="${v}" ${v===2?'selected':''}>${v}F</option>`).join('')}</select>
+                        <select id="new-floors" class="numlist" size="5" onchange="generateSetupGrid()" style="background:#FFF9DD;">${Array.from({length:30},(_,i)=>i+1).map(v=>`<option value="${v}" ${v===2?'selected':''}>${v}F</option>`).join('')}</select>
                     </div>
                     <div class="form-group" style="flex:1;"><label>最大部屋数</label>
                         <select id="new-maxroom" class="numlist" size="5" onchange="generateSetupGrid()" style="background:#FFF9DD;">${Array.from({length:20},(_,i)=>i+1).map(v=>`<option value="${v}" ${v===3?'selected':''}>${String(v).padStart(2,'0')}</option>`).join('')}</select>
@@ -3286,7 +3286,7 @@
         const memoText = cleanMemo(item);
 
         const opt = (v, label, cur) => `<option value="${v}" ${String(cur) === String(v) ? 'selected' : ''}>${label}</option>`;
-        const floorOpts = [1,2,3,4,5,6,7,8,9,10].map(v => opt(v, v + 'F', floors)).join('');
+        const floorOpts = Array.from({length:30},(_,i)=>i+1).map(v => opt(v, v + 'F', floors)).join('');
         const roomOpts = Array.from({length:20},(_,i)=>i+1).map(v => opt(v, String(v).padStart(2,'0'), maxRoom)).join('');
         const lockOpts = ['不明','なし','あり'].map(v => opt(v, v, lock)).join('');
         const mgrOpts = ['不明','なし','あり'].map(v => opt(v, v, item.管理人)).join('');
