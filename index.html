@@ -455,7 +455,7 @@
     const MY_TOKEN = 'pk.eyJ1IjoidG9ydW8xMTA0IiwiYSI6ImNtcTdlOGp2MzBhY3QycXBocno2OHQ5dmoifQ.bfkHvR5OmkacGJsDorHL5Q';
     mapboxgl.accessToken = MY_TOKEN;
     // ↓ デプロイした GAS Webアプリの URL（.../exec）に置き換える
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbxJXB5jAjyV0EdIL2DwU7Gph-DhG_WWXJLTgzrFJK_daj9PZou9fxQArPLaYWfuHHLf/exec";
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyRLD8ca6YzKSDQ-Hrqm5Egvyzi__jOCNOhi39MI3_FD6rzWdsv2fuGrTuCYheKbE8W/exec";
     // ↓ Google Cloud で発行した OAuth クライアントID（code_api.gs と同一値）
     const GOOGLE_CLIENT_ID = "273556684740-01e17ja1as1pchs4cvlfqvh67vbt51l3.apps.googleusercontent.com";
     // ↓ 地図スタイル（Mapbox Studio のスタイルURL。標準に戻す場合は 'mapbox://styles/mapbox/streets-v12'）
@@ -3175,7 +3175,7 @@
         if (item.履歴データ) {
             try {
                 const arr = JSON.parse(item.履歴データ);
-                historyHtml = arr.map((h, i) => `<div class="history-item hist-row" data-idx="${i}" data-time="${escHtml(h.time)}" style="display:flex; justify-content:space-between; gap:8px; cursor:pointer;"><span>${h.time}</span><b>${String(h.status).replace(/属性：/g, '')}</b></div>`).join('');
+                historyHtml = arr.map((h, i) => `<div class="history-item hist-row" data-idx="${i}" data-time="${escHtml(h.time)}" style="display:flex; justify-content:space-between; gap:8px; cursor:pointer;"><span>${escHtml(h.time)}</span><b>${escHtml(String(h.status).replace(/属性：/g, ''))}</b></div>`).join('');
             } catch(e){}
         }
 
@@ -3246,7 +3246,7 @@
             <div class="building-title">${escHtml(first['建物名 / 世帯名'])}</div>
             ${addrRowHtml(first)}
             <div style="font-size:11px; color:#666; margin-bottom:4px;">
-                管理人: ${first.管理人} ｜ 構成: ${first.属性} ｜ オートロック: ${getAutolock(first)}
+                管理人: ${escHtml(first.管理人)} ｜ 構成: ${escHtml(first.属性)} ｜ オートロック: ${getAutolock(first)}
             </div>
             ${gridHtml}
             <div id="room-action-area" style="margin-top:8px; border:1px solid #6FAEC0; padding:6px; background:#f0f7f9; min-height:200px;">${roomActionPlaceholder()}</div>
@@ -3438,7 +3438,7 @@
                     .filter(x => String(x.h.status).indexOf(prefix) === 0)
                     .map(x => {
                         const text = String(x.h.status).slice(prefix.length).replace(/^[:：\s]+/, '').replace(/属性：/g, ''); // 先頭の「○号室」と「属性：」を除去（号室は欄上部に表示済み）
-                        return `<div class="hist-row" data-idx="${x.i}" data-time="${escHtml(x.h.time)}" style="border-bottom:1px dashed #eee; display:flex; justify-content:space-between; gap:8px; cursor:pointer;"><span>${x.h.time}</span><b>${text}</b></div>`;
+                        return `<div class="hist-row" data-idx="${x.i}" data-time="${escHtml(x.h.time)}" style="border-bottom:1px dashed #eee; display:flex; justify-content:space-between; gap:8px; cursor:pointer;"><span>${escHtml(x.h.time)}</span><b>${escHtml(text)}</b></div>`;
                     }).join('');
             } catch(e){}
         }
