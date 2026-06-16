@@ -455,7 +455,7 @@
     const MY_TOKEN = 'pk.eyJ1IjoidG9ydW8xMTA0IiwiYSI6ImNtcTdlOGp2MzBhY3QycXBocno2OHQ5dmoifQ.bfkHvR5OmkacGJsDorHL5Q';
     mapboxgl.accessToken = MY_TOKEN;
     // ↓ デプロイした GAS Webアプリの URL（.../exec）に置き換える
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyGiewP1xVgH3dpzRl6q4Mqbo0IKl7Fjwg6YYzkCkb-PVoUhaBYUFSYOotE9mwRPzTT/exec";
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwUk7ASZraOmfXYJZiDfruRxwbb_mWb7DRtbBuXn7EWLfid168V4BHdHHWzpgey8ewF/exec";
     // ↓ Google Cloud で発行した OAuth クライアントID（code_api.gs と同一値）
     const GOOGLE_CLIENT_ID = "273556684740-01e17ja1as1pchs4cvlfqvh67vbt51l3.apps.googleusercontent.com";
     // ↓ 地図スタイル（Mapbox Studio のスタイルURL。標準に戻す場合は 'mapbox://styles/mapbox/streets-v12'）
@@ -1143,13 +1143,11 @@
         }
         body.innerHTML = html;
         body.scrollTop = 0;
-        // 番地ボタンは「タップ＝移動して枠表示／長押し＝枠内ピンに住所を一括割当」
+        // 番地ボタンはタップでその番地へ移動して枠表示（枠内ピン一括割当は廃止）
         if (step === 'banchi') {
             body.querySelectorAll('.area-opt-num').forEach(el => {
                 const b = parseInt(el.dataset.b, 10);
-                attachLongPress(el,
-                    () => selectArea('banchi', b),
-                    () => selectAreaAssign(areaSel.district, areaSel.chome, b));
+                el.onclick = () => selectArea('banchi', b);
             });
         }
     }
@@ -1185,14 +1183,6 @@
         el.addEventListener('mouseup', () => { if (synthMouse()) return; finish(); });
         el.addEventListener('mouseleave', () => clearTimeout(timer));
         el.addEventListener('contextmenu', (e) => e.preventDefault()); // 長押しメニューを抑止
-    }
-    // 長押し：その番地へ移動して枠を出し、枠内ピンに住所を一括割当する
-    function selectAreaAssign(district, chome, banchi) {
-        if (areaPickCallback) { selectArea('banchi', banchi); return; } // 手動「住所を指定」中は通常選択
-        const label = district + chome + '丁目' + banchi + '番';
-        const query = ADDR_PREFIX + district + chome + '-' + banchi;
-        closeAreaNav();
-        geocodeAndFly(query, 18, true, label, assignAddressToPinsInBox);
     }
     function selectArea(kind, val) {
         if (kind === 'district') {
@@ -1559,33 +1549,13 @@
         currentBoxFeature = null;
         currentBoxAddr = null;
     }
-    // 赤枠の中にあるピンに、検索した住所（丁目・番）を一括で割り当てる
-    function assignAddressToPinsInBox() {
-        if (!currentBoxFeature || !currentBoxAddr) return;
-        const ring = currentBoxFeature.geometry && currentBoxFeature.geometry.coordinates
-            && currentBoxFeature.geometry.coordinates[0];
-        if (!ring) return;
-        const ids = currentData.filter(d => {
-            const lng = parseFloat(d.経度), lat = parseFloat(d.緯度);
-            return !isNaN(lng) && !isNaN(lat) && pointInRing(lng, lat, ring);
-        }).map(d => d.rowNumber);
-        if (!ids.length) { showToast('枠内にピンはありません', true); return; }
-        const addr = currentBoxAddr, n = ids.length;
-        appConfirm('枠内の ' + n + ' 件のピンに\n「' + addr + '」\nを割り当てます。', { okLabel: '割り当てる' }).then(ok => {
-            if (!ok) return;
-            showBusy('割当中…');
-            apiCall('updateAddressBatch', { rowNumbers: ids, address: addr })
-                .then((latest) => { renderMarkers(latest); showToast(n + '件に「' + addr + '」を割り当てました', false); })
-                .catch(handleServerError).finally(hideBusy);
-        });
-    }
-    // 画面上部に選択した地域名（番地まで）を常時表示する（タップで消去できる）
+    // 画面上部に選択した地域名（番地まで）を常時表示する（長押しで消去できる）
     function showAreaLabel(text) {
         const el = document.getElementById('area-label');
-        // 住所だけを表示。タップ＝枠消去の確認、長押し＝枠内ピンに一括割当
+        // 住所だけを表示。長押し＝枠線と住所表示の消去（タップは無効＝誤タップで消えないように）
         el.innerHTML = '<span id="area-label-text">' + text + '</span>';
         el.style.display = 'block';
-        attachLongPress(document.getElementById('area-label-text'), () => askClearAreaSelection(), assignAddressToPinsInBox);
+        attachLongPress(document.getElementById('area-label-text'), () => {}, () => askClearAreaSelection());
     }
     // 住所表示をタップ → 枠線と住所表示を消すか確認してクリア
     function askClearAreaSelection() {
@@ -3205,7 +3175,7 @@
         if (item.履歴データ) {
             try {
                 const arr = JSON.parse(item.履歴データ);
-                historyHtml = arr.map((h, i) => `<div class="history-item hist-row" data-idx="${i}" data-time="${escHtml(h.time)}" style="display:flex; justify-content:space-between; gap:8px; cursor:pointer;"><span>${h.time}</span><b>${h.status}</b></div>`).join('');
+                historyHtml = arr.map((h, i) => `<div class="history-item hist-row" data-idx="${i}" data-time="${escHtml(h.time)}" style="display:flex; justify-content:space-between; gap:8px; cursor:pointer;"><span>${h.time}</span><b>${String(h.status).replace(/属性：/g, '')}</b></div>`).join('');
             } catch(e){}
         }
 
@@ -3467,7 +3437,7 @@
                 historyHtml = arr.map((h, i) => ({ h, i }))
                     .filter(x => String(x.h.status).indexOf(prefix) === 0)
                     .map(x => {
-                        const text = String(x.h.status).slice(prefix.length).replace(/^[:：\s]+/, ''); // 先頭の「○号室」を除去（欄上部に号室を表示済み）
+                        const text = String(x.h.status).slice(prefix.length).replace(/^[:：\s]+/, '').replace(/属性：/g, ''); // 先頭の「○号室」と「属性：」を除去（号室は欄上部に表示済み）
                         return `<div class="hist-row" data-idx="${x.i}" data-time="${escHtml(x.h.time)}" style="border-bottom:1px dashed #eee; display:flex; justify-content:space-between; gap:8px; cursor:pointer;"><span>${x.h.time}</span><b>${text}</b></div>`;
                     }).join('');
             } catch(e){}
@@ -3715,9 +3685,9 @@
         if (roomNum != null && !isNaN(roomNum)) {
             const prefix = roomNum + '号室';
             return arr.filter(h => String(h.status).indexOf(prefix) === 0)
-                      .map(h => ((h.time || '') + ' ' + String(h.status).slice(prefix.length).replace(/^[:：\s]+/, '')).trim());
+                      .map(h => ((h.time || '') + ' ' + String(h.status).slice(prefix.length).replace(/^[:：\s]+/, '').replace(/属性：/g, '')).trim());
         }
-        return arr.map(h => ((h.time || '') + ' ' + (h.status || '')).trim());
+        return arr.map(h => ((h.time || '') + ' ' + String(h.status || '').replace(/属性：/g, '')).trim());
     }
     let infoCopyCtx = null; // 現在開いているコピー対象の {addr,hist,app,map}
     function openInfoCopyMenu(rowNumber, roomNum) {
