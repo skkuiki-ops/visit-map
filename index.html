@@ -249,7 +249,7 @@
         .vmh-large .vmh-pttl, .vmh-large .vmh-soon { font-size: 18px; }
         .vmh-large .vmh-plbl, .vmh-large .vmh-prow { font-size: 17px; }
         .vmh-large .vmh-soon small { font-size: 15px; }
-        .vmh-large .vmh-gt { font-size: 18px; }
+        .vmh-large .vmh-gt { font-size: 22px; }
         .vmh-large .vmh-rcell { font-size: 16px; width: 33px; height: 25px; }
         /* 大モード：説明文中の各種アイコン（マーカーチップ/建物SVG/小ボタン/番号丸など）も拡大 */
         .vmh-large .vmh-chip { width: 31px; height: 31px; font-size: 15px; }
@@ -308,7 +308,7 @@
         .vmh-must { display: inline-block; font-size: 10.5px; font-weight: bold; background: #3E8E54; color: #fff; border-radius: 10px; padding: 1px 8px; margin-left: 6px; white-space: nowrap; }
         .vmh-mbtn { display: inline-flex; align-items: center; justify-content: center; padding: 1px 7px; border-radius: 5px; border: 1px solid #c8cfd6; font-size: 11px; font-weight: bold; line-height: 1.5; vertical-align: middle; margin: 1px 2px; }
         .vmh-rcell { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 23px; border: 1px solid #cfd8de; border-radius: 3px; font-size: 14px; font-weight: bold; flex-shrink: 0; }
-        .vmh-gt { border-collapse: collapse; margin: 2px auto 0; width: auto; text-align: center; font-size: 16px; }
+        .vmh-gt { border-collapse: collapse; margin: 2px auto 0; width: auto; text-align: center; font-size: 19px; }
         .vmh-gt td { border: 1px solid #ccc; padding: 10px 9px; font-weight: bold; }
         .vmh-gt td:not(.vmh-fl) { min-width: 42px; }
         .vmh-gt .vmh-fl { background: #2c3e50; color: #fff; width: 26px; min-width: 26px; padding: 2px 0; font-size: 11px; }
@@ -2437,10 +2437,10 @@
             </div>
         </div></details>`;
         // 応用操作 / 区域の貸出方法（Coming soon）
-        html += `<details class="vmh-sec"><summary class="vmh-h">⚙️ 応用操作</summary><div class="vmh-in"><div class="vmh-soon">Coming soon ✨<small>長押し移動・住所指定・履歴・情報コピー・部屋マーク など</small></div></div></details>`;
+        html += `<details class="vmh-sec"><summary class="vmh-h">💡 応用操作</summary><div class="vmh-in"><div class="vmh-soon">Coming soon ✨<small>長押し移動・住所指定・履歴・情報コピー・部屋マーク など</small></div></div></details>`;
         html += `<details class="vmh-sec"><summary class="vmh-h">🗂 区域の貸出方法</summary><div class="vmh-in"><div class="vmh-soon">Coming soon ✨<small>貸出/返却・自分の区域・進捗モニタリング</small></div></div></details>`;
         if (isSys) {
-            html += `<details class="vmh-sec"><summary class="vmh-h">🧹 メンテナンス　<span style="font-weight:normal;font-size:11px;color:#888;">※システム管理者のみ</span></summary><div class="vmh-in"><div class="vmh-soon">Coming soon ✨<small>期間を指定した履歴・ステータスの一括リセット</small></div></div></details>`;
+            html += `<details class="vmh-sec"><summary class="vmh-h">⚙️ メンテナンス　<span style="font-weight:normal;font-size:11px;color:#888;">※システム管理者のみ</span></summary><div class="vmh-in"><div class="vmh-soon">Coming soon ✨<small>期間を指定した履歴・ステータスの一括リセット</small></div></div></details>`;
         }
         html += `</div>`;
         document.getElementById('app-modal-body').innerHTML = html;
