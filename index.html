@@ -3,8 +3,16 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>map tool</title>
+    <title>s.k.visit-map</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗺️</text></svg>">
+    <!-- ホーム画面アプリ(PWA)表示: 名前=s.k.visit-map / アイコン / 全画面(standalone)。Service Worker は入れない(キャッシュ制御に干渉しないため) -->
+    <link rel="manifest" href="manifest.webmanifest">
+    <meta name="theme-color" content="#ffffff">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="s.k.visit-map">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
     <script>
     /* ── 互換チェッカー（古い端末のセーフティネット） ──
        本体スクリプトは新しい文法(ES6+)のため、古いブラウザでは「読み込み自体」が失敗して真っ白になる。
