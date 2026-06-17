@@ -99,7 +99,12 @@
         /* ポップアップ共通 */
         /* touch-action: 吹き出し・住所モーダル上のピンチで画面全体がズームしてしまうのを防ぐ（スクロールは可） */
         .mapboxgl-popup, .popup-content, #area-modal { touch-action: pan-x pan-y; }
-        .popup-content { width: 290px; max-height: 60vh; overflow-y: auto; font-size: 13px; color: #333; }
+        .popup-content { width: 290px; max-height: 60vh; overflow-y: auto; overflow-x: hidden; font-size: 13px; color: #333; box-sizing: border-box; }
+        /* width:100%のボタン/入力がpadding分はみ出して画面が横スクロールするのを防ぐ（box-sizingで幅内に収める）。
+           ※部屋セルの横スクロールは .grid-scroll が独立scroll(overflow-x:auto)なので、ここの指定では消えず維持される。 */
+        .popup-content button, .popup-content input, .popup-content select, .popup-content textarea,
+        .popup-content .history-box, .popup-content .memo-section, .popup-content .grid-scroll,
+        .popup-content .btn-row, .popup-content .choice-grid { box-sizing: border-box; max-width: 100%; }
         .building-title { font-weight: bold; font-size: 15px; border-bottom: 2px solid #333; padding-bottom: 4px; margin-bottom: 8px; }
         
         /* フォーム・レイアウト */
