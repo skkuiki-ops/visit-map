@@ -242,16 +242,18 @@
         .vmh-fsbtn { font-size: 12px; border: 1px solid #cbd5da; border-radius: 5px; padding: 3px 12px; color: #5a737e; background: #fff; cursor: pointer; font-weight: bold; }
         .vmh-fsbtn.on { background: #2c5b6e; color: #fff; border-color: #2c5b6e; }
         .vmh-root { font-size: 14px; color: #333; }
-        .vmh-large { font-size: 16px; }
+        .vmh-large { font-size: 18px; }
         .vmh-large * { font-weight: bold !important; }
-        .vmh-large .vmh-h { font-size: 16px; }
-        .vmh-large .vmh-note { font-size: 14px; }
-        .vmh-large .vmh-sub, .vmh-large .vmh-ssnote, .vmh-large .vmh-psub { font-size: 12.5px; }
-        .vmh-large .vmh-mk .vmh-i, .vmh-large .vmh-shline, .vmh-large .vmh-steps .vmh-s { font-size: 14.5px; }
-        .vmh-large .vmh-pttl, .vmh-large .vmh-soon { font-size: 16px; }
-        .vmh-large .vmh-plbl, .vmh-large .vmh-prow { font-size: 15px; }
-        .vmh-large .vmh-soon small { font-size: 13px; }
+        .vmh-large .vmh-h { font-size: 18px; }
+        .vmh-large .vmh-note { font-size: 16px; }
+        .vmh-large .vmh-sub, .vmh-large .vmh-ssnote, .vmh-large .vmh-psub { font-size: 14px; }
+        .vmh-large .vmh-mk .vmh-i, .vmh-large .vmh-shline, .vmh-large .vmh-steps .vmh-s { font-size: 16.5px; }
+        .vmh-large .vmh-pttl, .vmh-large .vmh-soon { font-size: 18px; }
+        .vmh-large .vmh-plbl, .vmh-large .vmh-prow { font-size: 17px; }
+        .vmh-large .vmh-soon small { font-size: 15px; }
         #help-fs-header { display: flex; align-items: center; gap: 3px; margin-right: 6px; }
+        #help-fs-header .vmh-fsbtn { min-width: 0; font-size: 12px; border: 1px solid #cbd5da; border-radius: 5px; padding: 3px 11px; color: #5a737e; background: #fff; font-weight: bold; }
+        #help-fs-header .vmh-fsbtn.on { background: #2c5b6e; color: #fff; border-color: #2c5b6e; }
         .vmh-sec { border: 1px solid #d8e2e7; border-radius: 8px; margin-bottom: 9px; overflow: hidden; }
         .vmh-sec > .vmh-h { background: #eef4f7; color: #2c5b6e; font-weight: bold; padding: 9px 12px; font-size: 14px; display: flex; align-items: center; gap: 7px; cursor: pointer; list-style: none; }
         .vmh-sec > .vmh-h::-webkit-details-marker { display: none; }
@@ -1871,7 +1873,10 @@
     // 吹き出し・住所モーダル上でのピンチ（2本指）による画面ズームを抑止する。
     // ※ iOS Safari は viewport の user-scalable=no を無視するため、ジェスチャを直接 preventDefault する。
     //    地図(canvas)上のピンチは対象外なので、地図のズームは従来どおり効く。
-    function isOnPopup(t) { return t && t.closest && t.closest('.mapboxgl-popup, #area-modal'); }
+    // 地図(#map)以外＝吹き出し・メニュー・各モーダル/ダイアログ全部では、ピンチによる「ページ全体の拡大」を抑止する。
+    // （地図上のピンチズームは Mapbox が canvas で処理するので対象外。吹き出しは #map 内に出るため明示的に含める）
+    // ※ページ拡大されたまま吹き出しを閉じると操作不能になる事故を防ぐ。新しいモーダルも body直下なら自動で対象。
+    function isOnPopup(t) { return t && t.closest && (t.closest('.mapboxgl-popup') || !t.closest('#map')); }
     ['gesturestart', 'gesturechange', 'gestureend'].forEach(ev => {
         document.addEventListener(ev, (e) => { if (isOnPopup(e.target)) e.preventDefault(); }, { passive: false });
     });
@@ -3256,8 +3261,14 @@
         });
 
         console.log(`受信データ ${data.length} 件 / 表示ピン ${Object.keys(groups).length} 件 / 座標無効スキップ ${skipped} 件`);
+        // 「座標が無い」警告は、全データに有効座標が1件も無いときだけ出す。
+        // limitedMode（>200件）で画面内にピンが無いだけのケースでは出さない（誤検知防止）。
         if (data.length > 0 && Object.keys(groups).length === 0) {
-            showToast('座標が読み取れる行がありません（F列=緯度 / G列=経度 を確認）', true);
+            const hasAnyValidCoord = data.some(item => {
+                const la = parseFloat(item.緯度), ln = parseFloat(item.経度);
+                return !isNaN(la) && !isNaN(ln) && la !== 0 && ln !== 0;
+            });
+            if (!hasAnyValidCoord) showToast('座標が読み取れる行がありません（E列=緯度 / F列=経度 を確認）', true);
         }
 
         Object.keys(groups).forEach(key => {
