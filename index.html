@@ -251,6 +251,19 @@
         .vmh-large .vmh-soon small { font-size: 15px; }
         .vmh-large .vmh-gt { font-size: 18px; }
         .vmh-large .vmh-rcell { font-size: 16px; width: 33px; height: 25px; }
+        /* 大モード：説明文中の各種アイコン（マーカーチップ/建物SVG/小ボタン/番号丸など）も拡大 */
+        .vmh-large .vmh-chip { width: 31px; height: 31px; font-size: 15px; }
+        .vmh-large .vmh-sh { width: 35px; height: 31px; }
+        .vmh-large .vmh-shline svg, .vmh-large .vmh-sh svg { width: 20px; height: 20px; }
+        .vmh-large .vmh-em { font-size: 16px; }
+        .vmh-large .vmh-hicon { width: 28px; height: 24px; }
+        .vmh-large .vmh-hicon svg { width: 17px; height: 17px; }
+        .vmh-large .vmh-num { width: 24px; height: 24px; font-size: 14px; }
+        .vmh-large .vmh-must { font-size: 13px; }
+        .vmh-large .vmh-mbtn { font-size: 14px; padding: 2px 9px; }
+        .vmh-large .vmh-attrb { font-size: 16px; }
+        .vmh-large .vmh-b { font-size: 16px; }
+        .vmh-large .vmh-cg3s .vmh-b { font-size: 14px; }
         #help-fs-header { display: flex; align-items: center; gap: 3px; margin-right: 6px; }
         #help-fs-header .vmh-fsbtn { min-width: 0; font-size: 12px; border: 1px solid #cbd5da; border-radius: 5px; padding: 3px 11px; color: #5a737e; background: #fff; font-weight: bold; }
         #help-fs-header .vmh-fsbtn.on { background: #2c5b6e; color: #fff; border-color: #2c5b6e; }
@@ -266,6 +279,7 @@
         .vmh-sub:not(:first-child) { border-top: 1px solid #e2e9ec; margin-top: 15px; padding-top: 12px; }
         .vmh-ssnote { font-size: 11px; color: #8a99a0; margin: 5px 0 2px; }
         .vmh-chip { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; font-size: 12px; font-weight: bold; flex-shrink: 0; line-height: 1; box-shadow: 0 1px 2px rgba(0,0,0,.25); }
+        .vmh-em { font-size: 13px; }  /* 🏢など絵文字チップ用（大モードで拡大できるようインライン指定をクラス化） */
         .vmh-ko { background: #fff; border: 2px solid #333; border-radius: 50%; }
         .vmh-star { color: #fff; clip-path: polygon(50% 2%,61% 35%,96% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,4% 35%,39% 35%); box-shadow: none; }
         .vmh-sh { border: 2px solid #fff; border-radius: 6px; width: 27px; height: 24px; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
@@ -2369,7 +2383,7 @@
               <div class="vmh-i"><span class="vmh-chip vmh-star" style="background:#8E79AB;">外</span>外国語</div>
               <div class="vmh-i"><span class="vmh-chip vmh-ko" style="color:#8C8C8C;">空</span>空き家</div>
               <div class="vmh-i"><span class="vmh-chip vmh-ko" style="color:#7f8c8d;">他</span>その他</div>
-              <div class="vmh-i"><span class="vmh-chip vmh-ko" style="font-size:13px;">🏢</span>会社・店</div>
+              <div class="vmh-i"><span class="vmh-chip vmh-ko vmh-em">🏢</span>会社・店</div>
               <div class="vmh-i"><span class="vmh-chip vmh-ko" style="color:#6FAEC0;">未</span>未訪問</div>
             </div>
             <div class="vmh-sub">── 集合住宅 ──</div>
