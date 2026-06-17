@@ -254,8 +254,8 @@
         #help-fs-header { display: flex; align-items: center; gap: 3px; margin-right: 6px; }
         #help-fs-header .vmh-fsbtn { min-width: 0; font-size: 12px; border: 1px solid #cbd5da; border-radius: 5px; padding: 3px 11px; color: #5a737e; background: #fff; font-weight: bold; }
         #help-fs-header .vmh-fsbtn.on { background: #2c5b6e; color: #fff; border-color: #2c5b6e; }
-        .vmh-sec { border: 1px solid #d8e2e7; border-radius: 8px; margin-bottom: 9px; overflow: hidden; }
-        .vmh-sec > .vmh-h { background: #eef4f7; color: #2c5b6e; font-weight: bold; padding: 9px 12px; font-size: 14px; display: flex; align-items: center; gap: 7px; cursor: pointer; list-style: none; }
+        .vmh-sec { border: 1px solid #a9c3cf; border-radius: 8px; margin-bottom: 9px; overflow: hidden; }
+        .vmh-sec > .vmh-h { background: #cfe2eb; color: #2c5b6e; font-weight: bold; padding: 9px 12px; font-size: 14px; display: flex; align-items: center; gap: 7px; cursor: pointer; list-style: none; }
         .vmh-sec > .vmh-h::-webkit-details-marker { display: none; }
         .vmh-sec > .vmh-h::before { content: '▶'; font-size: 10px; color: #5E9DB8; flex-shrink: 0; }
         .vmh-sec[open] > .vmh-h::before { content: '▼'; }
@@ -1001,11 +1001,17 @@
 
     // 広域表示（ズームがこの値未満）のときは戸建てを隠す
     const KODATE_HIDE_BELOW_ZOOM = 16; // 17→16。もう少しだけ広域でも戸建てを表示（z16は約85%サイズ）
+    // 戸建てが消えた後、さらに広域（この値未満）になったら「小さめ集合住宅（12戸以下＝アパート型）」も隠す。
+    // 大きめ集合住宅（13戸以上＝マンション型）はそのまま表示し続ける。数値を下げるほど小さめも広域まで残る。
+    const SHUGA_SMALL_HIDE_BELOW_ZOOM = 14;
     function applyZoomVisibility() {
         const zoom = map.getZoom();
         const showKodate = zoom >= KODATE_HIDE_BELOW_ZOOM;
+        const showSmallShuga = zoom >= SHUGA_SMALL_HIDE_BELOW_ZOOM;
         currentMarkers.forEach(m => {
             if (m._isKodate) m.getElement().style.display = showKodate ? '' : 'none';
+            else if (m._shugaSmall) m.getElement().style.display = showSmallShuga ? '' : 'none';
+            // 大きめ集合住宅は常時表示（display は触らない）
         });
         applyZoomScale(); // ズームに応じてアイコンサイズも更新
     }
@@ -1912,7 +1918,7 @@
                 <input type="hidden" id="new-attribute-k" value="通常">
                 ${newAddrRowHtml(attrLineHtml('通常', `pickNewAndSubmit('new-attribute-k', '%v', ${latVal}, ${lngVal})`, false))}
                 <input type="hidden" id="new-status" value="">
-                <div style="font-weight:bold; font-size:14px; margin:2px 0 4px;">訪問結果（タップで登録。未選択なら未訪問）</div>
+                <div style="font-weight:bold; font-size:14px; margin:2px 0 4px;">訪問結果（タップで登録）</div>
                 ${resultChoiceHtml('', `pickNewAndSubmit('new-status', '%v', ${latVal}, ${lngVal})`)}
                 <div class="form-group memo-empty"><label>メモ</label><textarea id="new-memo" rows="2"></textarea></div>
                 <button class="submit-btn detail-only" id="reg-btn" onclick="submitNewLocation(${latVal}, ${lngVal}, '戸建て')">登録</button>
@@ -2424,7 +2430,7 @@
             <div class="vmh-pop">
               <div class="vmh-pttl">📍 戸建てを新規登録</div>
               <div class="vmh-prow">🏠 <span>東小岩2丁目5番3</span> <span class="vmh-attrb">訪問可 ▾</span></div>
-              <div class="vmh-plbl">訪問結果（タップで登録／未選択なら未訪問）</div>
+              <div class="vmh-plbl">訪問結果（タップで登録）</div>
               <div class="vmh-cg3"><div class="vmh-b" style="background:#CBE3F0;border-color:#9fc4da;color:#0d3c55;">不在</div><div class="vmh-b" style="background:#F2C892;border-color:#ddb070;color:#5b3b00;">会えた</div><div class="vmh-b" style="background:#CBE2CC;border-color:#a8cbaa;color:#2E5E33;">投函</div></div>
               <div class="vmh-dtog">▼ 詳細を表示</div>
             </div>
@@ -3280,11 +3286,13 @@
             markerEl.className = 'custom-marker';
 
             let popupHtml = `<div class="popup-content">`;
+            let isSmallShuga = false; // 小さめ集合住宅(12戸以下)＝広域で先に隠す対象
 
             if (firstItem.種別 === '集合住宅') {
                 markerEl.className += ' marker-shuga';
                 // 戸数が12以下はアパート(低層SVG)、13以上はマンション(高層SVG)。白シルエットで背景色(構成属性)が生きる
                 const units = parseInt(firstItem.総戸数) || (firstItem.有効部屋リスト ? String(firstItem.有効部屋リスト).split(',').filter(s => s !== '').length : 0);
+                isSmallShuga = units <= 12;
                 markerEl.innerHTML = units > 12 ? ICON_MANSION : ICON_APART;
                 // 背景＝構成属性（ファミリー/シングル等）で色分け
                 markerEl.style.background = shugaColor(firstItem.属性);
@@ -3322,6 +3330,7 @@
                 .setPopup(popup)
                 .addTo(map);
             marker._isKodate = (firstItem.種別 !== '集合住宅'); // 広域表示の出し分け用
+            marker._shugaSmall = isSmallShuga;                  // 小さめ集合住宅は更に広域(z<SHUGA_SMALL_HIDE_BELOW_ZOOM)で隠す
             marker._rowNumber = firstItem.rowNumber;            // 部屋更新時にポップアップを特定する用
 
             // このマーカーを開くときは、新規フォームや他の開いているポップアップを閉じる
