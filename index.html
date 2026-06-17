@@ -241,7 +241,8 @@
         .vmh-root { font-size: 14px; color: #333; }
         .vmh-large { font-size: 18px; }
         .vmh-large * { font-weight: bold !important; }
-        .vmh-large .vmh-h { font-size: 18px; }
+        .vmh-large .vmh-sec > .vmh-h { font-size: 19px; }  /* 見出し（アコーディオン）も拡大。.vmh-sec>を付けて詳細度で確実に効かせる */
+        .vmh-large .vmh-sec > .vmh-h::before { font-size: 13px; }  /* 見出しの▶▼も合わせて拡大 */
         .vmh-large .vmh-note { font-size: 16px; }
         .vmh-large .vmh-sub, .vmh-large .vmh-ssnote, .vmh-large .vmh-psub { font-size: 14px; }
         .vmh-large .vmh-mk .vmh-i, .vmh-large .vmh-shline, .vmh-large .vmh-steps .vmh-s { font-size: 16.5px; }
