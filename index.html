@@ -236,17 +236,54 @@
         #app-modal-head button { min-width: 48px; background: #f0f0f0; border: 1px solid #ccc; border-radius: 6px; padding: 4px 8px; font-size: 13px; cursor: pointer; }
         #app-modal-body { padding: 12px; overflow-y: auto; font-size: 14px; }
         #app-modal-body select, #app-modal-body input { box-sizing: border-box; padding: 8px; font-size: 15px; border: 1px solid #bbb; border-radius: 6px; }
-        /* アプリの使い方（ヘルプ）: ネイティブ details で開閉する節 */
-        #app-modal-body details.help-sec { border: 1px solid #d8e2e7; border-radius: 8px; margin-bottom: 8px; overflow: hidden; }
-        #app-modal-body details.help-sec > summary { cursor: pointer; padding: 10px 12px; font-weight: bold; background: #eef4f7; color: #2c5b6e; list-style: none; }
-        #app-modal-body details.help-sec > summary::-webkit-details-marker { display: none; }
-        #app-modal-body details.help-sec > summary::before { content: '▶ '; font-size: 11px; color: #5E9DB8; }
-        #app-modal-body details.help-sec[open] > summary::before { content: '▼ '; }
-        #app-modal-body .help-in { padding: 4px 14px 10px; }
-        #app-modal-body .help-in ul { margin: 6px 0; padding-left: 18px; }
-        #app-modal-body .help-in li { margin-bottom: 6px; line-height: 1.55; }
-        #app-modal-body .help-img { width: 100%; border: 1px solid #ccc; border-radius: 6px; margin: 2px 0 8px; }
-        #app-modal-body .help-cap { font-size: 12px; color: #888; margin-bottom: 8px; }
+        /* アプリの使い方（図解ヘルプ）。クラスは vmh- 接頭辞で既存と衝突回避。現物の配色に合わせる */
+        .vmh-fsbar { display: flex; align-items: center; gap: 4px; justify-content: flex-end; margin: -2px 0 8px; }
+        .vmh-fsbar .vmh-lab { font-size: 10px; color: #9aa7ad; margin-right: 2px; }
+        .vmh-fsbtn { font-size: 12px; border: 1px solid #cbd5da; border-radius: 5px; padding: 3px 12px; color: #5a737e; background: #fff; cursor: pointer; font-weight: bold; }
+        .vmh-fsbtn.on { background: #2c5b6e; color: #fff; border-color: #2c5b6e; }
+        .vmh-root { font-size: 14px; color: #333; }
+        .vmh-root.vmh-allbold * { font-weight: bold !important; }
+        .vmh-sec { border: 1px solid #d8e2e7; border-radius: 8px; margin-bottom: 9px; overflow: hidden; }
+        .vmh-sec > .vmh-h { background: #eef4f7; color: #2c5b6e; font-weight: bold; padding: 9px 12px; font-size: 14px; display: flex; align-items: center; gap: 7px; }
+        .vmh-sec > .vmh-in { padding: 10px 12px; }
+        .vmh-note { font-size: 12.5px; color: #7c8b93; margin: 0 0 9px; line-height: 1.7; }
+        .vmh-sub { font-size: 11px; color: #67808a; font-weight: bold; margin: 9px 0 6px; }
+        .vmh-ssnote { font-size: 11px; color: #8a99a0; margin: 5px 0 2px; }
+        .vmh-chip { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; font-size: 12px; font-weight: bold; flex-shrink: 0; line-height: 1; box-shadow: 0 1px 2px rgba(0,0,0,.25); }
+        .vmh-ko { background: #fff; border: 2px solid #333; border-radius: 50%; }
+        .vmh-star { color: #fff; clip-path: polygon(50% 2%,61% 35%,96% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,4% 35%,39% 35%); box-shadow: none; }
+        .vmh-sh { border: 2px solid #fff; border-radius: 6px; width: 27px; height: 24px; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
+        .vmh-mk { display: grid; grid-template-columns: 1fr 1fr; gap: 9px 10px; }
+        .vmh-mk .vmh-i { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #444; }
+        .vmh-mk .vmh-full { grid-column: 1 / -1; }
+        .vmh-shline { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #444; margin: 5px 0; flex-wrap: wrap; }
+        .vmh-hicon { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 19px; background: #F2E394; border: 2px solid #fff; border-radius: 5px; box-shadow: 0 1px 2px rgba(0,0,0,.35); }
+        .vmh-pop { width: 290px; max-width: 100%; border: 1.5px solid #b3bfc8; border-radius: 8px; box-shadow: 0 3px 14px rgba(0,0,0,.20); padding: 10px; background: #fff; margin: 4px auto 2px; }
+        .vmh-pttl { font-weight: bold; font-size: 15px; border-bottom: 2px solid #333; padding-bottom: 4px; margin-bottom: 8px; }
+        .vmh-psub { font-size: 11px; color: #666; margin-bottom: 4px; }
+        .vmh-prow { display: flex; align-items: center; gap: 6px; font-size: 14px; color: #555; margin: -2px 0 8px; flex-wrap: wrap; }
+        .vmh-attrb { min-width: 8.5em; margin-left: auto; background: #F2E394; color: #6b5a1e; border: 1.5px solid #F2E394; border-radius: 6px; padding: 4px 14px; font-size: 13px; font-weight: bold; text-align: center; }
+        .vmh-plbl { font-weight: bold; font-size: 14px; margin: 2px 0 4px; }
+        .vmh-cg3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 5px; margin: 2px 0 8px; }
+        .vmh-cg3 .vmh-b { padding: 9px 2px; border-radius: 6px; font-size: 13px; font-weight: bold; text-align: center; border: 1.5px solid #c8cfd6; }
+        .vmh-cg3s .vmh-b { padding: 7px 2px; font-size: 12px; }
+        .vmh-dtog { display: block; width: auto; margin: 6px auto 0; padding: 3px 12px; background: #eef1f4; color: #8a97a5; border: 1px solid #dfe4e9; border-radius: 4px; font-size: 12px; text-align: center; }
+        .vmh-steps { margin: 10px 0 2px; }
+        .vmh-steps .vmh-s { display: flex; align-items: flex-start; margin: 10px 0; font-size: 13px; }
+        .vmh-num { display: inline-flex; width: 19px; height: 19px; border-radius: 50%; background: #2c5b6e; color: #fff; font-size: 11px; font-weight: bold; align-items: center; justify-content: center; margin-right: 8px; flex-shrink: 0; margin-top: 1px; }
+        .vmh-act { font-weight: bold; line-height: 1.7; }
+        .vmh-dt { color: #555; line-height: 1.8; margin-top: 3px; }
+        .vmh-must { display: inline-block; font-size: 10.5px; font-weight: bold; background: #3E8E54; color: #fff; border-radius: 10px; padding: 1px 8px; margin-left: 6px; white-space: nowrap; }
+        .vmh-mbtn { display: inline-flex; align-items: center; justify-content: center; padding: 1px 7px; border-radius: 5px; border: 1px solid #c8cfd6; font-size: 11px; font-weight: bold; line-height: 1.5; vertical-align: middle; margin: 1px 2px; }
+        .vmh-rcell { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 19px; border: 1px solid #cfd8de; border-radius: 3px; font-size: 10px; font-weight: bold; flex-shrink: 0; }
+        .vmh-gt { border-collapse: collapse; margin: 2px auto 0; width: auto; text-align: center; font-size: 11px; }
+        .vmh-gt td { border: 1px solid #ccc; padding: 6px 5px; font-weight: bold; }
+        .vmh-gt .vmh-fl { background: #2c3e50; color: #fff; width: 22px; min-width: 22px; padding: 2px 0; font-size: 10px; }
+        .vmh-gt .vmh-ina { background: #eaeaea; color: #aaa; }
+        .vmh-gt .vmh-sel { outline: 3px solid #E07A4E; outline-offset: -3px; }
+        .vmh-rarea { border: 1px solid #6FAEC0; background: #f0f7f9; padding: 6px; margin-top: 8px; font-size: 12px; }
+        .vmh-soon { text-align: center; color: #8aa0a8; font-size: 14px; font-weight: bold; padding: 16px 10px; background: #f7f9fa; border: 1px dashed #d5dde1; border-radius: 8px; line-height: 1.7; }
+        .vmh-soon small { display: block; font-weight: normal; font-size: 12px; color: #a7b3b8; margin-top: 4px; }
         /* 情報コピー（ピン吹き出しの長押しで開く小モーダル） */
         #info-copy-modal { position: absolute; inset: 0; z-index: 10007; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; padding: 16px; }
         #info-copy-card { background: #fff; border-radius: 10px; width: min(360px, 92vw); max-height: 84vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
@@ -2326,56 +2363,94 @@
         document.getElementById('app-modal').style.display = 'none';
         document.getElementById('lend-preview-back').style.display = 'none';
     }
-    // アプリの使い方（左下メニュー）。ネイティブ details で節を開閉。メンテナンス節はシステム管理者(level>=3)のみ表示。
-    // 地図サンプルは index.html と同じ場所に置いた help-map.png を表示（無ければ自動で非表示）。
+    // アプリの使い方（左下メニュー）。図解版＝マーカー凡例＋戸建て新規/集合住宅編集の吹き出し図解。
+    // 見た目は実アプリのCSS/配色に合わせる。メンテナンス節はシステム管理者(level>=3)のみ表示。文字サイズ(小/大)切替つき。
     function showHelp() {
         openAppModal('❓ アプリの使い方');
-        const sec = (title, open, inner) => `<details class="help-sec"${open ? ' open' : ''}><summary>${title}</summary><div class="help-in">${inner}</div></details>`;
-        let html = '';
-        html += sec('🗺️ 地図の見方', true,
-            `<img src="help-map.png" alt="地図サンプル" class="help-img" onerror="this.style.display='none'">`
-            + `<div class="help-cap">↑サンプル。実際の地図でも見方は同じです。</div>`
-            + `<ul>`
-            + `<li><b>グレーの数字</b>＝その建物の<b>番地</b>（地図の下地。例「7」「16」）。<b>名前付きの建物</b>は集合住宅（例「ヘリオスコート」）。</li>`
-            + `<li><b>色つきアイコン</b>＝登録済みの地点。<b>形＝種別</b>（戸建て＝丸／集合住宅＝🏢）、<b>色＝訪問状況</b>（未訪問・不在・会えた・投函）。属性（訪問拒否／外国語／空き家／会社）は専用アイコンで固定です。</li>`
-            + `<li><b>オレンジ枠</b>＝いま選んでいる地点。</li>`
-            + `<li><b>赤枠</b>＝住所検索や区域表示で選んだ「番地」の範囲。</li>`
-            + `<li>色や記号の意味は、メニューの「📖 凡例」でいつでも確認できます。</li>`
-            + `</ul>`);
-        html += sec('✅ 基本操作（まずはこれだけでOK）', true,
-            `<ul>`
-            + `<li><b>地図を動かす</b>…指でドラッグ。2本指のピンチで拡大／縮小。</li>`
-            + `<li><b>情報を見る</b>…地点（アイコン）を<b>タップ</b>すると吹き出しが開きます。</li>`
-            + `<li><b>訪問結果を記録</b>…吹き出しのボタンで「不在／会えた／投函」などを選ぶだけ。集合住宅は<b>部屋をタップ</b>して記録します。</li>`
-            + `<li><b>新規登録</b>…地図の何もない所を <b>タップ＝戸建て</b>／<b>長押し＝集合住宅</b> で登録。</li>`
-            + `<li><b>現在地</b>…現在地ボタンで自分の位置へ移動。</li>`
-            + `</ul>`);
-        html += sec('⚙️ 応用操作', false,
-            `<ul>`
-            + `<li><b>住所で探す</b>…住所選択／検索から番地へ飛び、赤枠で表示。</li>`
-            + `<li><b>ピンを動かす</b>…アイコンを<b>長押し→ドラッグ</b>で位置を修正。</li>`
-            + `<li><b>属性を変える</b>…戸建ては吹き出しの属性ボタンで「訪問拒否／外国語／空き家／会社」。集合住宅は<b>部屋を長押し</b>で「個人宅🏠／会社🏢」を切替。</li>`
-            + `<li><b>メモ</b>…吹き出しの特記事項を編集して保存／削除。</li>`
-            + `<li><b>履歴</b>…吹き出しで履歴を確認。1件だけ削除や、まとめてクリアも可能。</li>`
-            + `<li><b>情報コピー</b>…吹き出し（戸建ては「戸建て」／集合は部屋）を<b>長押し</b>で場所情報をコピー。</li>`
-            + `<li><b>表示</b>…アイコンの大きさ（小／大）切替、凡例の表示。</li>`
-            + `</ul>`);
-        html += sec('🗂 区域の貸出方法', false,
-            `<ul>`
-            + `<li><b>貸し出す</b>（貸出係以上）…メニュー「🗂 区域の貸出・返却」で、区域を<b>個人／グループ／全体利用</b>へ割り当て、返却期日を設定。</li>`
-            + `<li><b>自分の区域</b>…メニュー「📋 個人・グループの区域」で確認・地図表示・返却。</li>`
-            + `<li><b>全体利用</b>…「👪 全体利用の区域」は全員が閲覧でき、共同で回れます。</li>`
-            + `<li><b>進捗</b>…「📈 進捗モニタリング」で地区ごとの訪問率を確認（貸出係以上）。</li>`
-            + `</ul>`);
-        if (typeof ME !== 'undefined' && ME && ME.level >= 3) {
-            html += sec('🧹 メンテナンス（システム管理者のみ）', false,
-                `<ul>`
-                + `<li>メニュー「🧹 メンテナンス」で、<b>期間を指定</b>して<b>訪問結果・履歴を一括リセット</b>できます（属性・住所・個人宅・建物情報は<b>保持</b>）。</li>`
-                + `<li>実行前に<b>自動バックアップ</b>（bkup1〜3）を取り、<b>二重確認</b>があります。期間未指定では実行できません（全消し防止）。</li>`
-                + `<li>新シーズンの開始時など、過去の訪問記録だけを区切ってリセットする用途に使います。</li>`
-                + `</ul>`);
+        const mb = (c, w) => { w = w || 15; return '<svg viewBox="0 0 24 24" width="' + w + '" height="' + w + '" style="fill:' + c + '"><path fill-rule="evenodd" d="M9 1.5 h6 v2.5 h-6 Z M5 4 h14 v17 h-14 Z M7 6 h2.2 v2.2 H7 Z M10.9 6 h2.2 v2.2 h-2.2 Z M14.8 6 h2.2 v2.2 h-2.2 Z M7 9.4 h2.2 v2.2 H7 Z M10.9 9.4 h2.2 v2.2 h-2.2 Z M14.8 9.4 h2.2 v2.2 h-2.2 Z M7 12.8 h2.2 v2.2 H7 Z M10.9 12.8 h2.2 v2.2 h-2.2 Z M14.8 12.8 h2.2 v2.2 h-2.2 Z M7 16.2 h2.2 v2.2 H7 Z M14.8 16.2 h2.2 v2.2 h-2.2 Z M10.7 16.4 h2.6 v4.6 h-2.6 Z"/></svg>'; };
+        const isSys = (typeof ME !== 'undefined' && ME && ME.level >= 3);
+        let html = `<div class="vmh-fsbar"><span class="vmh-lab">文字</span><button class="vmh-fsbtn" data-fs="s" onclick="setHelpFontSize('s')">小</button><button class="vmh-fsbtn" data-fs="l" onclick="setHelpFontSize('l')">大</button></div><div id="help-root" class="vmh-root">`;
+        // 地図の見方（マーカー凡例）
+        html += `<div class="vmh-sec"><div class="vmh-h">🗺️ 地図の見方（マーカーの意味）</div><div class="vmh-in">
+            <div class="vmh-sub">── 戸建て ──</div>
+            <div class="vmh-mk">
+              <div class="vmh-i vmh-full"><span class="vmh-chip vmh-ko" style="color:#333;">1</span><span class="vmh-chip vmh-ko" style="color:#4A78B0;">2</span><span class="vmh-chip vmh-ko" style="color:#1B4F72;">3</span>不在回数</div>
+              <div class="vmh-i"><span class="vmh-chip vmh-ko" style="color:#DB7C2E;">会</span>会えた</div>
+              <div class="vmh-i"><span class="vmh-chip vmh-ko" style="color:#3E8E54;">投</span>投函</div>
+              <div class="vmh-i"><span class="vmh-chip vmh-star" style="background:#B0554D;">拒</span>拒否宅</div>
+              <div class="vmh-i"><span class="vmh-chip vmh-star" style="background:#8E79AB;">外</span>外国語</div>
+              <div class="vmh-i"><span class="vmh-chip vmh-ko" style="color:#8C8C8C;">空</span>空き家</div>
+              <div class="vmh-i"><span class="vmh-chip vmh-ko" style="color:#7f8c8d;">他</span>その他</div>
+              <div class="vmh-i"><span class="vmh-chip vmh-ko" style="font-size:13px;">🏢</span>会社・店</div>
+              <div class="vmh-i"><span class="vmh-chip vmh-ko" style="color:#6FAEC0;">未</span>未訪問</div>
+            </div>
+            <div class="vmh-sub">── 集合住宅 ──</div>
+            <div class="vmh-shline">
+              <span class="vmh-chip vmh-sh" style="background:#F2E394;">${mb('#8a7117')}</span>ファミリー/混在
+              <span class="vmh-chip vmh-sh" style="background:#5B8BB0;">${mb('#fff')}</span>シングル
+              <span class="vmh-chip vmh-sh" style="background:#8C8C8C;">${mb('#fff')}</span>不明
+            </div>
+            <div class="vmh-ssnote">※ マークの色 ＝ 建物の構成</div>
+        </div></div>`;
+        // 戸建ての新規登録
+        html += `<div class="vmh-sec"><div class="vmh-h">🏠 戸建ての新規登録</div><div class="vmh-in">
+            <div class="vmh-note">地図の <b>何もない所をタップ</b> すると，<br>この吹き出しが出ます</div>
+            <div class="vmh-pop">
+              <div class="vmh-pttl">📍 戸建てを新規登録</div>
+              <div class="vmh-prow">🏠 <span>東小岩2丁目5番3</span> <span class="vmh-attrb">訪問可 ▾</span></div>
+              <div class="vmh-plbl">訪問結果（タップで登録／未選択なら未訪問）</div>
+              <div class="vmh-cg3"><div class="vmh-b" style="background:#CBE3F0;border-color:#9fc4da;color:#0d3c55;">不在</div><div class="vmh-b" style="background:#F2C892;border-color:#ddb070;color:#5b3b00;">会えた</div><div class="vmh-b" style="background:#CBE2CC;border-color:#a8cbaa;color:#2E5E33;">投函</div></div>
+              <div class="vmh-dtog">▼ 詳細を表示</div>
+            </div>
+            <div class="vmh-steps">
+              <div class="vmh-s"><span class="vmh-num">1</span><div><div class="vmh-act">訪問結果をタップ <span class="vmh-must">⭐ これだけ覚えればOK</span></div><div class="vmh-dt"><span class="vmh-mbtn" style="background:#CBE3F0;border-color:#9fc4da;color:#0d3c55;">不在</span><span class="vmh-mbtn" style="background:#F2C892;border-color:#ddb070;color:#5b3b00;">会えた</span> などを押せば完了</div></div></div>
+              <div class="vmh-s"><span class="vmh-num">2</span><div><div class="vmh-act">必要なら，右上の <span class="vmh-mbtn" style="background:#F2E394;border-color:#F2E394;color:#6b5a1e;">訪問可 ▾</span> で属性を変更</div><div class="vmh-dt"><span class="vmh-mbtn" style="background:#F2E394;border-color:#F2E394;color:#6b5a1e;">訪問可</span><span class="vmh-mbtn" style="background:#A8554E;border-color:#A8554E;color:#fff;">拒否</span><span class="vmh-mbtn" style="background:#8E79AB;border-color:#8E79AB;color:#fff;">外国語</span><span class="vmh-mbtn" style="background:#8C8C8C;border-color:#8C8C8C;color:#fff;">空き</span><span class="vmh-mbtn" style="background:#7f8c8d;border-color:#7f8c8d;color:#fff;">他</span><span class="vmh-mbtn" style="background:#2E5090;border-color:#2E5090;color:#fff;">会社</span></div></div></div>
+            </div>
+        </div></div>`;
+        // 集合住宅の編集
+        html += `<div class="vmh-sec"><div class="vmh-h"><span class="vmh-hicon">${mb('#8a7117', 13)}</span>集合住宅の編集</div><div class="vmh-in">
+            <div class="vmh-note">集合住宅の <b>マークをタップ</b> すると，<br>部屋の一覧（吹き出し）が出ます</div>
+            <div class="vmh-pop">
+              <div class="vmh-pttl">ハイツ小岩</div>
+              <div class="vmh-prow" style="margin:-2px 0 4px;">🏠 <span>東小岩2丁目5番</span></div>
+              <div class="vmh-psub">管理人: なし ｜ 構成: ファミリー ｜ オートロック: なし</div>
+              <table class="vmh-gt"><tbody>
+                <tr><td class="vmh-fl">3F</td><td style="background:#E6F1F4;">301</td><td style="background:#F2C892;color:#5b3b00;">302</td><td style="background:#CBE2CC;color:#2E5E33;">303</td></tr>
+                <tr><td class="vmh-fl">2F</td><td class="vmh-sel" style="background:#CBE3F0;color:#0d3c55;">201</td><td style="background:#A8554E;color:#fff;">☆</td><td style="background:#E6F1F4;">203</td></tr>
+                <tr><td class="vmh-fl">1F</td><td style="background:#A6CFE4;color:#0d3c55;">101</td><td style="background:#E6F1F4;">102</td><td class="vmh-ina"></td></tr>
+              </tbody></table>
+              <div class="vmh-rarea">🚪 <b>201号室</b> の訪問結果<div class="vmh-cg3 vmh-cg3s" style="margin:5px 0 0;"><div class="vmh-b" style="background:#3D7FA8;border-color:#3D7FA8;color:#fff;">不在</div><div class="vmh-b" style="background:#F2C892;border-color:#ddb070;color:#5b3b00;">会えた</div><div class="vmh-b" style="background:#CBE2CC;border-color:#a8cbaa;color:#2E5E33;">投函</div></div></div>
+            </div>
+            <div class="vmh-steps">
+              <div class="vmh-s"><span class="vmh-num">1</span><div><div class="vmh-act">部屋セルをタップ <span class="vmh-must">⭐ これだけ覚えればOK</span></div><div class="vmh-dt">「201号室」のように出るので<br>　訪問結果 <span class="vmh-mbtn" style="background:#CBE3F0;border-color:#9fc4da;color:#0d3c55;">不在</span><span class="vmh-mbtn" style="background:#F2C892;border-color:#ddb070;color:#5b3b00;">会えた</span><span class="vmh-mbtn" style="background:#CBE2CC;border-color:#a8cbaa;color:#2E5E33;">投函</span> を押す</div></div></div>
+              <div class="vmh-s"><span class="vmh-num">2</span><div style="width:100%;"><div class="vmh-act">セルの色 ＝ その部屋の訪問状況</div>
+                <div class="vmh-mk" style="margin-top:7px;">
+                  <div class="vmh-i vmh-full"><span class="vmh-rcell" style="background:#CBE3F0;color:#0d3c55;">1</span><span class="vmh-rcell" style="background:#A6CFE4;color:#0d3c55;">2</span><span class="vmh-rcell" style="background:#7FB6D6;color:#0d3c55;">3</span>不在回数（濃いほど多い）</div>
+                  <div class="vmh-i"><span class="vmh-rcell" style="background:#F2C892;color:#5b3b00;">会</span>会えた</div>
+                  <div class="vmh-i"><span class="vmh-rcell" style="background:#CBE2CC;color:#2E5E33;">投</span>投函</div>
+                  <div class="vmh-i"><span class="vmh-rcell" style="background:#A8554E;color:#fff;">☆</span>拒否</div>
+                  <div class="vmh-i"><span class="vmh-rcell" style="background:#8E79AB;color:#fff;">☆</span>外国語</div>
+                </div>
+              </div></div>
+            </div>
+        </div></div>`;
+        // 応用操作 / 区域の貸出方法（Coming soon）
+        html += `<div class="vmh-sec"><div class="vmh-h">⚙️ 応用操作</div><div class="vmh-in"><div class="vmh-soon">Coming soon ✨<small>長押し移動・住所指定・履歴・情報コピー・部屋マーク など</small></div></div></div>`;
+        html += `<div class="vmh-sec"><div class="vmh-h">🗂 区域の貸出方法</div><div class="vmh-in"><div class="vmh-soon">Coming soon ✨<small>貸出/返却・自分の区域・進捗モニタリング</small></div></div></div>`;
+        if (isSys) {
+            html += `<div class="vmh-sec"><div class="vmh-h">🧹 メンテナンス　<span style="font-weight:normal;font-size:11px;color:#888;">※システム管理者のみ</span></div><div class="vmh-in"><div class="vmh-soon">Coming soon ✨<small>期間を指定した履歴・ステータスの一括リセット</small></div></div></div>`;
         }
+        html += `</div>`;
         document.getElementById('app-modal-body').innerHTML = html;
+        let fs = 's'; try { fs = localStorage.getItem('vm_helpFont') || 's'; } catch (e) {}
+        setHelpFontSize(fs);
+    }
+    // ヘルプの文字サイズ切替（小=通常 / 大=拡大＋全文Bold）。端末に記憶。
+    function setHelpFontSize(sz) {
+        try { localStorage.setItem('vm_helpFont', sz); } catch (e) {}
+        const root = document.getElementById('help-root');
+        if (root) { root.style.zoom = (sz === 'l') ? 1.18 : 1; root.classList.toggle('vmh-allbold', sz === 'l'); }
+        document.querySelectorAll('.vmh-fsbtn').forEach(b => b.classList.toggle('on', b.getAttribute('data-fs') === sz));
     }
     // 返却期日の警告クラス。超過=赤(due-over)、2週間以内=アンバー(due-soon)、それ以外は無印
     function dueClass(d) {
