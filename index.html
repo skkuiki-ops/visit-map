@@ -249,6 +249,8 @@
         .vmh-large .vmh-pttl, .vmh-large .vmh-soon { font-size: 18px; }
         .vmh-large .vmh-plbl, .vmh-large .vmh-prow { font-size: 17px; }
         .vmh-large .vmh-soon small { font-size: 15px; }
+        .vmh-large .vmh-gt { font-size: 18px; }
+        .vmh-large .vmh-rcell { font-size: 16px; width: 33px; height: 25px; }
         #help-fs-header { display: flex; align-items: center; gap: 3px; margin-right: 6px; }
         #help-fs-header .vmh-fsbtn { min-width: 0; font-size: 12px; border: 1px solid #cbd5da; border-radius: 5px; padding: 3px 11px; color: #5a737e; background: #fff; font-weight: bold; }
         #help-fs-header .vmh-fsbtn.on { background: #2c5b6e; color: #fff; border-color: #2c5b6e; }
@@ -260,6 +262,8 @@
         .vmh-sec > .vmh-in { padding: 10px 12px; }
         .vmh-note { font-size: 12.5px; color: #7c8b93; margin: 0 0 9px; line-height: 1.7; }
         .vmh-sub { font-size: 11px; color: #67808a; font-weight: bold; margin: 9px 0 6px; }
+        /* 2つ目以降のサブ見出し（── 集合住宅 ── など）の上に極細線＋余白を入れて区切りを明確に */
+        .vmh-sub:not(:first-child) { border-top: 1px solid #e2e9ec; margin-top: 15px; padding-top: 12px; }
         .vmh-ssnote { font-size: 11px; color: #8a99a0; margin: 5px 0 2px; }
         .vmh-chip { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; font-size: 12px; font-weight: bold; flex-shrink: 0; line-height: 1; box-shadow: 0 1px 2px rgba(0,0,0,.25); }
         .vmh-ko { background: #fff; border: 2px solid #333; border-radius: 50%; }
@@ -282,13 +286,15 @@
         .vmh-dtog { display: block; width: auto; margin: 6px auto 0; padding: 3px 12px; background: #eef1f4; color: #8a97a5; border: 1px solid #dfe4e9; border-radius: 4px; font-size: 12px; text-align: center; }
         .vmh-steps { margin: 10px 0 2px; }
         .vmh-steps .vmh-s { display: flex; align-items: flex-start; margin: 10px 0; font-size: 13px; }
+        /* ②以降のステップの上に極細線＋余白を入れて①②を見分けやすく */
+        .vmh-steps .vmh-s:not(:first-child) { border-top: 1px solid #e9eef1; margin-top: 6px; padding-top: 13px; }
         .vmh-num { display: inline-flex; width: 19px; height: 19px; border-radius: 50%; background: #2c5b6e; color: #fff; font-size: 11px; font-weight: bold; align-items: center; justify-content: center; margin-right: 8px; flex-shrink: 0; margin-top: 1px; }
         .vmh-act { font-weight: bold; line-height: 1.7; }
         .vmh-dt { color: #555; line-height: 1.8; margin-top: 3px; }
         .vmh-must { display: inline-block; font-size: 10.5px; font-weight: bold; background: #3E8E54; color: #fff; border-radius: 10px; padding: 1px 8px; margin-left: 6px; white-space: nowrap; }
         .vmh-mbtn { display: inline-flex; align-items: center; justify-content: center; padding: 1px 7px; border-radius: 5px; border: 1px solid #c8cfd6; font-size: 11px; font-weight: bold; line-height: 1.5; vertical-align: middle; margin: 1px 2px; }
-        .vmh-rcell { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 19px; border: 1px solid #cfd8de; border-radius: 3px; font-size: 10px; font-weight: bold; flex-shrink: 0; }
-        .vmh-gt { border-collapse: collapse; margin: 2px auto 0; width: auto; text-align: center; font-size: 13px; }
+        .vmh-rcell { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 23px; border: 1px solid #cfd8de; border-radius: 3px; font-size: 14px; font-weight: bold; flex-shrink: 0; }
+        .vmh-gt { border-collapse: collapse; margin: 2px auto 0; width: auto; text-align: center; font-size: 16px; }
         .vmh-gt td { border: 1px solid #ccc; padding: 10px 9px; font-weight: bold; }
         .vmh-gt td:not(.vmh-fl) { min-width: 42px; }
         .vmh-gt .vmh-fl { background: #2c3e50; color: #fff; width: 26px; min-width: 26px; padding: 2px 0; font-size: 11px; }
