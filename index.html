@@ -4,8 +4,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>s.k.visit-map</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗺️</text></svg>">
-    <!-- ホーム画面アプリ(PWA)表示: 名前=s.k.visit-map / アイコン / 全画面(standalone)。Service Worker は入れない(キャッシュ制御に干渉しないため) -->
+    <link rel="icon" type="image/png" href="icon-192.png">
+    <!-- ホーム画面アプリ(PWA)表示: 名前=s.k.visit-map / アイコン / 全画面(standalone)。Chrome で「アプリ(WebAPK)としてインストール」させ、毎回の「Chromeで開く？」確認を出さない(専用ウィンドウ起動)には fetchハンドラ付き Service Worker が必須。ただしキャッシュ干渉を避けるため sw.js は何もキャッシュしないネットワーク専用にしている -->
     <link rel="manifest" href="manifest.webmanifest">
     <meta name="theme-color" content="#ffffff">
     <meta name="mobile-web-app-capable" content="yes">
@@ -13,6 +13,15 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="s.k.visit-map">
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
+    <script>
+    /* Chrome の「アプリとしてインストール」に必要な最小 Service Worker を登録（sw.js は何もキャッシュしない）。
+       古い端末でも壊れないよう ES5 文法のみ・失敗は握りつぶす。 */
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+            navigator.serviceWorker.register('sw.js').catch(function () {});
+        });
+    }
+    </script>
     <script>
     /* ── 互換チェッカー（古い端末のセーフティネット） ──
        本体スクリプトは新しい文法(ES6+)のため、古いブラウザでは「読み込み自体」が失敗して真っ白になる。
@@ -1372,7 +1381,7 @@
         const lng = parseFloat(item.経度), lat = parseFloat(item.緯度);
         const shown = stored || '判定中…';
         return `<div style="font-size:14px; color:#555; margin-bottom:6px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">`
-            + `🏠 <span class="derived-addr" id="addr-text-${item.rowNumber}" data-lng="${lng}" data-lat="${lat}" data-stored="${stored ? '1' : '0'}" style="cursor:pointer;" title="タップで番地を赤枠表示／長押しで住所を指定">${escHtml(shown)}</span>`
+            + `🏠 <span class="derived-addr" id="addr-text-${item.rowNumber}" data-lng="${lng}" data-lat="${lat}" data-stored="${stored ? '1' : '0'}" style="cursor:pointer;" title="タップで番地を赤枠表示">${escHtml(shown)}</span>`
             + `<span style="cursor:pointer; padding:0 4px; font-size:17px;" title="Googleマップでこの地点を開く" onclick="window.open('https://www.google.com/maps/search/?api=1&query=${lat},${lng}','_blank')">🗺</span>`
             + (attrHtml || '')
             + `</div>`;
@@ -1399,18 +1408,14 @@
             const a = deriveAddress(parseFloat(el.dataset.lng), parseFloat(el.dataset.lat));
             el.textContent = a ? a : (addrPoints ? '（住所判定不可）' : '判定中…');
         });
-        // 住所表示にタップ（番地を赤枠表示）と長押し（住所を指定）を割り当てる
+        // 住所表示にタップ（番地を赤枠表示）を割り当てる（長押しでの住所指定は廃止）
         rootEl.querySelectorAll('.derived-addr').forEach(el => {
             if (el._goBound) return;
             const rn = parseInt(String(el.id).replace('addr-text-', ''));
             if (!rn) return;
             el._goBound = true;
-            attachLongPress(el, () => outlineAddrForPin(rn), () => pickAddressFor(rn));
+            attachLongPress(el, () => outlineAddrForPin(rn), () => {});
         });
-    }
-    // 既存ピンの住所を指定（ピッカーを開く→選択で保存）
-    function pickAddressFor(rowNumber) {
-        openAreaNav(function (addr) { saveAddressFor(rowNumber, addr); });
     }
     function saveAddressFor(rowNumber, addr) {
         showBusy('更新中…');
@@ -1422,13 +1427,6 @@
     // 新規登録フォームで指定中の住所（登録時に送信）
     let newPinAddress = '';
     let newPinLng = NaN, newPinLat = NaN; // 新規登録地点の座標（住所タップで赤枠表示するのに使う）
-    function pickAddressForNew() {
-        openAreaNav(function (addr) {
-            newPinAddress = addr;
-            const el = document.getElementById('new-addr-text');
-            if (el) el.textContent = addr;
-        });
-    }
     // 住所の「号」を選ぶモーダル（なし＋1〜50）。cb(go) で選択値（''=なし）を返す。Esc/枠外で閉じる。
     function pickGoNumber(curGo, cb) {
         let ov = document.getElementById('go-pick-overlay');
@@ -1466,7 +1464,7 @@
     // 新規登録フォームに入れる「住所」行。attrHtml: 戸建てで右側に置く属性の現在値ボタン
     function newAddrRowHtml(attrHtml) {
         return `<div style="font-size:14px; color:#555; margin:-2px 0 6px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">`
-            + `🏠 <span id="new-addr-text" style="cursor:pointer;" title="タップで番地を赤枠表示／長押しで住所を指定">${escHtml(newPinAddress || '（住所未指定）')}</span>`
+            + `🏠 <span id="new-addr-text" style="cursor:pointer;" title="タップで番地を赤枠表示">${escHtml(newPinAddress || '（住所未指定）')}</span>`
             + (attrHtml || '')
             + `</div>`;
     }
@@ -1887,7 +1885,7 @@
         // 座標を100%数値型としてパース
         const latVal = parseFloat(lngLat.lat);
         const lngVal = parseFloat(lngLat.lng);
-        // タップ地点から住所を逆算して初期値に（「住所を指定」で手動上書きも可）
+        // タップ地点から住所を逆算して初期値に（号は下で Mapbox から付加。手動上書きは不可）
         newPinAddress = deriveAddress(lngVal, latVal) || '';
         // 最寄りの「号」(住居番号)を Mapbox から取得して住所に付加（取れなければ番地のみ。手動でも設定可）
         if (newPinAddress) fetchNearestHouseNum(lngVal, latVal).then(go => {
@@ -1946,7 +1944,7 @@
         popup.on('open', () => {
             fitPopupInView(activeNewMarker, 0);
             const el = document.getElementById('new-addr-text');
-            if (el && !el._goBound) { el._goBound = true; attachLongPress(el, () => outlineNewAddr(), () => pickAddressForNew()); }
+            if (el && !el._goBound) { el._goBound = true; attachLongPress(el, () => outlineNewAddr(), () => {}); }
         });
         activeNewMarker = new mapboxgl.Marker({ color: forcedType === '戸建て' ? '#E0A93C' : '#C75F56' })
             .setLngLat([lngVal, latVal])
@@ -2454,7 +2452,7 @@
             </div>
         </div></details>`;
         // 応用操作 / 区域の貸出方法（Coming soon）
-        html += `<details class="vmh-sec"><summary class="vmh-h">💡 応用操作</summary><div class="vmh-in"><div class="vmh-soon">Coming soon ✨<small>長押し移動・住所指定・履歴・情報コピー・部屋マーク など</small></div></div></details>`;
+        html += `<details class="vmh-sec"><summary class="vmh-h">💡 応用操作</summary><div class="vmh-in"><div class="vmh-soon">Coming soon ✨<small>長押し移動・履歴・情報コピー・部屋マーク など</small></div></div></details>`;
         html += `<details class="vmh-sec"><summary class="vmh-h">🗂 区域の貸出方法</summary><div class="vmh-in"><div class="vmh-soon">Coming soon ✨<small>貸出/返却・自分の区域・進捗モニタリング</small></div></div></details>`;
         if (isSys) {
             html += `<details class="vmh-sec"><summary class="vmh-h">⚙️ メンテナンス　<span style="font-weight:normal;font-size:11px;color:#888;">※システム管理者のみ</span></summary><div class="vmh-in"><div class="vmh-soon">Coming soon ✨<small>期間を指定した履歴・ステータスの一括リセット</small></div></div></details>`;
