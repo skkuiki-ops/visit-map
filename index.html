@@ -299,12 +299,12 @@
         #help-fs-header .vmh-fsbtn { min-width: 0; font-size: 12px; border: 1px solid #cbd5da; border-radius: 5px; padding: 3px 11px; color: #5a737e; background: #fff; font-weight: bold; }
         #help-fs-header .vmh-fsbtn.on { background: #2c5b6e; color: #fff; border-color: #2c5b6e; }
         .vmh-sec { border: 1px solid #a9c3cf; border-radius: 8px; margin-bottom: 9px; overflow: hidden; }
-        .vmh-sec > .vmh-h { background: #cfe2eb; color: #2c5b6e; font-weight: bold; padding: 9px 12px; font-size: 14px; display: flex; align-items: center; gap: 7px; cursor: pointer; list-style: none; }
+        .vmh-sec > .vmh-h { background: #2c5b6e; color: #fff; font-weight: bold; padding: 9px 12px; font-size: 14px; display: flex; align-items: center; gap: 7px; cursor: pointer; list-style: none; }
         .vmh-sec > .vmh-h::-webkit-details-marker { display: none; }
-        .vmh-sec > .vmh-h::before { content: '▶'; font-size: 10px; color: #5E9DB8; flex-shrink: 0; }
+        .vmh-sec > .vmh-h::before { content: '▶'; font-size: 10px; color: #bcd9e6; flex-shrink: 0; }
         .vmh-sec[open] > .vmh-h::before { content: '▼'; }
-        .vmh-sec > .vmh-in { padding: 10px 12px; }
-        .vmh-note { font-size: 12.5px; color: #7c8b93; margin: 0 0 9px; line-height: 1.7; }
+        .vmh-sec > .vmh-in { padding: 10px 12px; background: #eef3f6; } /* 説明部はごく薄いブルーグレー＝白い吹き出し(.vmh-pop)と差を出す */
+        .vmh-note { font-size: 12.5px; color: #44555d; margin: 0 0 9px; line-height: 1.7; }
         .vmh-sub { font-size: 11px; color: #67808a; font-weight: bold; margin: 9px 0 6px; }
         /* 2つ目以降のサブ見出し（── 集合住宅 ── など）の上に極細線＋余白を入れて区切りを明確に */
         .vmh-sub:not(:first-child) { border-top: 1px solid #e2e9ec; margin-top: 15px; padding-top: 12px; }
@@ -2529,8 +2529,8 @@
             <div class="vmh-ssnote">※ マークの色 ＝ 建物の構成</div>
         </div></details>`;
         // 戸建ての新規登録
-        html += `<details class="vmh-sec" open><summary class="vmh-h">🏠 戸建ての新規登録</summary><div class="vmh-in">
-            <div class="vmh-note">地図の <b>何もない所をタップ</b> すると，<br>この吹き出しが出ます</div>
+        html += `<details class="vmh-sec" open><summary class="vmh-h">🏠 戸建て</summary><div class="vmh-in">
+            <div class="vmh-note"><b>地図をタップ</b> すると吹き出しが出ます</div>
             <div class="vmh-pop">
               <div class="vmh-pttl">📍 戸建てを新規登録</div>
               <div class="vmh-prow">🏠 <span>東小岩2丁目5番3</span> <span class="vmh-attrb">訪問可 ▾</span></div>
@@ -2544,8 +2544,8 @@
             </div>
         </div></details>`;
         // 集合住宅の編集
-        html += `<details class="vmh-sec" open><summary class="vmh-h"><span class="vmh-hicon">${mb('#8a7117', 13)}</span>集合住宅の編集</summary><div class="vmh-in">
-            <div class="vmh-note">集合住宅の <b>マークをタップ</b> すると，<br>部屋の一覧（吹き出し）が出ます</div>
+        html += `<details class="vmh-sec" open><summary class="vmh-h"><span class="vmh-hicon">${mb('#8a7117', 13)}</span>アパート・マンション</summary><div class="vmh-in">
+            <div class="vmh-note"><b>四角のマークをタップ</b> すると下の吹き出しが出ます</div>
             <div class="vmh-pop">
               <div class="vmh-pttl">ハイツ小岩</div>
               <div class="vmh-prow" style="margin:-2px 0 4px;">🏠 <span>東小岩2丁目5番</span></div>
@@ -2558,8 +2558,8 @@
               <div class="vmh-rarea">🚪 <b>201号室</b> の訪問結果<div class="vmh-cg3 vmh-cg3s" style="margin:5px 0 0;"><div class="vmh-b" style="background:#3D7FA8;border-color:#3D7FA8;color:#fff;">不在</div><div class="vmh-b" style="background:#F2C892;border-color:#ddb070;color:#5b3b00;">会えた</div><div class="vmh-b" style="background:#CBE2CC;border-color:#a8cbaa;color:#2E5E33;">投函</div></div></div>
             </div>
             <div class="vmh-steps">
-              <div class="vmh-s"><span class="vmh-num">1</span><div><div class="vmh-act">部屋セルをタップ <span class="vmh-must">⭐ これだけ覚えればOK</span></div><div class="vmh-dt">「201号室」のように出るので<br>　訪問結果 <span class="vmh-mbtn" style="background:#CBE3F0;border-color:#9fc4da;color:#0d3c55;">不在</span><span class="vmh-mbtn" style="background:#F2C892;border-color:#ddb070;color:#5b3b00;">会えた</span><span class="vmh-mbtn" style="background:#CBE2CC;border-color:#a8cbaa;color:#2E5E33;">投函</span> を押す</div></div></div>
-              <div class="vmh-s"><span class="vmh-num">2</span><div style="width:100%;"><div class="vmh-act">セルの色 ＝ その部屋の訪問状況</div>
+              <div class="vmh-s"><span class="vmh-num">1</span><div><div class="vmh-act">部屋番号をタップ <span class="vmh-must">⭐ これだけ覚えればOK</span></div><div class="vmh-dt">部屋番号が選択されたら<br>　<span class="vmh-mbtn" style="background:#CBE3F0;border-color:#9fc4da;color:#0d3c55;">不在</span><span class="vmh-mbtn" style="background:#F2C892;border-color:#ddb070;color:#5b3b00;">会えた</span><span class="vmh-mbtn" style="background:#CBE2CC;border-color:#a8cbaa;color:#2E5E33;">投函</span> を押す</div></div></div>
+              <div class="vmh-s"><span class="vmh-num">2</span><div style="width:100%;"><div class="vmh-act">色で状況が分かります</div>
                 <div class="vmh-mk" style="margin-top:7px;">
                   <div class="vmh-i vmh-full"><span class="vmh-rcell" style="background:#CBE3F0;color:#0d3c55;">1</span><span class="vmh-rcell" style="background:#A6CFE4;color:#0d3c55;">2</span><span class="vmh-rcell" style="background:#7FB6D6;color:#0d3c55;">3</span>不在回数（濃いほど多い）</div>
                   <div class="vmh-i"><span class="vmh-rcell" style="background:#F2C892;color:#5b3b00;">会</span>会えた</div>
@@ -2568,6 +2568,27 @@
                   <div class="vmh-i"><span class="vmh-rcell" style="background:#8E79AB;color:#fff;">☆</span>外国語</div>
                 </div>
               </div></div>
+            </div>
+        </div></details>`;
+        // アパート・マンションの新規登録（集合住宅）。上の「アパート・マンション」説明と対の図解。
+        html += `<details class="vmh-sec" open><summary class="vmh-h"><span class="vmh-hicon">${mb('#8a7117', 13)}</span>アパート・マンションの新規登録</summary><div class="vmh-in">
+            <div class="vmh-note"><b>地図を長押し</b> すると下の吹き出しが出ます</div>
+            <div class="vmh-pop">
+              <div class="vmh-pttl">🏢 集合住宅を新規登録</div>
+              <div class="vmh-prow" style="margin:-2px 0 4px;">🏠 <span>東小岩2丁目5番</span></div>
+              <div class="vmh-psub">建物名: ハイツ小岩 ｜ 階数: 3F ｜ 最大部屋数: 03</div>
+              <div class="vmh-plbl" style="font-weight:normal;font-size:12px;color:#555;">緑 ＝ 部屋あり。無い部屋をタップで外す</div>
+              <table class="vmh-gt"><tbody>
+                <tr><td class="vmh-fl">3F</td><td style="background:#CBE2CC;color:#2E5E33;">301</td><td style="background:#CBE2CC;color:#2E5E33;">302</td><td style="background:#CBE2CC;color:#2E5E33;">303</td></tr>
+                <tr><td class="vmh-fl">2F</td><td style="background:#CBE2CC;color:#2E5E33;">201</td><td style="background:#CBE2CC;color:#2E5E33;">202</td><td style="background:#eef0f2;color:#b9c0c6;text-decoration:line-through;">203</td></tr>
+                <tr><td class="vmh-fl">1F</td><td style="background:#CBE2CC;color:#2E5E33;">101</td><td style="background:#CBE2CC;color:#2E5E33;">102</td><td style="background:#CBE2CC;color:#2E5E33;">103</td></tr>
+              </tbody></table>
+              <div class="vmh-dtog" style="background:#3E8E54;color:#fff;border-color:#3E8E54;margin-top:8px;">登録</div>
+            </div>
+            <div class="vmh-steps">
+              <div class="vmh-s"><span class="vmh-num">1</span><div><div class="vmh-act">建物名・階数・最大部屋数 を入れる</div></div></div>
+              <div class="vmh-s"><span class="vmh-num">2</span><div><div class="vmh-act">無い部屋を <b>タップして外す</b></div><div class="vmh-dt">最初は全部屋が緑（あり）。存在しない部屋だけタップで外す</div></div></div>
+              <div class="vmh-s"><span class="vmh-num">3</span><div><div class="vmh-act"><span class="vmh-mbtn" style="background:#3E8E54;border-color:#3E8E54;color:#fff;">登録</span> を押して完了</div></div></div>
             </div>
         </div></details>`;
         // 応用操作 / 区域の貸出方法（Coming soon）
