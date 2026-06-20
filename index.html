@@ -106,10 +106,10 @@
         .area-map .lbl.sm { font-size: 34px; }
         /* 住所検索の「丁目マップ」：地区図の上に重ねる丁目番号バッジ（オレンジ系でピンや地区と区別） */
         .area-map .chome-badge { cursor: pointer; -webkit-touch-callout: none; }
-        .area-map .chome-badge circle { fill: #fff; stroke: #d35400; stroke-width: 3; }
-        .area-map .chome-badge:hover circle { fill: #fdebd0; }
-        .area-map .chome-badge:active circle { fill: #e67e22; }
-        .area-map .chome-badge text { fill: #a04000; font-size: 30px; font-weight: bold; text-anchor: middle; dominant-baseline: central; pointer-events: none; user-select: none; }
+        .area-map .chome-badge circle { fill: rgba(195,195,195,0.6); stroke: #d35400; stroke-width: 3; }
+        .area-map .chome-badge:hover circle { fill: rgba(165,165,165,0.78); }
+        .area-map .chome-badge:active circle { fill: rgba(135,135,135,0.88); }
+        .area-map .chome-badge text { fill: #555555; font-size: 30px; font-weight: bold; text-anchor: middle; dominant-baseline: central; pointer-events: none; user-select: none; }
         /* 全体利用の区域：地区グリッド（地区名＋貸出中数） */
         .shared-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
         .shared-grid .shared-cell { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; padding: 10px 4px; }
@@ -1187,15 +1187,15 @@
        丁目の一覧は AREA_DATA（サーバ AREA_DEF が正）を使い、ここは「番号をどこに置くか(SVG座標)」だけを持つ。
        添付画像をもとに見た目で配置。未定義の丁目は地区ラベル付近へ自動仮配置（後から座標を微調整可）。 */
     const CHOME_POS = {
-        '東小岩': { 3: [431, 134], 4: [343, 193], 2: [461, 273], 1: [412, 361] },
-        '南小岩': { 3: [241, 266], 4: [168, 324], 1: [225, 417], 2: [292, 398] },
+        '東小岩': { 3: [406, 134], 4: [343, 193], 2: [461, 273], 1: [412, 361] },
+        '南小岩': { 3: [220, 288], 4: [168, 324], 1: [225, 417], 2: [292, 398] },
         '北篠崎': { 1: [512, 399], 2: [487, 505] },
         '東松本': { 2: [102, 460], 1: [241, 513] },
-        '鹿骨':   { 6: [175, 725], 5: [250, 717], 4: [308, 664], 3: [390, 671], 1: [263, 810], 2: [408, 817] },
+        '鹿骨':   { 6: [175, 725], 5: [250, 717], 4: [308, 664], 3: [365, 671], 1: [263, 810], 2: [408, 817] },
         '西篠崎': { 1: [462, 593], 2: [508, 692] },
-        '上篠崎': { 1: [608, 605], 3: [582, 671], 2: [687, 671], 4: [588, 797] },
-        '篠崎町': { 8: [588, 915], 7: [707, 922], 1: [780, 800] },
-        '新堀':   { 1: [209, 942], 2: [341, 942] },
+        '上篠崎': { 1: [633, 605], 3: [607, 671], 2: [687, 671], 4: [588, 797] },
+        '篠崎町': { 8: [568, 932], 7: [687, 938], 1: [780, 800] },
+        '新堀':   { 1: [209, 942], 2: [341, 917] },
         '春江町': { 1: [360, 980] },
         '谷河内': { 1: [468, 995] }
     };
