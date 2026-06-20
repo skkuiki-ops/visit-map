@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="奉仕予定カレンダー">
+  <!-- 背景（角丸・濃紺。visit-map本体のピンアイコンと区別できるカレンダー意匠） -->
+  <rect width="512" height="512" rx="112" fill="#2c3e50"/>
+  <!-- カレンダー本体 -->
+  <rect x="96" y="120" width="320" height="288" rx="28" fill="#ffffff"/>
+  <!-- 上部の見出し帯 -->
+  <rect x="96" y="120" width="320" height="74" rx="28" fill="#34495e"/>
+  <rect x="96" y="166" width="320" height="28" fill="#34495e"/>
+  <!-- 綴じリング -->
+  <rect x="168" y="96" width="26" height="64" rx="13" fill="#e67e22"/>
+  <rect x="318" y="96" width="26" height="64" rx="13" fill="#e67e22"/>
+  <!-- 日付ドット（2段） -->
+  <g fill="#bdc8d2">
+    <circle cx="152" cy="244" r="15"/><circle cx="208" cy="244" r="15"/>
+    <circle cx="264" cy="244" r="15"/><circle cx="320" cy="244" r="15"/><circle cx="360" cy="244" r="15"/>
+    <circle cx="152" cy="312" r="15"/><circle cx="208" cy="312" r="15"/>
+  </g>
+  <!-- 当日（チェック付きの強調ドット） -->
+  <circle cx="300" cy="324" r="58" fill="#3498db"/>
+  <path d="M274 326 l18 18 l34 -40" fill="none" stroke="#ffffff" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
