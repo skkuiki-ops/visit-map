@@ -696,6 +696,31 @@
         } catch (e) {}
     }
 
+    // モバイルでアプリを背景化すると更新タイマー(setTimeout)が止まり、復帰時にトークンが失効していることがある。
+    // 復帰（画面表示/bfcache復元）のたびに、失効が近ければ One Tap で黙って再発行し、更新タイマーも貼り直す。
+    // ＝ 継続利用での「久しぶりに開いたら再ログイン」を減らす。サインアウト中(ID_TOKEN空)は何もしない（無限ループ防止）。
+    let lastResumeRefresh = 0;
+    function refreshTokenOnResume() {
+        if (!appEntered || !ID_TOKEN) return;
+        try {
+            const payload = JSON.parse(decodeURIComponent(escape(atob(
+                ID_TOKEN.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+            ))));
+            const msLeft = payload.exp * 1000 - Date.now();
+            const now = Date.now();
+            // 失効5分前を切っていて、かつ直近30秒に試みていなければ、黙って再発行を試みる（連続発火・レート制限対策）
+            if (msLeft < 5 * 60 * 1000 && now - lastResumeRefresh > 30000) {
+                lastResumeRefresh = now;
+                try { google.accounts.id.prompt(); } catch (e) {}
+            }
+        } catch (e) {}
+        scheduleTokenRefresh(); // 背景でタイマーが止まっていた場合に備え、前面復帰のたびに貼り直す
+    }
+    document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'visible') refreshTokenOnResume();
+    });
+    window.addEventListener('pageshow', refreshTokenOnResume);
+
     // サインアウト：トークンを破棄してログイン画面へ戻す
     function signOut() {
         ID_TOKEN = '';
