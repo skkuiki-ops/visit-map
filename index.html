@@ -1721,10 +1721,10 @@
     // 画面上部に選択した地域名（番地まで）を常時表示する（長押しで消去できる）
     function showAreaLabel(text) {
         const el = document.getElementById('area-label');
-        // 住所だけを表示。長押し＝枠線と住所表示の消去（タップは無効＝誤タップで消えないように）
+        // 住所だけを表示。タップ＝枠線と住所表示の消去（消去前に確認ダイアログを出すので誤タップでも即消えない）
         el.innerHTML = '<span id="area-label-text">' + text + '</span>';
         el.style.display = 'block';
-        attachLongPress(document.getElementById('area-label-text'), () => {}, () => askClearAreaSelection());
+        attachLongPress(document.getElementById('area-label-text'), () => askClearAreaSelection(), () => {});
     }
     // 住所表示をタップ → 枠線と住所表示を消すか確認してクリア
     function askClearAreaSelection() {
