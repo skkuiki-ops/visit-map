@@ -84,7 +84,7 @@
 
         /* 住所で移動モーダル */
         #area-modal { position: absolute; inset: 0; z-index: 10002; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; padding: 16px; }
-        #area-modal-card { background: #fff; border-radius: 10px; width: min(360px, 92vw); max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 4px 20px rgba(0,0,0,0.3); overflow: hidden; }
+        #area-modal-card { background: #fff; border-radius: 10px; width: min(360px, 92vw); max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 4px 20px rgba(0,0,0,0.3); overflow: hidden; position: relative; }
         #area-modal-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #eee; }
         #area-modal-title { flex: 1; font-weight: bold; font-size: 14px; text-align: center; }
         /* 左右ボタンを同じ幅にして、タイトルを常に中央に置く */
@@ -94,6 +94,9 @@
         .area-opt-num { min-width: 0; width: 46px; padding: 9px 0; text-align: center; }
         /* 地区選択をSVGマップで表示するステップ（位置・形は江戸川区の地区図を模式化） */
         #area-view-toggle { flex: 0 0 auto; min-width: 56px; text-align: center; background: #f0f0f0; border: 1px solid #ccc; border-radius: 6px; padding: 4px 8px; font-size: 12px; cursor: pointer; }
+        /* 地図表示中だけ右上(✕の下)に出す「丁目表示」ON/OFFトグル（住所検索のみ） */
+        #area-chome-toggle { position: absolute; top: 52px; right: 10px; z-index: 5; background: #f0f0f0; border: 1px solid #ccc; border-radius: 14px; padding: 4px 11px; font-size: 12px; font-weight: bold; color: #555; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.18); -webkit-touch-callout: none; user-select: none; touch-action: manipulation; }
+        #area-chome-toggle.on { background: #5E9DB8; color: #fff; border-color: #5E9DB8; }
         #area-modal-body.is-map { display: block; padding: 8px; }
         #area-modal-body.is-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
         #area-modal-body.is-list .area-opt { min-width: 0; width: 100%; box-sizing: border-box; }
@@ -106,7 +109,7 @@
         .area-map .lbl.sm { font-size: 34px; }
         /* 住所検索の「丁目マップ」：地区図の上に重ねる丁目番号バッジ（オレンジ系でピンや地区と区別） */
         .area-map .chome-badge { cursor: pointer; -webkit-touch-callout: none; }
-        .area-map .chome-badge circle { fill: rgba(195,195,195,0.6); stroke: #d35400; stroke-width: 3; }
+        .area-map .chome-badge circle { fill: rgba(195,195,195,0.6); stroke: #8a8a8a; stroke-width: 3; }
         .area-map .chome-badge:hover circle { fill: rgba(165,165,165,0.78); }
         .area-map .chome-badge:active circle { fill: rgba(135,135,135,0.88); }
         .area-map .chome-badge text { fill: #555555; font-size: 30px; font-weight: bold; text-anchor: middle; dominant-baseline: central; pointer-events: none; user-select: none; }
@@ -521,6 +524,7 @@
             <button id="area-close-btn" onclick="closeAreaNav()">✕</button>
         </div>
         <div id="area-modal-body"></div>
+        <button id="area-chome-toggle" onclick="toggleChomeOverlay()" style="display:none;">☐ 丁目</button>
     </div>
 </div>
 
@@ -1234,16 +1238,20 @@
 
     let areaSel = { district: null, chome: null };
     let areaViewMode = localStorage.getItem('vm_areaView') || 'map'; // 'map'=地区図 / 'list'=一覧グリッド
+    if (areaViewMode === 'chome') areaViewMode = 'map'; // 旧3状態('chome')の名残は地図に正規化
+    let areaChomeOn = localStorage.getItem('vm_areaChome') === '1'; // 地図表示中に丁目バッジを重ねるか（住所検索のみ）
     // 一覧グリッドの並び順（3列×4行で江戸川区の地図配置に近づけた）
     const AREA_GRID_ORDER = ['東松本','南小岩','東小岩','鹿骨町','鹿骨','北篠崎','新堀','西篠崎','上篠崎','春江町','谷河内','篠崎町'];
     const SHARED_GROUP_NAME = '全体利用'; // 全体利用（共同利用）の予約グループ名。サーバの SHARED_GROUP_ と必ず一致させる
     function toggleAreaView() {
-        // 住所検索（非pick）では 地図→丁目→一覧 の3状態、印刷/貸出の住所指定では従来どおり 地図⇔一覧 の2状態。
-        const order = areaPickCallback ? ['map', 'list'] : ['map', 'chome', 'list'];
-        let i = order.indexOf(areaViewMode);
-        if (i < 0) i = 0;
-        areaViewMode = order[(i + 1) % order.length];
+        areaViewMode = (areaViewMode === 'map') ? 'list' : 'map';
         localStorage.setItem('vm_areaView', areaViewMode);
+        renderAreaStep('district');
+    }
+    // 地図表示中の「丁目表示」ON/OFF（住所検索のみ。印刷/貸出では出さない）
+    function toggleChomeOverlay() {
+        areaChomeOn = !areaChomeOn;
+        localStorage.setItem('vm_areaChome', areaChomeOn ? '1' : '0');
         renderAreaStep('district');
     }
     let areaPickCallback = null; // 住所指定モード：番地確定時にこの関数へ住所文字列を渡す（無ければ通常＝地図移動）
@@ -1269,28 +1277,27 @@
         const title = document.getElementById('area-modal-title');
         const back = document.getElementById('area-back-btn');
         const toggle = document.getElementById('area-view-toggle');
+        const chomeToggle = document.getElementById('area-chome-toggle');
         const body = document.getElementById('area-modal-body');
+        if (chomeToggle) chomeToggle.style.display = 'none'; // 既定は隠し、地図表示(住所検索)のときだけ出す
         let html = '';
         if (step === 'district') {
             title.textContent = '地区を選択';
             back.style.visibility = 'hidden';
-            toggle.style.display = '';             // 地区選択時だけ表示切替ボタンを出す
-            // 丁目マップは住所検索（非pickモード）でのみ提供。印刷/貸出の住所指定モードでは出さない（=従来挙動を保持）。
-            const allowChome = !areaPickCallback;
-            let mode = areaViewMode;
-            if (mode === 'chome' && !allowChome) mode = 'map';
-            if (mode === 'map') {
-                toggle.textContent = allowChome ? '🔢 丁目' : '☰ 一覧';
-                body.classList.add('is-map');
-                body.classList.remove('is-list');
-                html = AREA_MAP_SVG;
-            } else if (mode === 'chome') {
-                title.textContent = '丁目を選択';
+            toggle.style.display = '';             // 地区選択時だけ「地図⇔一覧」切替ボタンを出す
+            const allowChome = !areaPickCallback;  // 丁目表示は住所検索（非pickモード）でのみ。印刷/貸出は従来挙動を保持
+            if (areaViewMode === 'map') {
                 toggle.textContent = '☰ 一覧';
                 body.classList.add('is-map');
                 body.classList.remove('is-list');
-                // 地区図に丁目バッジを重ねる（地区そのものをタップすれば従来どおり丁目一覧へ）
-                html = AREA_MAP_SVG.replace('</svg>', buildChomeBadges() + '</svg>');
+                // 地図表示中はONなら地区図に丁目バッジを重ねる。右上に丁目ON/OFFトグルを出す。
+                const showChome = allowChome && areaChomeOn;
+                html = showChome ? AREA_MAP_SVG.replace('</svg>', buildChomeBadges() + '</svg>') : AREA_MAP_SVG;
+                if (chomeToggle && allowChome) {
+                    chomeToggle.style.display = '';
+                    chomeToggle.textContent = areaChomeOn ? '☑ 丁目' : '☐ 丁目';
+                    chomeToggle.classList.toggle('on', areaChomeOn);
+                }
             } else {
                 toggle.textContent = '🗺 地図';
                 body.classList.add('is-list');
