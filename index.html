@@ -104,6 +104,12 @@
         .area-map .dist:active { fill: #5E9DB8; }
         .area-map .lbl { fill: #102733; font-size: 38px; font-weight: bold; text-anchor: middle; dominant-baseline: middle; pointer-events: none; user-select: none; }
         .area-map .lbl.sm { font-size: 34px; }
+        /* 住所検索の「丁目マップ」：地区図の上に重ねる丁目番号バッジ（オレンジ系でピンや地区と区別） */
+        .area-map .chome-badge { cursor: pointer; -webkit-touch-callout: none; }
+        .area-map .chome-badge circle { fill: #fff; stroke: #d35400; stroke-width: 3; }
+        .area-map .chome-badge:hover circle { fill: #fdebd0; }
+        .area-map .chome-badge:active circle { fill: #e67e22; }
+        .area-map .chome-badge text { fill: #a04000; font-size: 30px; font-weight: bold; text-anchor: middle; dominant-baseline: central; pointer-events: none; user-select: none; }
         /* 全体利用の区域：地区グリッド（地区名＋貸出中数） */
         .shared-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
         .shared-grid .shared-cell { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; padding: 10px 4px; }
@@ -1175,13 +1181,68 @@
         <text class="lbl sm" data-name="谷河内" x="456" y="1006">谷河内</text>
       </g>
     </svg></div>`;
+
+    /* ── 住所検索の「丁目マップ」：地区図の上に丁目番号バッジを重ね、タップでその丁目の番地選択へ進む ──
+       ※ この機能は住所検索（地図移動モード）専用。印刷/貸出の住所指定モード(areaPickCallback)では出さない。
+       丁目の一覧は AREA_DATA（サーバ AREA_DEF が正）を使い、ここは「番号をどこに置くか(SVG座標)」だけを持つ。
+       添付画像をもとに見た目で配置。未定義の丁目は地区ラベル付近へ自動仮配置（後から座標を微調整可）。 */
+    const CHOME_POS = {
+        '東小岩': { 3: [431, 134], 4: [343, 193], 2: [461, 273], 1: [412, 361] },
+        '南小岩': { 3: [241, 266], 4: [168, 324], 1: [225, 417], 2: [292, 398] },
+        '北篠崎': { 1: [512, 399], 2: [487, 505] },
+        '東松本': { 2: [102, 460], 1: [241, 513] },
+        '鹿骨':   { 6: [175, 725], 5: [250, 717], 4: [308, 664], 3: [390, 671], 1: [263, 810], 2: [408, 817] },
+        '西篠崎': { 1: [462, 593], 2: [508, 692] },
+        '上篠崎': { 1: [608, 605], 3: [582, 671], 2: [687, 671], 4: [588, 797] },
+        '篠崎町': { 8: [588, 915], 7: [707, 922], 1: [780, 800] },
+        '新堀':   { 1: [209, 942], 2: [341, 942] },
+        '春江町': { 1: [360, 980] },
+        '谷河内': { 1: [468, 995] }
+    };
+    // 各地区ラベルの座標（CHOME_POS 未定義の丁目を仮配置する基準）
+    const AREA_LBL_POS = {
+        '東小岩': [399, 229], '南小岩': [225, 365], '北篠崎': [503, 456], '東松本': [142, 506],
+        '鹿骨町': [186, 582], '西篠崎': [482, 650], '鹿骨': [300, 757], '上篠崎': [661, 708],
+        '篠崎町': [674, 893], '新堀': [262, 949], '春江町': [366, 993], '谷河内': [456, 1006]
+    };
+    // 地区図SVGに重ねる丁目バッジ群を生成する。AREA_DATA の丁目すべてを必ず出す（位置は CHOME_POS／無ければ仮配置）。
+    function buildChomeBadges() {
+        let s = '<g class="chome-layer">';
+        Object.keys(AREA_DATA).forEach(function (d) {
+            const chomes = AREA_DATA[d];
+            if (!chomes) return; // 丁目を持たない地区（鹿骨町）はバッジ無し＝地区そのものをタップして選択
+            const keys = Object.keys(chomes);
+            keys.forEach(function (c, idx) {
+                let pos = (CHOME_POS[d] && CHOME_POS[d][c]) ? CHOME_POS[d][c] : null;
+                if (!pos) { // 未定義はラベル付近に横並びで仮配置（後で CHOME_POS に正値を入れて微調整）
+                    const base = AREA_LBL_POS[d] || [452, 530];
+                    pos = [base[0] + (idx - (keys.length - 1) / 2) * 48, base[1] + 44];
+                }
+                s += '<g class="chome-badge" onclick="pickChomeOnMap(\'' + d + '\',' + c + ')">'
+                   + '<circle cx="' + pos[0] + '" cy="' + pos[1] + '" r="24"/>'
+                   + '<text x="' + pos[0] + '" y="' + pos[1] + '">' + c + '</text></g>';
+            });
+        });
+        return s + '</g>';
+    }
+    // 丁目バッジのタップ：その地区・丁目を確定して既存の「番地を選択」ステップへ。selectArea は変更しない（共用ロジック保護）。
+    function pickChomeOnMap(d, c) {
+        areaSel.district = d;
+        areaSel.chome = c;
+        renderAreaStep('banchi');
+    }
+
     let areaSel = { district: null, chome: null };
     let areaViewMode = localStorage.getItem('vm_areaView') || 'map'; // 'map'=地区図 / 'list'=一覧グリッド
     // 一覧グリッドの並び順（3列×4行で江戸川区の地図配置に近づけた）
     const AREA_GRID_ORDER = ['東松本','南小岩','東小岩','鹿骨町','鹿骨','北篠崎','新堀','西篠崎','上篠崎','春江町','谷河内','篠崎町'];
     const SHARED_GROUP_NAME = '全体利用'; // 全体利用（共同利用）の予約グループ名。サーバの SHARED_GROUP_ と必ず一致させる
     function toggleAreaView() {
-        areaViewMode = (areaViewMode === 'map') ? 'list' : 'map';
+        // 住所検索（非pick）では 地図→丁目→一覧 の3状態、印刷/貸出の住所指定では従来どおり 地図⇔一覧 の2状態。
+        const order = areaPickCallback ? ['map', 'list'] : ['map', 'chome', 'list'];
+        let i = order.indexOf(areaViewMode);
+        if (i < 0) i = 0;
+        areaViewMode = order[(i + 1) % order.length];
         localStorage.setItem('vm_areaView', areaViewMode);
         renderAreaStep('district');
     }
@@ -1214,11 +1275,22 @@
             title.textContent = '地区を選択';
             back.style.visibility = 'hidden';
             toggle.style.display = '';             // 地区選択時だけ表示切替ボタンを出す
-            if (areaViewMode === 'map') {
-                toggle.textContent = '☰ 一覧';
+            // 丁目マップは住所検索（非pickモード）でのみ提供。印刷/貸出の住所指定モードでは出さない（=従来挙動を保持）。
+            const allowChome = !areaPickCallback;
+            let mode = areaViewMode;
+            if (mode === 'chome' && !allowChome) mode = 'map';
+            if (mode === 'map') {
+                toggle.textContent = allowChome ? '🔢 丁目' : '☰ 一覧';
                 body.classList.add('is-map');
                 body.classList.remove('is-list');
                 html = AREA_MAP_SVG;
+            } else if (mode === 'chome') {
+                title.textContent = '丁目を選択';
+                toggle.textContent = '☰ 一覧';
+                body.classList.add('is-map');
+                body.classList.remove('is-list');
+                // 地区図に丁目バッジを重ねる（地区そのものをタップすれば従来どおり丁目一覧へ）
+                html = AREA_MAP_SVG.replace('</svg>', buildChomeBadges() + '</svg>');
             } else {
                 toggle.textContent = '🗺 地図';
                 body.classList.add('is-list');
