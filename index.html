@@ -638,7 +638,8 @@
         google.accounts.id.initialize({
             client_id: GOOGLE_CLIENT_ID,
             callback: handleCredential,
-            auto_select: true
+            auto_select: true,
+            use_fedcm_for_prompt: true // FedCM経由でOne Tapを出す＝サードパーティCookie制限下でもサイレント再認証が通りやすい（再ログイン出現を減らす）
         });
         google.accounts.id.renderButton(document.getElementById('google-btn'), {
             type: 'standard', theme: 'filled_black', size: 'large',
