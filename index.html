@@ -214,6 +214,9 @@
         .prog-bar > span { display: block; height: 100%; border-radius: 5px; }
         #busy-indicator { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 10007; background: rgba(44,62,80,0.92); color: #fff; padding: 10px 18px; border-radius: 20px; font-size: 14px; display: none; align-items: center; gap: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.35); }
         #busy-indicator .spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.35); border-top-color: #fff; border-radius: 50%; animation: busy-spin 0.7s linear infinite; }
+        /* 楽観的更新の「保存中」バッジ：操作はブロックしない（pointer-events:none）。画面下に控えめに出す。 */
+        #saving-indicator { position: absolute; bottom: 26px; left: 50%; transform: translateX(-50%); z-index: 10005; background: rgba(44,62,80,0.82); color: #fff; padding: 6px 13px; border-radius: 16px; font-size: 13px; display: none; align-items: center; gap: 7px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); pointer-events: none; }
+        #saving-indicator .spinner { width: 12px; height: 12px; border: 2px solid rgba(255,255,255,0.35); border-top-color: #fff; border-radius: 50%; animation: busy-spin 0.7s linear infinite; }
         @keyframes busy-spin { to { transform: rotate(360deg); } }
 
         /* ── メニューパネル・汎用モーダル（割り当て区域／貸出／ユーザー管理） ── */
@@ -1131,6 +1134,28 @@
         if (el) el.style.display = 'none';
         const ov = document.getElementById('busy-overlay');
         if (ov) ov.style.display = 'none';
+    }
+
+    // ── 軽量「保存中」バッジ（楽観的更新用） ──
+    // showBusy と違い全画面オーバーレイを出さず操作をブロックしない。飛んでいる通信数を参照カウントで表示する。
+    let _savingCount = 0;
+    function showSaving() {
+        _savingCount++;
+        let el = document.getElementById('saving-indicator');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'saving-indicator';
+            el.innerHTML = '<span class="spinner"></span>保存中…';
+            document.body.appendChild(el);
+        }
+        el.style.display = 'flex';
+    }
+    function hideSaving() {
+        _savingCount = Math.max(0, _savingCount - 1);
+        if (_savingCount === 0) {
+            const el = document.getElementById('saving-indicator');
+            if (el) el.style.display = 'none';
+        }
     }
 
     /* ── 住所で移動（地区→丁目→番地を選んで、そのエリアの中心へ移動） ──
@@ -3874,17 +3899,89 @@
         };
     }
 
+    // ── 戸建て訪問結果の楽観的更新 ──
+    // 行ごとに { gen, pending, baseStatus, baseHistory, lastGood, chain } を保持する。
+    // タップ即UI反映（applyKodateChange を再利用）→ 直列キューで保存 → 最後の応答で正データに突き合わせ（reconcile）。
+    // 1件でも失敗したら gen を進めて以降のキューを無効化し、直前に成功した正データ（無ければ開始前）へ戻す。
+    const _optState = {};
+
+    // 楽観反映用：履歴JSONの先頭に暫定エントリ（時刻は「…」、サーバー応答で正式な時刻に置き換わる）を積む。
+    function addProvisionalHistory(historyJson, status) {
+        let arr = [];
+        try { arr = JSON.parse(historyJson || '[]') || []; } catch (e) { arr = []; }
+        arr.unshift({ status: status, time: '…', user: '' });
+        return JSON.stringify(arr);
+    }
+
+    // currentData の該当行だけを source（getMapData の戻り）の同じ行で差し替え、その場再描画する。
+    // 全件置換にしないのは、別の行で飛んでいる楽観更新を巻き戻さないため。
+    function reconcileKodate(rowNumber, source) {
+        const i = currentData.findIndex(d => d.rowNumber === rowNumber);
+        const src = source ? source.find(d => d.rowNumber === rowNumber) : null;
+        if (i >= 0 && src) { currentData[i] = src; applyKodateChange(rowNumber)(currentData); }
+        else { applyKodateChange(rowNumber)(source || currentData); } // 行が消えた等のフォールバック
+    }
+
     function saveStatus(rowNumber, val) {
-        if(!val) return;
+        if (!val) return;
+        const idx = currentData.findIndex(d => d.rowNumber === rowNumber);
+        if (idx < 0) return;
+
+        // 「不在」は現在値（楽観反映済みなら最新値）から繰り上げ＝連打で 1→2→3 と進む。それ以外は同値なら再送スキップ。
         let status = val;
-        if (val === '不在') {
-            const item = currentData.find(d => d.rowNumber === rowNumber);
-            status = nextAbsence(item ? item.最新ステータス : '');
+        if (val === '不在') status = nextAbsence(currentData[idx].最新ステータス);
+        else if (currentData[idx].最新ステータス === status) return;
+
+        const st = _optState[rowNumber] || (_optState[rowNumber] = { gen: 0, pending: 0, chain: Promise.resolve() });
+
+        if (st.pending === 0) { // この一連の開始前状態を退避（まだ1件も成功していない時のロールバック先）
+            st.baseStatus = currentData[idx].最新ステータス;
+            st.baseHistory = currentData[idx].履歴データ;
+            st.lastGood = null;
         }
-        showBusy('更新中…');
-        apiCall('updateLocation', { rowNumber: rowNumber, status: status, memoText: null, isClearMemo: false })
-            .then((latest) => { applyKodateChange(rowNumber)(latest); showToast('訪問結果を記録しました', false); })
-            .catch(handleServerError).finally(hideBusy);
+
+        // 楽観反映：該当 item を新オブジェクトに差し替え（退避した base を壊さない）→ ピン色・ボタン・履歴を即更新。
+        currentData[idx] = Object.assign({}, currentData[idx], {
+            最新ステータス: status,
+            履歴データ: addProvisionalHistory(currentData[idx].履歴データ, status)
+        });
+        applyKodateChange(rowNumber)(currentData);
+
+        const myGen = st.gen;
+        st.pending++;
+        showSaving();
+        st.chain = st.chain.then(() => {
+            if (st.gen !== myGen) { hideSaving(); return; } // 先行操作が失敗→無効化済み：送信しない
+            return apiCall('updateLocation', { rowNumber: rowNumber, status: status, memoText: null, isClearMemo: false })
+                .then((latest) => {
+                    hideSaving();
+                    if (st.gen !== myGen) return;
+                    st.lastGood = latest;   // 直前に成功した正データ（途中失敗時のロールバック先）
+                    st.pending--;
+                    if (st.pending === 0) { // 全送信完了 → 正データで確定（暫定履歴の時刻もここで確定）
+                        reconcileKodate(rowNumber, latest);
+                        showToast('訪問結果を記録しました', false);
+                    }
+                })
+                .catch((err) => {
+                    hideSaving();
+                    if (st.gen !== myGen) return;
+                    st.gen++;               // 以降のキューを全て無効化
+                    st.pending = 0;
+                    if (st.lastGood) {      // 直前に成功した分は保持し、そこへ戻す
+                        reconcileKodate(rowNumber, st.lastGood);
+                    } else {                // まだ1件も成功していない → 開始前へ戻す
+                        const i2 = currentData.findIndex(d => d.rowNumber === rowNumber);
+                        if (i2 >= 0) {
+                            currentData[i2] = Object.assign({}, currentData[i2], {
+                                最新ステータス: st.baseStatus, 履歴データ: st.baseHistory
+                            });
+                            applyKodateChange(rowNumber)(currentData);
+                        }
+                    }
+                    handleServerError(err); // 通知＋認証時はログイン誘導（統一パターンに合わせ独自トーストは出さない）
+                });
+        });
     }
 
     // 部屋の更新を、ポップアップを閉じずにグリッドの色・履歴だけ最新化する
