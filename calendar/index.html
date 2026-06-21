@@ -59,7 +59,7 @@
     .header-box h2 { margin: 0; font-size: 19px; letter-spacing: 0.04em; }
 
     /* ログイン（本人確認）関連 */
-    .account-bar { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 13px; color: var(--muted); }
+    .account-bar { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 13px; color: var(--muted); }
     .account-email { font-weight: bold; color: var(--accent); }
     .logout-btn {
       background: var(--surface); color: var(--accent); border: 1px solid var(--accent);
@@ -125,6 +125,14 @@
       transition: background-color 0.12s ease, color 0.12s ease;
     }
     .today-btn:hover { background: var(--accent); color: #fff; }
+    /* 文字サイズ切替ボタン（年配者向けに目立つ塗りボタン） */
+    .size-btn {
+      background: var(--accent); color: #fff; border: 1px solid var(--accent);
+      padding: 7px 16px; border-radius: 20px; font-size: 13px; font-weight: bold; cursor: pointer;
+      transition: filter 0.12s ease, transform 0.06s ease;
+    }
+    .size-btn:hover { filter: brightness(1.12); }
+    .size-btn:active { transform: translateY(1px); }
 
     /* 複数選択チェックボックスゾーン */
     .filter-zone {
@@ -137,12 +145,17 @@
     .filter-head {
       display: flex;
       align-items: center;
-      justify-content: space-between;
       gap: 8px;
-      margin-bottom: 8px;
+      margin-bottom: 0;
+      cursor: pointer;
+      list-style: none;
     }
-    .filter-title { font-size: 13px; font-weight: bold; color: #d35400; }
-    .filter-actions { display: flex; gap: 6px; flex-shrink: 0; }
+    .filter-head::-webkit-details-marker { display: none; }
+    .filter-head::after { content: '▶'; margin-left: auto; font-size: 11px; color: #d35400; }
+    .filter-zone[open] > .filter-head { margin-bottom: 10px; }
+    .filter-zone[open] > .filter-head::after { content: '▼'; }
+    .filter-title { font-size: 14px; font-weight: bold; color: #d35400; }
+    .filter-actions { display: flex; gap: 6px; flex-shrink: 0; margin-bottom: 8px; }
     .mini-btn {
       background: var(--surface);
       border: 1px solid #f0c8a0;
@@ -198,7 +211,7 @@
       text-align: center;
       font-weight: bold;
       padding: 8px 0;
-      font-size: 13px;
+      font-size: 15px;
       background-color: #eaeded;
       border-radius: 4px;
       overflow: hidden;
@@ -225,7 +238,7 @@
     .calendar-day-cell.no-events { min-height: 50px; background-color: #fcfdfe; }
     .calendar-day-cell.no-events .day-number { color: #bdc3c7; font-weight: normal; }
 
-    .day-number { font-size: 12px; font-weight: bold; color: #566573; margin-bottom: 4px; }
+    .day-number { font-size: 14px; font-weight: bold; color: #2c3e50; margin-bottom: 4px; }
     .today .day-number {
       color: #fff;
       background-color: var(--sun);
@@ -236,7 +249,7 @@
 
     /* セル内スケジュールアイテム */
     .event-item {
-      font-size: 11px;
+      font-size: 13px;
       padding: 4px;
       margin-bottom: 4px;
       border-radius: 4px;
@@ -251,8 +264,15 @@
       gap: 4px;
     }
     .event-item:hover { transform: translateY(-1px); box-shadow: 0 2px 5px rgba(0,0,0,0.12); }
-    .event-time { font-weight: bold; flex-shrink: 0; opacity: 0.85; }
+    .event-time { font-weight: bold; flex-shrink: 0; opacity: 1; }
     .event-group { font-weight: bold; flex: 1; min-width: 0; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; }
+    /* 文字サイズ「大」：年配者向けにカレンダー文字を更に拡大（「小」は上の基準サイズ） */
+    body.cal-large .calendar-header-cell { font-size: 18px; }
+    body.cal-large .day-number { font-size: 18px; }
+    body.cal-large .event-item { font-size: 16px; }
+    body.cal-large .modal-body { font-size: 17px; }
+    body.cal-large .goal-row-1 { font-size: 18px; }
+    body.cal-large .goal-row-2-c, body.cal-large .goal-row-2-d { font-size: 16px; }
 
     /* 状態メッセージ（読み込み中・エラー・空） */
     .state-msg { text-align: center; padding: 40px 16px; color: var(--muted); font-weight: bold; }
@@ -306,9 +326,10 @@
 
     @media (max-width: 600px) {
       .calendar-grid { gap: 2px; padding: 3px; }
-      .calendar-day-cell { min-height: 80px; padding: 1px; }
-      .calendar-day-cell.no-events { min-height: 35px; }
-      .event-item { font-size: 9px; padding: 2px 1px; margin-bottom: 2px; }
+      .calendar-day-cell { min-height: 90px; padding: 2px; }
+      .calendar-day-cell.no-events { min-height: 42px; }
+      .event-item { font-size: 12px; padding: 3px 2px; margin-bottom: 3px; }
+      body.cal-large .event-item { font-size: 15px; }
       .nav-btn { padding: 12px 10px; font-size: 13px; }
     }
   </style>
@@ -318,6 +339,8 @@
 <div class="container">
 
   <div id="accountBar" class="account-bar" style="display:none;">
+    <button class="size-btn" id="calSizeBtn" onclick="toggleCalSize()">大きく</button>
+    <button class="today-btn" onclick="goToday()">今日へ移動</button>
     <button class="logout-btn" onclick="signOut()">ログアウト</button>
   </div>
 
@@ -342,22 +365,20 @@
     <button class="nav-btn" onclick="shiftMonth(1)" aria-label="次の月へ">次月 ▶</button>
   </div>
 
-  <div class="subnav">
-    <button class="today-btn" onclick="goToday()">📍 今日へ移動</button>
-  </div>
-
-  <div class="filter-zone">
-    <div class="filter-head">
-      <div class="filter-title">グループの選択</div>
+  <details class="filter-zone" id="filterAcc">
+    <summary class="filter-head">
+      <span class="filter-title">グループの選択</span>
+    </summary>
+    <div class="filter-body">
       <div class="filter-actions" id="filterActions" style="display:none;">
         <button class="mini-btn" onclick="setAllGroups(true)">全選択</button>
         <button class="mini-btn" onclick="setAllGroups(false)">全解除</button>
       </div>
+      <div id="checkboxZone" class="checkbox-container">
+        <span class="hint">データ読み込み中…</span>
+      </div>
     </div>
-    <div id="checkboxZone" class="checkbox-container">
-      <span class="hint">データ読み込み中…</span>
-    </div>
-  </div>
+  </details>
 
   <div id="calendarView"></div>
 
@@ -816,9 +837,21 @@
   }
 
   // ===== 初期化 =====
+  // カレンダー文字サイズ 小⇔大（年配者向け）。既定は小。ボタンには「次にする操作」を表示し、端末に記憶する。
+  function setCalSize(big) {
+    document.body.classList.toggle('cal-large', big);
+    try { localStorage.setItem('cal_textSize', big ? 'large' : 'small'); } catch (e) {}
+    const btn = document.getElementById('calSizeBtn');
+    if (btn) btn.textContent = big ? '小さく' : '大きく';
+  }
+  function toggleCalSize() {
+    setCalSize(!document.body.classList.contains('cal-large'));
+  }
+
   function init() {
     // GAS コールドスタート対策: ログイン中にウォームアップ ping（結果は使わない・未設定時はスキップ）
     if (API_URL.indexOf('XXXX') === -1) { try { fetch(API_URL).catch(function () {}); } catch (e) {} }
+    setCalSize((function () { try { return localStorage.getItem('cal_textSize') === 'large'; } catch (e) { return false; } })()); // 文字サイズの記憶を復元（既定は小）
     populateYearOptions();
     const now = new Date();
     document.getElementById('yearSelector').value = String(now.getFullYear());
