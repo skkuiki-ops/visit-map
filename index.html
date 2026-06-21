@@ -2276,7 +2276,7 @@
 
         const btn = document.getElementById('reg-btn');
         btn.disabled = true; btn.innerText = '登録中...';
-        showBusy('登録中…');
+        showSaving(); // 全画面ブロックはやめ保存中バッジに（操作はブロックしない）。ボタン無効化で二重登録は防ぐ。
 
         apiCall('addNew', { data: data }).then((latestData) => {
             if (activeNewMarker) activeNewMarker.remove();
@@ -2286,7 +2286,7 @@
         }).catch((err) => {
             btn.disabled = false; btn.innerText = '登録';
             handleServerError(err);
-        }).finally(hideBusy);
+        }).finally(hideSaving);
     }
 
     /* ── データキャッシュ（起動の先行表示用） ──
@@ -3899,11 +3899,44 @@
         };
     }
 
-    // ── 戸建て訪問結果の楽観的更新 ──
-    // 行ごとに { gen, pending, baseStatus, baseHistory, lastGood, chain } を保持する。
-    // タップ即UI反映（applyKodateChange を再利用）→ 直列キューで保存 → 最後の応答で正データに突き合わせ（reconcile）。
-    // 1件でも失敗したら gen を進めて以降のキューを無効化し、直前に成功した正データ（無ければ開始前）へ戻す。
+    // ── 楽観的更新の共通エンジン ──
+    // key 単位（戸建て=行番号 / 集合住宅=建物行番号）で直列キュー（chain）を持ち、UIは即時・保存は裏で順送りする。
+    //   fns.snapshot()      : 一連の最初の1回だけ呼ばれ、開始前状態を返す（失敗時のロールバック先）。
+    //   fns.apply()         : 毎回呼ばれ、currentData を楽観的に書き換えて即UI反映する。
+    //   fns.send()          : Promise<latest>（サーバー送信）。
+    //   fns.reconcile(src)  : 正データ src（getMapData の戻り）で確定描画する。
+    //   fns.restore(snap)   : 失敗かつ一度も成功していない時に、開始前状態へ戻す。
+    //   fns.onSuccess()     : 全送信が正常完了した時だけ呼ばれる（成功トースト）。
+    // 1件でも失敗したら gen を進めて以降のキューを無効化し、直前に成功した正データ（無ければ snapshot）へ戻す。
     const _optState = {};
+    function enqueueOptimistic(key, fns) {
+        const st = _optState[key] || (_optState[key] = { gen: 0, pending: 0, chain: Promise.resolve() });
+        if (st.pending === 0) { st.snap = fns.snapshot(); st.lastGood = null; } // 開始前状態を退避（楽観反映の前に）
+        fns.apply(); // 楽観反映（即UI）
+        const myGen = st.gen;
+        st.pending++;
+        showSaving();
+        st.chain = st.chain.then(() => {
+            if (st.gen !== myGen) { hideSaving(); return; } // 先行操作が失敗→無効化済み：送信しない
+            return fns.send()
+                .then((latest) => {
+                    hideSaving();
+                    if (st.gen !== myGen) return;
+                    st.lastGood = latest;   // 直前に成功した正データ（途中失敗時のロールバック先）
+                    st.pending--;
+                    if (st.pending === 0) { fns.reconcile(latest); fns.onSuccess(); } // 全送信完了 → 確定＋成功通知
+                })
+                .catch((err) => {
+                    hideSaving();
+                    if (st.gen !== myGen) return;
+                    st.gen++;               // 以降のキューを全て無効化
+                    st.pending = 0;
+                    if (st.lastGood) fns.reconcile(st.lastGood); // 直前の成功分は保持してそこへ（成功トーストは出さない）
+                    else fns.restore(st.snap);                   // まだ1件も成功していない → 開始前へ
+                    handleServerError(err); // 通知＋認証時はログイン誘導
+                });
+        });
+    }
 
     // 楽観反映用：履歴JSONの先頭に暫定エントリ（時刻は「…」、サーバー応答で正式な時刻に置き換わる）を積む。
     function addProvisionalHistory(historyJson, status) {
@@ -3922,90 +3955,90 @@
         else { applyKodateChange(rowNumber)(source || currentData); } // 行が消えた等のフォールバック
     }
 
+    // 戸建ての訪問結果。タップ即反映 → 裏で保存 → 失敗で巻き戻し（共通エンジンに乗せる）。
     function saveStatus(rowNumber, val) {
         if (!val) return;
         const idx = currentData.findIndex(d => d.rowNumber === rowNumber);
         if (idx < 0) return;
-
         // 「不在」は現在値（楽観反映済みなら最新値）から繰り上げ＝連打で 1→2→3 と進む。それ以外は同値なら再送スキップ。
         let status = val;
         if (val === '不在') status = nextAbsence(currentData[idx].最新ステータス);
         else if (currentData[idx].最新ステータス === status) return;
 
-        const st = _optState[rowNumber] || (_optState[rowNumber] = { gen: 0, pending: 0, chain: Promise.resolve() });
-
-        if (st.pending === 0) { // この一連の開始前状態を退避（まだ1件も成功していない時のロールバック先）
-            st.baseStatus = currentData[idx].最新ステータス;
-            st.baseHistory = currentData[idx].履歴データ;
-            st.lastGood = null;
-        }
-
-        // 楽観反映：該当 item を新オブジェクトに差し替え（退避した base を壊さない）→ ピン色・ボタン・履歴を即更新。
-        currentData[idx] = Object.assign({}, currentData[idx], {
-            最新ステータス: status,
-            履歴データ: addProvisionalHistory(currentData[idx].履歴データ, status)
-        });
-        applyKodateChange(rowNumber)(currentData);
-
-        const myGen = st.gen;
-        st.pending++;
-        showSaving();
-        st.chain = st.chain.then(() => {
-            if (st.gen !== myGen) { hideSaving(); return; } // 先行操作が失敗→無効化済み：送信しない
-            return apiCall('updateLocation', { rowNumber: rowNumber, status: status, memoText: null, isClearMemo: false })
-                .then((latest) => {
-                    hideSaving();
-                    if (st.gen !== myGen) return;
-                    st.lastGood = latest;   // 直前に成功した正データ（途中失敗時のロールバック先）
-                    st.pending--;
-                    if (st.pending === 0) { // 全送信完了 → 正データで確定（暫定履歴の時刻もここで確定）
-                        reconcileKodate(rowNumber, latest);
-                        showToast('訪問結果を記録しました', false);
-                    }
-                })
-                .catch((err) => {
-                    hideSaving();
-                    if (st.gen !== myGen) return;
-                    st.gen++;               // 以降のキューを全て無効化
-                    st.pending = 0;
-                    if (st.lastGood) {      // 直前に成功した分は保持し、そこへ戻す
-                        reconcileKodate(rowNumber, st.lastGood);
-                    } else {                // まだ1件も成功していない → 開始前へ戻す
-                        const i2 = currentData.findIndex(d => d.rowNumber === rowNumber);
-                        if (i2 >= 0) {
-                            currentData[i2] = Object.assign({}, currentData[i2], {
-                                最新ステータス: st.baseStatus, 履歴データ: st.baseHistory
-                            });
-                            applyKodateChange(rowNumber)(currentData);
-                        }
-                    }
-                    handleServerError(err); // 通知＋認証時はログイン誘導（統一パターンに合わせ独自トーストは出さない）
+        enqueueOptimistic(rowNumber, {
+            snapshot: () => { const it = currentData.find(d => d.rowNumber === rowNumber); return { 最新ステータス: it.最新ステータス, 履歴データ: it.履歴データ }; },
+            apply: () => {
+                const i = currentData.findIndex(d => d.rowNumber === rowNumber);
+                currentData[i] = Object.assign({}, currentData[i], {
+                    最新ステータス: status,
+                    履歴データ: addProvisionalHistory(currentData[i].履歴データ, status)
                 });
+                applyKodateChange(rowNumber)(currentData);
+            },
+            send: () => apiCall('updateLocation', { rowNumber: rowNumber, status: status, memoText: null, isClearMemo: false }),
+            reconcile: (latest) => reconcileKodate(rowNumber, latest),
+            restore: (snap) => { const i = currentData.findIndex(d => d.rowNumber === rowNumber); if (i >= 0) { currentData[i] = Object.assign({}, currentData[i], snap); applyKodateChange(rowNumber)(currentData); } },
+            onSuccess: () => showToast('訪問結果を記録しました', false)
         });
     }
 
-    // 部屋の更新を、ポップアップを閉じずにグリッドの色・履歴だけ最新化する
+    // 集合住宅の楽観反映用：部屋履歴の暫定エントリ。prefix「○号室」付きなので showRoomAction の履歴欄に出る。
+    function addRoomProvisionalHistory(historyJson, roomNum, status) {
+        let arr = [];
+        try { arr = JSON.parse(historyJson || '[]') || []; } catch (e) { arr = []; }
+        arr.unshift({ status: `${roomNum}号室: ${status}`, time: '…', user: '' });
+        return JSON.stringify(arr);
+    }
+
+    // currentData の現在値で、集合住宅の吹き出し＋指定部屋の操作欄をその場再描画する（applyRoomChange の描画部分を分離）。
+    function renderShugaRoom(buildingRow, roomNum) {
+        const item = currentData.find(d => d.rowNumber === buildingRow);
+        const marker = currentMarkers.find(m => m._rowNumber === buildingRow);
+        const popup = marker ? marker.getPopup() : null;
+        if (item && popup) {
+            popup.setHTML('<div class="popup-content">' + createShugaViewHtml([item]) + '</div>');
+            const root = popup.getElement();
+            fillDerivedAddress(root);
+            bindRoomCopyCells(root, buildingRow); // グリッドを作り直したので部屋長押し（情報コピー）を付け直す
+            const newCell = root ? root.querySelector(`[data-room="${roomNum}"]`) : null;
+            showRoomAction(buildingRow, roomNum, newCell); // 操作欄を開き直し履歴も更新
+            setTimeout(() => fitPopupInView(marker, 0), 30); // 編集後、ピンを画面中央の少し下へ戻す
+        } else {
+            renderMarkers(currentData); // フォールバック
+        }
+    }
+
+    // 該当建物行を source の同じ行で差し替えてから再描画する（他行の楽観更新を壊さない）。
+    function reconcileShugaRoom(buildingRow, roomNum, source) {
+        const i = currentData.findIndex(d => d.rowNumber === buildingRow);
+        const src = source ? source.find(d => d.rowNumber === buildingRow) : null;
+        if (i >= 0 && src) currentData[i] = src;
+        renderShugaRoom(buildingRow, roomNum);
+    }
+
+    // 部屋の更新（訪問結果・属性 共通）。ポップアップを閉じず、グリッドの色・履歴を楽観的に即反映する。
     function applyRoomChange(buildingRow, roomNum, finalStatus, addHistory) {
-        showBusy('更新中…');
-        apiCall('updateRoom', { buildingRow: buildingRow, roomNum: roomNum, status: finalStatus, addHistory: addHistory }).then((latest) => {
-            currentData = latest;
-            const item = currentData.find(d => d.rowNumber === buildingRow);
-            const marker = currentMarkers.find(m => m._rowNumber === buildingRow);
-            const popup = marker ? marker.getPopup() : null;
-            if (item && popup) {
-                // ポップアップ自体のHTMLを更新（再オープンしても最新の色を保つ）
-                popup.setHTML('<div class="popup-content">' + createShugaViewHtml([item]) + '</div>');
-                const root = popup.getElement();
-                fillDerivedAddress(root);
-                bindRoomCopyCells(root, buildingRow); // グリッドを作り直したので部屋長押し（情報コピー）を付け直す
-                const newCell = root ? root.querySelector(`[data-room="${roomNum}"]`) : null;
-                showRoomAction(buildingRow, roomNum, newCell); // 操作欄を開き直し履歴も更新
-                setTimeout(() => fitPopupInView(marker, 0), 30); // 編集後、ピンを画面中央の少し下へ戻す
-            } else {
-                renderMarkers(latest); // フォールバック
-            }
-            showToast('更新しました', false);
-        }).catch(handleServerError).finally(hideBusy);
+        const idx = currentData.findIndex(d => d.rowNumber === buildingRow);
+        if (idx < 0) return;
+        if (roomStatusOf(currentData[idx], roomNum) === finalStatus) return; // 同値スキップ（不在は繰り上げ済みで一致しない）
+
+        enqueueOptimistic(buildingRow, { // 建物行単位で直列化（同一建物の履歴順序を保証）
+            snapshot: () => { const it = currentData.find(d => d.rowNumber === buildingRow); return { 部屋ステータス: it.部屋ステータス, 最新ステータス: it.最新ステータス, 履歴データ: it.履歴データ }; },
+            apply: () => {
+                const i = currentData.findIndex(d => d.rowNumber === buildingRow);
+                const it = currentData[i];
+                let rsMap = {}; try { rsMap = JSON.parse(it.部屋ステータス || '{}') || {}; } catch (e) {}
+                rsMap[String(roomNum)] = finalStatus;
+                const patch = { 部屋ステータス: JSON.stringify(rsMap), 最新ステータス: `${roomNum}号室: ${finalStatus}` };
+                if (addHistory) patch.履歴データ = addRoomProvisionalHistory(it.履歴データ, roomNum, finalStatus);
+                currentData[i] = Object.assign({}, it, patch);
+                renderShugaRoom(buildingRow, roomNum);
+            },
+            send: () => apiCall('updateRoom', { buildingRow: buildingRow, roomNum: roomNum, status: finalStatus, addHistory: addHistory }),
+            reconcile: (latest) => reconcileShugaRoom(buildingRow, roomNum, latest),
+            restore: (snap) => { const i = currentData.findIndex(d => d.rowNumber === buildingRow); if (i >= 0) { currentData[i] = Object.assign({}, currentData[i], snap); renderShugaRoom(buildingRow, roomNum); } },
+            onSuccess: () => showToast('更新しました', false)
+        });
     }
 
     function saveRoomStatus(buildingRow, roomNum, val) {
@@ -4018,13 +4051,28 @@
         applyRoomChange(buildingRow, roomNum, status, true);
     }
 
-    // 属性（通常/訪問拒否/外国語/空き家）の更新。J列を更新し、操作ログも履歴に残す。
+    // 戸建ての属性（通常/訪問拒否/外国語/空き家）。タップ即反映（ピン形・色も変わる）→ 裏で保存 → 失敗で巻き戻し。
     function saveAttribute(rowNumber, attribute) {
-        if(!attribute) return;
-        showBusy('更新中…');
-        apiCall('updateLocation', { rowNumber: rowNumber, status: null, memoText: null, isClearMemo: false, addHistory: true, attribute: attribute })
-            .then((latest) => { applyKodateChange(rowNumber)(latest); showToast('属性を更新しました', false); })
-            .catch(handleServerError).finally(hideBusy);
+        if (!attribute) return;
+        const idx = currentData.findIndex(d => d.rowNumber === rowNumber);
+        if (idx < 0) return;
+        if (currentData[idx].属性 === attribute) return; // 同値スキップ
+
+        enqueueOptimistic(rowNumber, {
+            snapshot: () => { const it = currentData.find(d => d.rowNumber === rowNumber); return { 属性: it.属性, 履歴データ: it.履歴データ }; },
+            apply: () => {
+                const i = currentData.findIndex(d => d.rowNumber === rowNumber);
+                currentData[i] = Object.assign({}, currentData[i], {
+                    属性: attribute,
+                    履歴データ: addProvisionalHistory(currentData[i].履歴データ, '属性：' + attribute) // 暫定。応答で「属性：旧→新」に確定
+                });
+                applyKodateChange(rowNumber)(currentData);
+            },
+            send: () => apiCall('updateLocation', { rowNumber: rowNumber, status: null, memoText: null, isClearMemo: false, addHistory: true, attribute: attribute }),
+            reconcile: (latest) => reconcileKodate(rowNumber, latest),
+            restore: (snap) => { const i = currentData.findIndex(d => d.rowNumber === rowNumber); if (i >= 0) { currentData[i] = Object.assign({}, currentData[i], snap); applyKodateChange(rowNumber)(currentData); } },
+            onSuccess: () => showToast('属性を更新しました', false)
+        });
     }
 
     // 部屋の属性（訪問可/訪問拒否/外国語/空き家）の更新。操作ログも履歴に残す（addHistory=true）。
