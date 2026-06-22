@@ -66,7 +66,8 @@
     </script>
     <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
     <style>
         body { margin: 0; padding: 0; font-family: sans-serif; user-select: none; }
         #map { position: absolute; top: 0; bottom: 0; width: 100%; }
@@ -467,7 +468,7 @@
 <div id="login-overlay">
     <h1>map tool</h1>
     <p>続行するには Google アカウントでサインインしてください。<br>スプレッドシートに共有されたアカウントのみ利用できます。</p>
-    <div id="google-btn"></div>
+    <button id="google-btn" onclick="signInWithGoogle()" style="padding:12px 26px; font-size:16px; border-radius:24px; border:none; background:#2c3e50; color:#fff; cursor:pointer;">Google でサインイン</button>
     <div id="login-note">サインインできない場合は、管理者にこのアプリのスプレッドシートへの共有を依頼してください。</div>
 </div>
 
@@ -546,7 +547,7 @@
     const MY_TOKEN = 'pk.eyJ1IjoidG9ydW8xMTA0IiwiYSI6ImNtcTdlOGp2MzBhY3QycXBocno2OHQ5dmoifQ.bfkHvR5OmkacGJsDorHL5Q';
     mapboxgl.accessToken = MY_TOKEN;
     // ↓ デプロイした GAS Webアプリの URL（.../exec）に置き換える
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwNi4fxxZmNjCf5GhH92lo-p3DlzDHREF-wEGOyYWkxk9T5aB6y5ZA6zksHHPS80cpk/exec";
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwj2t-3F5ZixfXUOvVjFsoW4dJjPEExjfBDio33aTNfBo_4QVFy3qZDLx6cm6uuHHD4/exec";
     // ↓ Google Cloud で発行した OAuth クライアントID（code_api.gs と同一値）
     const GOOGLE_CLIENT_ID = "273556684740-01e17ja1as1pchs4cvlfqvh67vbt51l3.apps.googleusercontent.com";
     // ↓ 地図スタイル（Mapbox Studio のスタイルURL。標準に戻す場合は 'mapbox://styles/mapbox/streets-v12'）
@@ -557,53 +558,20 @@
     const ADDR_PREFIX = '東京都江戸川区';
     const AREA_PROXIMITY = MAP_HOME.lng + ',' + MAP_HOME.lat; // Mapboxフォールバック検索の優先中心
 
-    let ID_TOKEN = ''; // 「Googleで続ける」で取得した署名付きIDトークン(JWT)
-    let appEntered = false;       // enterApp を一度だけ実行（黙ってトークン更新するときは画面を作り直さない）
-    let tokenRefreshTimer = null; // 失効少し前に黙って新トークンを再取得するタイマー
+    let appEntered = false; // enterApp を一度だけ実行（トークン自動更新では画面を作り直さない）
 
-    /* ── セッション維持（トークン有効期限まで再認証不要・画面更新やアプリ復帰でも継続） ──
-       取得済みIDトークンを localStorage に保存し、未失効の間は認証画面を出さずに自動復帰する。
-       GoogleのIDトークンは発行から約1時間有効。実質その間は再ログイン不要。（簡易認証ゆえ保存する設計） */
-    const SESSION_TOKEN_KEY = 'vm_idtoken';
-    const SESSION_TS_KEY = 'vm_idtoken_ts';
-    const SESSION_MAX_MS = 12 * 60 * 60 * 1000; // 保存の上限（実際はトークン失効=約1時間が先に効く）
-    const DATA_CACHE_KEY = 'vm_dataCache';      // 前回取得した地図データ（起動時の先行表示用）
+    // ── Firebase Authentication 初期化（GIS から移行） ──
+    // refresh token を indexedDB に保持し、IDトークンを無音で自動更新する＝アカウント確認UIが出ない（再認証頻発の解消）。
+    const firebaseConfig = {
+        apiKey: 'AIzaSyC5ItYNNlpwkO2s54dAOjGS1d51MCYLVEk',
+        authDomain: 'sk-visit-map.firebaseapp.com',
+        projectId: 'sk-visit-map',
+        appId: '1:742821746922:web:83729214d2ffe155255f93'
+    };
+    firebase.initializeApp(firebaseConfig);
+    const fbAuth = firebase.auth();
 
-    function saveSession(token) {
-        try {
-            localStorage.setItem(SESSION_TOKEN_KEY, token);
-            localStorage.setItem(SESSION_TS_KEY, String(Date.now()));
-        } catch (e) {}
-    }
-    function clearSession() {
-        // データキャッシュも一緒に破棄する（サインアウト後、権限のない別アカウントに前データが見えるのを防ぐ）
-        try { localStorage.removeItem(SESSION_TOKEN_KEY); localStorage.removeItem(SESSION_TS_KEY); localStorage.removeItem(DATA_CACHE_KEY); } catch (e) {}
-    }
-    // 保存トークンが「保存上限内 かつ JWT未失効」なら返す。だめなら null。
-    function loadValidSession() {
-        try {
-            const token = localStorage.getItem(SESSION_TOKEN_KEY);
-            const ts = parseInt(localStorage.getItem(SESSION_TS_KEY) || '0', 10);
-            if (!token || !ts) return null;
-            if (Date.now() - ts > SESSION_MAX_MS) return null; // 保存上限(12時間)超
-            const payload = JSON.parse(decodeURIComponent(escape(atob(
-                token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
-            ))));
-            // トークン自体が失効（または15秒以内に失効）なら使わない
-            if (!payload.exp || payload.exp * 1000 < Date.now() + 15000) return null;
-            return token;
-        } catch (e) { return null; }
-    }
-    // 保存セッションがあれば、認証画面を出さずにアプリへ復帰する
-    function tryResumeSession() {
-        const token = loadValidSession();
-        if (!token) return false;
-        ID_TOKEN = token;
-        appEntered = true;
-        scheduleTokenRefresh(); // 復帰後も失効前の自動更新を予約
-        enterApp();
-        return true;
-    }
+    const DATA_CACHE_KEY = 'vm_dataCache'; // 前回取得した地図データ（起動時の先行表示用。サインアウト時に掃除する）
 
     // サインイン後（新規サインイン／セッション復帰の共通処理）：UIを切り替えてデータ取得
     function enterApp() {
@@ -632,32 +600,33 @@
         }
     }
 
-    // GIS(アカウントライブラリ)の読み込み完了後にサインインボタンを初期化する
-    function initGoogleSignIn() {
-        if (!(window.google && google.accounts && google.accounts.id)) {
-            setTimeout(initGoogleSignIn, 300); // 読み込み待ち
-            return;
-        }
-        google.accounts.id.initialize({
-            client_id: GOOGLE_CLIENT_ID,
-            callback: handleCredential,
-            auto_select: true,
-            use_fedcm_for_prompt: true // FedCM経由でOne Tapを出す＝サードパーティCookie制限下でもサイレント再認証が通りやすい（再ログイン出現を減らす）
+    // ログイン画面の「Google でサインイン」ボタンから呼ぶ
+    function signInWithGoogle() {
+        const provider = new firebase.auth.GoogleAuthProvider();
+        fbAuth.signInWithPopup(provider).catch(function (e) {
+            // ポップアップが塞がれる環境（PWA/一部モバイル）ではリダイレクト方式へフォールバック
+            if (e && (e.code === 'auth/popup-blocked' || e.code === 'auth/cancelled-popup-request' || e.code === 'auth/operation-not-supported-in-this-environment')) {
+                fbAuth.signInWithRedirect(provider);
+            } else {
+                showToast('サインインに失敗しました: ' + ((e && e.message) || e), true);
+            }
         });
-        google.accounts.id.renderButton(document.getElementById('google-btn'), {
-            type: 'standard', theme: 'filled_black', size: 'large',
-            text: 'continue_with', shape: 'pill', logo_alignment: 'center'
-        });
-        if (!ID_TOKEN) google.accounts.id.prompt(); // 復帰済みなら One Tap は出さない
     }
+
+    // ログイン状態の監視＝画面のルーティング。Firebase が indexedDB の refresh token で自動復帰・自動更新する。
+    fbAuth.onAuthStateChanged(function (user) {
+        if (user) {
+            if (!appEntered) { appEntered = true; enterApp(); } // 初回のみ画面遷移。トークン更新では何もしない
+        } else {
+            showLogin();
+        }
+    });
+
     window.addEventListener('load', initScale);
     window.addEventListener('load', () => {
         // GASのコールドスタートをログイン画面の間に済ませておく（応答は読まずに捨てる）
         try { fetch(GAS_API_URL).catch(() => {}); } catch (e) {}
         loadCachedData(); // 期限切れデータキャッシュの掃除（サインインせず開いた場合でも消す）
-        // まず未失効の保存セッションで復帰を試み、その後 GIS を初期化（失効後の再サインイン用）
-        tryResumeSession();
-        initGoogleSignIn();
     });
 
     function initScale() {
@@ -681,67 +650,13 @@
         applyZoomScale(); // マーカーサイズを切替に合わせて更新
     }
 
-    // サインイン成功時：IDトークンを保持・保存し、地図データを読み込む
-    function handleCredential(res) {
-        ID_TOKEN = res.credential;
-        try {
-            const payload = JSON.parse(decodeURIComponent(escape(atob(
-                ID_TOKEN.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
-            ))));
-            console.log('サインイン:', payload.email, payload.name);
-        } catch (e) {}
-        saveSession(ID_TOKEN); // 保存セッションとして記録（失効まで自動復帰）
-        scheduleTokenRefresh(); // 失効前に黙って更新を予約（継続使用で再ログインを避ける）
-        if (!appEntered) { appEntered = true; enterApp(); } // 初回のみ画面遷移。更新時はトークンだけ差し替える
-    }
-    // 取得済みトークンの失効3分前に、GISの auto_select で黙って新トークンを再発行する。
-    // 成功すると handleCredential が再度呼ばれてトークンが差し替わり、次回ぶんも再予約される（更新の連鎖）。
-    // Googleのログインセッションが生きていれば無操作で更新。失敗時は従来どおり失効→再ログイン（フォールバック）。
-    function scheduleTokenRefresh() {
-        if (tokenRefreshTimer) clearTimeout(tokenRefreshTimer);
-        try {
-            const payload = JSON.parse(decodeURIComponent(escape(atob(
-                ID_TOKEN.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
-            ))));
-            const ms = payload.exp * 1000 - Date.now() - 180000; // 失効3分前に更新を試みる
-            tokenRefreshTimer = setTimeout(function () {
-                try { google.accounts.id.prompt(); } catch (e) {}
-            }, Math.max(ms, 5000));
-        } catch (e) {}
-    }
+    // ※ GISの handleCredential / scheduleTokenRefresh / refreshTokenOnResume（prompt() によるトークン更新と
+    //   復帰時更新）は廃止した。Firebase が refresh token で無音自動更新するため不要＝これが再認証頻発の解消。
 
-    // モバイルでアプリを背景化すると更新タイマー(setTimeout)が止まり、復帰時にトークンが失効していることがある。
-    // 復帰（画面表示/bfcache復元）のたびに、失効が近ければ One Tap で黙って再発行し、更新タイマーも貼り直す。
-    // ＝ 継続利用での「久しぶりに開いたら再ログイン」を減らす。サインアウト中(ID_TOKEN空)は何もしない（無限ループ防止）。
-    let lastResumeRefresh = 0;
-    function refreshTokenOnResume() {
-        if (!appEntered || !ID_TOKEN) return;
-        try {
-            const payload = JSON.parse(decodeURIComponent(escape(atob(
-                ID_TOKEN.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
-            ))));
-            const msLeft = payload.exp * 1000 - Date.now();
-            const now = Date.now();
-            // 失効5分前を切っていて、かつ直近30秒に試みていなければ、黙って再発行を試みる（連続発火・レート制限対策）
-            if (msLeft < 5 * 60 * 1000 && now - lastResumeRefresh > 30000) {
-                lastResumeRefresh = now;
-                try { google.accounts.id.prompt(); } catch (e) {}
-            }
-        } catch (e) {}
-        scheduleTokenRefresh(); // 背景でタイマーが止まっていた場合に備え、前面復帰のたびに貼り直す
-    }
-    document.addEventListener('visibilitychange', function () {
-        if (document.visibilityState === 'visible') refreshTokenOnResume();
-    });
-    window.addEventListener('pageshow', refreshTokenOnResume);
-
-    // サインアウト：トークンを破棄してログイン画面へ戻す
+    // サインアウト：Firebase からサインアウトし、ログイン画面へ戻す
     function signOut() {
-        ID_TOKEN = '';
         appEntered = false;
-        if (tokenRefreshTimer) { clearTimeout(tokenRefreshTimer); tokenRefreshTimer = null; } // 自動更新を止める
-        clearSession(); // 保存セッションも破棄
-        try { google.accounts.id.disableAutoSelect(); } catch (e) {}
+        try { localStorage.removeItem(DATA_CACHE_KEY); } catch (e) {} // データキャッシュ掃除（別アカウントに前データが見えるのを防ぐ）
         currentMarkers.forEach(function (m) { m.remove(); });
         currentMarkers = [];
         document.getElementById('signout-btn').style.display = 'none';
@@ -755,30 +670,25 @@
         clearBanchiBox();
         didAutoGeolocate = false; // 次回サインイン時にまた現在地へ寄せる
         document.getElementById('area-label').style.display = 'none';
-        document.getElementById('login-overlay').classList.remove('hidden');
+        fbAuth.signOut(); // → onAuthStateChanged(null) が showLogin() を呼ぶ
     }
 
-    // ログイン画面を再表示（認証エラー時）
+    // ログイン画面を再表示（認証エラー時・未ログイン時）。自動再サインインはしない（無限ループ防止）。
     function showLogin() {
-        ID_TOKEN = '';
-        clearSession(); // 失効/無効トークンの保存セッションも破棄
+        try { localStorage.removeItem(DATA_CACHE_KEY); } catch (e) {} // 無効トークン時も前データを残さない
         document.getElementById('signout-btn').style.display = 'none';
         document.getElementById('login-overlay').classList.remove('hidden');
-        // ★ここで prompt() を呼ぶと、initialize の auto_select:true により
-        //   ユーザー操作なしで即・自動再サインインし、認証/権限エラーが続くと
-        //   「地図→ログイン→地図…」の無限ループになる。
-        //   そのため自動再試行はせず、One Tap の自動選択を無効化して、
-        //   ユーザーが「Googleで続ける」ボタンを押したときだけ再認証する。
-        try { google.accounts.id.disableAutoSelect(); } catch (e) {}
     }
 
     // GAS API 呼び出し（fetch）。CORSプリフライト回避のため Content-Type は text/plain。
-    // 認証は userEmail ではなく、検証可能な idToken(JWT) を送る。
-    function apiCall(action, params) {
+    // 認証は検証可能な Firebase IDトークン(JWT)を送る。getIdToken() は有効なトークンを返し、期限切れなら無音で自動更新する。
+    async function apiCall(action, params) {
+        const user = fbAuth.currentUser;
+        const idToken = user ? await user.getIdToken() : '';
         return fetch(GAS_API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify(Object.assign({ action: action, idToken: ID_TOKEN }, params || {}))
+            body: JSON.stringify(Object.assign({ action: action, idToken: idToken }, params || {}))
         })
         .then(function (r) { return r.json(); })
         .then(function (res) {
@@ -2372,7 +2282,7 @@
                 headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                 body: JSON.stringify({
                     action: 'reportError',
-                    idToken: ID_TOKEN,
+                    userEmail: (fbAuth.currentUser && fbAuth.currentUser.email) || '', // 参考情報（reportErrorは未認証でも受理。検証は不要）
                     message: msg.slice(0, 2000),
                     location: String(location || '').slice(0, 500),
                     userAgent: (navigator && navigator.userAgent) || ''
