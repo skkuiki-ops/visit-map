@@ -171,7 +171,9 @@
             filter: drop-shadow(0 1px 2.5px rgba(0,0,0,0.55)); }
 
         /* ── 文字サイズボタン（右下） ── */
-        #scale-btn { position: absolute; bottom: 10px; right: 10px; z-index: 9998; background: rgba(255,255,255,0.92); border: 1px solid #ccc; border-radius: 6px; padding: 8px 13px; font-size: 13px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+        /* 右下のスケール操作（左=文字サイズ「文字」／右=ピン印サイズ「印」）。可変幅でも右下にきれいに並ぶよう flex でまとめる */
+        #scale-group { position: absolute; bottom: 10px; right: 10px; z-index: 9998; display: flex; gap: 6px; }
+        #scale-btn, #text-btn { background: rgba(255,255,255,0.92); border: 1px solid #ccc; border-radius: 6px; padding: 8px 13px; font-size: 13px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.2); white-space: nowrap; }
 
         /* ── 属性・訪問結果の横並びレイアウト（ラベル左・セレクト右） ── */
         .inline-group { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
@@ -218,6 +220,9 @@
         /* 楽観的更新の「保存中」バッジ：操作はブロックしない（pointer-events:none）。画面下に控えめに出す。 */
         #saving-indicator { position: absolute; bottom: 26px; left: 50%; transform: translateX(-50%); z-index: 10005; background: rgba(44,62,80,0.82); color: #fff; padding: 6px 13px; border-radius: 16px; font-size: 13px; display: none; align-items: center; gap: 7px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); pointer-events: none; }
         #saving-indicator .spinner { width: 12px; height: 12px; border: 2px solid rgba(255,255,255,0.35); border-top-color: #fff; border-radius: 50%; animation: busy-spin 0.7s linear infinite; }
+        /* 完了バッジ（楽観更新・新規登録の「○○しました」）。「保存中…」と同じ位置・近い色で出し、緑の上部トーストの代わりにする */
+        #done-indicator { position: absolute; bottom: 26px; left: 50%; transform: translateX(-50%); z-index: 10006; background: rgba(44,62,80,0.92); color: #fff; padding: 6px 14px; border-radius: 16px; font-size: 13px; display: none; align-items: center; gap: 7px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); pointer-events: none; transition: opacity 0.32s ease; }
+        #done-indicator .done-check { color: #8ee0a8; font-weight: bold; font-size: 15px; line-height: 1; }
         @keyframes busy-spin { to { transform: rotate(360deg); } }
 
         /* ── メニューパネル・汎用モーダル（割り当て区域／貸出／ユーザー管理） ── */
@@ -458,6 +463,41 @@
         .mapboxgl-user-location-dot::after { width: 15px !important; height: 15px !important; } /* 白枠を本体に合わせて縮小 */
         .mapboxgl-user-location-dot::before { width: 11px !important; height: 11px !important; } /* 拍動する薄い青リングを一回り小さく復活 */
         .mapboxgl-user-location-accuracy-circle { display: none !important; } /* 周囲の薄い青（精度円）は引き続き非表示 */
+
+        /* ── 文字サイズ「中(text-md)／大(text-lg)」：右下「文字」ボタンで切替。large-ui(=小)を基準に吹き出し内の文字をさらに拡大 ── */
+        /* large-ui ルールより後に定義＝同詳細度・!important で後勝ち。@media 外なので全幅で効く */
+        /* 中：年配の方が読みやすい一段大きいサイズ */
+        body.text-md .popup-content { font-size: 22px !important; }
+        body.text-md .building-title { font-size: 25px !important; }
+        body.text-md .grid-table { font-size: 27px !important; }
+        body.text-md .grid-floor { font-size: 17px !important; }
+        body.text-md .form-group label { font-size: 19px !important; }
+        body.text-md .form-group input, body.text-md .form-group select, body.text-md .form-group textarea { font-size: 20px !important; }
+        body.text-md .inline-group label { font-size: 19px !important; }
+        body.text-md .inline-group select { font-size: 20px !important; }
+        body.text-md select.numlist option { font-size: 19px !important; }
+        body.text-md .submit-btn { font-size: 22px !important; }
+        body.text-md .clear-btn, body.text-md .save-btn { font-size: 18px !important; }
+        body.text-md .history-box { font-size: 18px !important; }
+        body.text-md .detail-toggle { font-size: 15px !important; }
+        body.text-md .choice-btn { font-size: 18px !important; }
+        body.text-md .attr-cur { font-size: 17px !important; }
+        /* 大：80代でもはっきり読める特大。視認性のためフォントも太くする */
+        body.text-lg .popup-content { font-size: 27px !important; font-weight: 500 !important; }
+        body.text-lg .building-title { font-size: 31px !important; font-weight: 700 !important; }
+        body.text-lg .grid-table { font-size: 33px !important; font-weight: 700 !important; }
+        body.text-lg .grid-floor { font-size: 20px !important; }
+        body.text-lg .form-group label { font-size: 22px !important; font-weight: 700 !important; }
+        body.text-lg .form-group input, body.text-lg .form-group select, body.text-lg .form-group textarea { font-size: 24px !important; }
+        body.text-lg .inline-group label { font-size: 22px !important; font-weight: 700 !important; }
+        body.text-lg .inline-group select { font-size: 24px !important; }
+        body.text-lg select.numlist option { font-size: 22px !important; }
+        body.text-lg .submit-btn { font-size: 26px !important; font-weight: 700 !important; }
+        body.text-lg .clear-btn, body.text-lg .save-btn { font-size: 21px !important; font-weight: 700 !important; }
+        body.text-lg .history-box { font-size: 21px !important; }
+        body.text-lg .detail-toggle { font-size: 18px !important; }
+        body.text-lg .choice-btn { font-size: 22px !important; font-weight: 700 !important; }
+        body.text-lg .attr-cur { font-size: 20px !important; font-weight: 700 !important; }
     </style>
 </head>
 <body>
@@ -472,7 +512,10 @@
     <div id="login-note">サインインできない場合は、管理者にこのアプリのスプレッドシートへの共有を依頼してください。</div>
 </div>
 
-<button id="scale-btn"  onclick="toggleScale()"  style="display:none;">小</button>
+<div id="scale-group" style="display:none;">
+    <button id="text-btn" onclick="toggleTextScale()">文字 小</button>
+    <button id="scale-btn" onclick="toggleScale()">印 小</button>
+</div>
 <button id="signout-btn" onclick="toggleMenu()" style="display:none;">☰ メニュー</button>
 
 <!-- メニューパネル（割り当て区域／管理機能／サインアウト。管理項目は admin のみ表示） -->
@@ -578,8 +621,9 @@
         document.getElementById('login-overlay').classList.add('hidden');
         document.getElementById('signout-btn').style.display = '';
         document.getElementById('area-nav-btn').style.display = '';
-        document.getElementById('scale-btn').style.display = '';
+        document.getElementById('scale-group').style.display = 'flex';
         updateScaleBtnText();
+        updateTextBtnText();
         loadMe(); // 自分の権限・グループを取得（メニューの管理項目の出し分け）
         const blocksReady = loadBlocks(); // 街区ポリゴン(blocks.geojson)を先読み
         loadAddrPoints();  // 番地代表点(address_points.json)を先読み（住所の逆算用）
@@ -630,24 +674,50 @@
     });
 
     function initScale() {
-        // 文字は「大」基準に統一（標準モードは廃止）。常に large-ui を適用する。
+        // 文字は「大」基準に統一（標準モードは廃止）。常に large-ui を適用する＝これが文字サイズ「小」。
         document.body.classList.add('large-ui');
-        // 右下ボタンで切り替える「アイコンの大きさ」だけを記憶から復元する。
+        // 右下ボタンで切り替える「アイコン(印)の大きさ」だけを記憶から復元する。
         if (localStorage.getItem('iconScale') === 'large') document.body.classList.add('icon-large');
+        // 文字サイズ（小=既定 / 中=text-md / 大=text-lg）を記憶から復元する。
+        const ts = localStorage.getItem('textScale');
+        if (ts === 'medium') document.body.classList.add('text-md');
+        else if (ts === 'large') document.body.classList.add('text-lg');
     }
 
-    // 現在のアイコンサイズに応じてボタン表示を更新
+    // 現在のアイコン(印)サイズに応じてボタン表示を更新（「印 小」「印 大」）
     function updateScaleBtnText() {
         const t = document.body.classList.contains('icon-large') ? '大' : '小';
-        document.getElementById('scale-btn').textContent = t;
+        document.getElementById('scale-btn').textContent = '印 ' + t;
     }
 
-    // 右下ボタン：アイコン（マーカー）の大きさを 標準 ⇔ 大 で切替（文字サイズは変えない）
+    // 右下ボタン：アイコン（印＝マーカー）の大きさを 標準 ⇔ 大 で切替（文字サイズは変えない）
     function toggleScale() {
         const iconLarge = document.body.classList.toggle('icon-large');
         localStorage.setItem('iconScale', iconLarge ? 'large' : 'normal');
         updateScaleBtnText();
         applyZoomScale(); // マーカーサイズを切替に合わせて更新
+    }
+
+    // 文字サイズ：小(既定=large-ui)→中(text-md)→大(text-lg) の3段階。吹き出し内の文字を大きくする（印＝ピンサイズとは独立）。
+    function currentTextScale() {
+        if (document.body.classList.contains('text-lg')) return 'large';
+        if (document.body.classList.contains('text-md')) return 'medium';
+        return 'small';
+    }
+    function updateTextBtnText() {
+        const label = { small: '小', medium: '中', large: '大' }[currentTextScale()];
+        const btn = document.getElementById('text-btn');
+        if (btn) btn.textContent = '文字 ' + label;
+    }
+    // 左の「文字」ボタン：押すたび 小→中→大→小 と循環する。
+    function toggleTextScale() {
+        const order = ['small', 'medium', 'large'];
+        const next = order[(order.indexOf(currentTextScale()) + 1) % order.length];
+        document.body.classList.remove('text-md', 'text-lg');
+        if (next === 'medium') document.body.classList.add('text-md');
+        else if (next === 'large') document.body.classList.add('text-lg');
+        localStorage.setItem('textScale', next);
+        updateTextBtnText();
     }
 
     // ※ GISの handleCredential / scheduleTokenRefresh / refreshTokenOnResume（prompt() によるトークン更新と
@@ -660,7 +730,7 @@
         currentMarkers.forEach(function (m) { m.remove(); });
         currentMarkers = [];
         document.getElementById('signout-btn').style.display = 'none';
-        document.getElementById('scale-btn').style.display = 'none';
+        document.getElementById('scale-group').style.display = 'none';
         document.getElementById('area-nav-btn').style.display = 'none';
         closeMenu();
         closeAppModal();
@@ -965,10 +1035,19 @@
         grid.dataset.cur = btn.dataset.cur;
         btn.replaceWith(grid);
     }
+    // 選択ボタン群のうち、押されたボタンだけを選択色(on)にし、同じグリッドの他は未選択色(off)へ戻す。
+    // 戸建て新規フォームで「押しても色が変わらない」問題の解消（集合住宅編集と同じ押下フィードバックにする）。
+    function highlightPicked(btn) {
+        if (!btn) return;
+        const grid = btn.closest('.choice-grid');
+        if (grid) grid.querySelectorAll('.choice-btn').forEach(b => { if (b.dataset.off) b.setAttribute('style', b.dataset.off); });
+        if (btn.dataset.on) btn.setAttribute('style', btn.dataset.on);
+    }
     // 戸建て新規フォーム：訪問結果/属性ボタンを押した時点で、その値を hidden にセットして即登録する。
     // 登録ボタンを押さずに反映する（属性・訪問結果のどちらでも可）。確定用の「登録」ボタンは
-    // 「詳細を表示」内に控える（メモを添えたい等のときに使う）。
-    function pickNewAndSubmit(inputId, val, lat, lng) {
+    // 「詳細を表示」内に控える（メモを添えたい等のときに使う）。押したボタンは即ハイライトして押下を可視化する。
+    function pickNewAndSubmit(ev, inputId, val, lat, lng) {
+        highlightPicked(ev && ev.currentTarget);
         const input = document.getElementById(inputId);
         if (input) input.value = val;
         submitNewLocation(lat, lng, '戸建て');
@@ -1066,6 +1145,27 @@
             const el = document.getElementById('saving-indicator');
             if (el) el.style.display = 'none';
         }
+    }
+    // 楽観更新・新規登録の完了通知。「保存中…」と同じ位置・近い色で「○○しました」を一瞬出してフェードアウトする。
+    // 緑の上部トースト(showToast)ではなく、更新中(saving)の流れを引き継ぐ控えめな下部バッジにする。
+    function showDone(msg) {
+        const sv = document.getElementById('saving-indicator');
+        if (sv) sv.style.display = 'none'; // 「保存中…」が残っていれば消す（同じ場所で切り替わって見えるように。参照カウントは触らない）
+        let el = document.getElementById('done-indicator');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'done-indicator';
+            document.body.appendChild(el);
+        }
+        el.innerHTML = '<span class="done-check">✓</span>' + (msg || '完了しました');
+        el.style.display = 'flex';
+        el.style.opacity = '1';
+        clearTimeout(window._doneTimer);
+        clearTimeout(window._doneFade);
+        window._doneTimer = setTimeout(() => {
+            el.style.opacity = '0';
+            window._doneFade = setTimeout(() => { el.style.display = 'none'; }, 320);
+        }, 1500);
     }
 
     /* ── 住所で移動（地区→丁目→番地を選んで、そのエリアの中心へ移動） ──
@@ -1956,10 +2056,10 @@
             formHtml += `
                 <div class="building-title">📍 戸建てを新規登録</div>
                 <input type="hidden" id="new-attribute-k" value="通常">
-                ${newAddrRowHtml(attrLineHtml('通常', `pickNewAndSubmit('new-attribute-k', '%v', ${latVal}, ${lngVal})`, false))}
+                ${newAddrRowHtml(attrLineHtml('通常', `pickNewAndSubmit(event, 'new-attribute-k', '%v', ${latVal}, ${lngVal})`, false))}
                 <input type="hidden" id="new-status" value="">
                 <div style="font-weight:bold; font-size:14px; margin:2px 0 4px;">訪問結果（タップで登録）</div>
-                ${resultChoiceHtml('', `pickNewAndSubmit('new-status', '%v', ${latVal}, ${lngVal})`)}
+                ${resultChoiceHtml('', `pickNewAndSubmit(event, 'new-status', '%v', ${latVal}, ${lngVal})`)}
                 <div class="form-group memo-empty"><label>メモ</label><textarea id="new-memo" rows="2"></textarea></div>
                 <button class="submit-btn detail-only" id="reg-btn" onclick="submitNewLocation(${latVal}, ${lngVal}, '戸建て')">登録</button>
                 <button class="detail-toggle" onclick="togglePopupDetail(this)">▼ 詳細を表示</button>
@@ -2191,7 +2291,7 @@
         apiCall('addNew', { data: data }).then((latestData) => {
             if (activeNewMarker) activeNewMarker.remove();
             activeNewMarker = null;
-            showToast('登録しました', false);
+            showDone('登録しました');
             renderMarkers(latestData);
         }).catch((err) => {
             btn.disabled = false; btn.innerText = '登録';
@@ -3888,7 +3988,7 @@
             send: () => apiCall('updateLocation', { rowNumber: rowNumber, status: status, memoText: null, isClearMemo: false }),
             reconcile: (latest) => reconcileKodate(rowNumber, latest),
             restore: (snap) => { const i = currentData.findIndex(d => d.rowNumber === rowNumber); if (i >= 0) { currentData[i] = Object.assign({}, currentData[i], snap); applyKodateChange(rowNumber)(currentData); } },
-            onSuccess: () => showToast('訪問結果を記録しました', false)
+            onSuccess: () => showDone('訪問結果を記録しました')
         });
     }
 
@@ -3947,7 +4047,7 @@
             send: () => apiCall('updateRoom', { buildingRow: buildingRow, roomNum: roomNum, status: finalStatus, addHistory: addHistory }),
             reconcile: (latest) => reconcileShugaRoom(buildingRow, roomNum, latest),
             restore: (snap) => { const i = currentData.findIndex(d => d.rowNumber === buildingRow); if (i >= 0) { currentData[i] = Object.assign({}, currentData[i], snap); renderShugaRoom(buildingRow, roomNum); } },
-            onSuccess: () => showToast('更新しました', false)
+            onSuccess: () => showDone('更新しました')
         });
     }
 
@@ -3981,7 +4081,7 @@
             send: () => apiCall('updateLocation', { rowNumber: rowNumber, status: null, memoText: null, isClearMemo: false, addHistory: true, attribute: attribute }),
             reconcile: (latest) => reconcileKodate(rowNumber, latest),
             restore: (snap) => { const i = currentData.findIndex(d => d.rowNumber === rowNumber); if (i >= 0) { currentData[i] = Object.assign({}, currentData[i], snap); applyKodateChange(rowNumber)(currentData); } },
-            onSuccess: () => showToast('属性を更新しました', false)
+            onSuccess: () => showDone('属性を更新しました')
         });
     }
 
