@@ -168,6 +168,8 @@
         /* マーカー（ピン）の見た目（サイズはJSのapplyZoomScaleで動的調整） */
         /* 屋外・年配者向けの視認性強化：太字・濃い影・文字の縁取りでくっきり見せる */
         .custom-marker { display: flex; justify-content: center; align-items: center; font-weight: 900; border-radius: 50%; cursor: pointer; background: white; box-shadow: 0 2px 5px rgba(0,0,0,0.55); text-shadow: 0 1px 1.5px rgba(0,0,0,0.45); }
+        /* タップ判定を見た目より少し広げる（近接ピンでも操作しやすく。透明な当たり判定。星形(拒/外)はclip-pathで形状どおりになる） */
+        .custom-marker::before { content: ''; position: absolute; inset: -8px; }
         .marker-kodedate { width: 24px; height: 24px; font-size: 13px; border: 2.5px solid #222; }
         .marker-shuga { width: 28px; height: 28px; font-size: 16px; background: #8C8C8C; border: 2px solid white; border-radius: 6px; }
         /* 戸建ての「訪問拒否(拒)」「外国語(外)」は外枠を☆形にする（塗り＝属性色／白文字） */
@@ -602,7 +604,7 @@
     const MY_TOKEN = 'pk.eyJ1IjoidG9ydW8xMTA0IiwiYSI6ImNtcTdlOGp2MzBhY3QycXBocno2OHQ5dmoifQ.bfkHvR5OmkacGJsDorHL5Q';
     mapboxgl.accessToken = MY_TOKEN;
     // ↓ デプロイした GAS Webアプリの URL（.../exec）に置き換える
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzIG6mST1FYUFxN5oqmgK8UIEkbftGfveqIDiUy0B1AcSiWF5Xi0Ya5RgySnWc0yUUE/exec";
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwjjdpJjCbAQuViCpf-_rXwdqFxjhnRdJKFgA2ZxDTmzorpXO2bgw6qF1KMw-GfhlOz/exec";
     // ↓ Google Cloud で発行した OAuth クライアントID（code_api.gs と同一値）
     const GOOGLE_CLIENT_ID = "273556684740-01e17ja1as1pchs4cvlfqvh67vbt51l3.apps.googleusercontent.com";
     // ↓ 地図スタイル（Mapbox Studio のスタイルURL。標準に戻す場合は 'mapbox://styles/mapbox/streets-v12'）
@@ -683,6 +685,11 @@
         const su = document.getElementById('startup-overlay');
         if (su && !su.classList.contains('hidden') && !appEntered) showLogin();
     }, 12000);
+    // リダイレクト方式サインイン（PWA/一部モバイル）の失敗を可視化する。
+    // 承認済みドメイン未登録・ネットワーク断などで戻ってきた時、従来は無音だったので原因が分かるよう通知する。
+    fbAuth.getRedirectResult().catch(function (e) {
+        showToast('サインインに失敗しました: ' + ((e && e.message) || e), true);
+    });
 
     window.addEventListener('load', initScale);
     window.addEventListener('load', () => {
@@ -781,7 +788,7 @@
         })
         .then(function (r) { return r.json(); })
         .then(function (res) {
-            if (res.error) throw new Error(res.message || res.error);
+            if (res.error) { const e = new Error(res.message || res.error); e.code = res.error; throw e; } // error種別を code で保持（文言非依存の判定用）
             return res.data;
         });
     }
@@ -1075,7 +1082,12 @@
     // 登録ボタンを押さずに反映する（属性・訪問結果のどちらでも可）。確定用の「登録」ボタンは
     // 「詳細を表示」内に控える（メモを添えたい等のときに使う）。押したボタンは即ハイライトして押下を可視化する。
     function pickNewAndSubmit(ev, inputId, val, lat, lng) {
-        highlightPicked(ev && ev.currentTarget);
+        const btn = ev && ev.currentTarget;
+        highlightPicked(btn);
+        // 二重送信防止: 押した瞬間に新規フォーム内の選択ボタンを無効化する（応答前の連打で訂正タップが
+        // サーバ側の重複抑止により無言で捨てられるのを防ぐ。失敗時は submitNewLocation の catch で復帰）。
+        const form = btn ? btn.closest('.popup-content') : null;
+        if (form) form.querySelectorAll('.choice-btn').forEach(b => { b.disabled = true; b.style.pointerEvents = 'none'; });
         const input = document.getElementById(inputId);
         if (input) input.value = val;
         submitNewLocation(lat, lng, '戸建て');
@@ -1704,6 +1716,7 @@
     //  ・街区が特定できない/街区内に番地点が無い場合 → 最寄り番地(400m以内)にフォールバック
     function deriveAddress(lng, lat) {
         if (!addrPoints || !addrPoints.length || isNaN(lng) || isNaN(lat)) return null;
+        const cosLat = Math.cos(lat * Math.PI / 180); // 経度差は緯度で縮むため補正（最寄り判定を実距離に近づける）
         const block = findBlock(lng, lat); // ピンを内包する街区（赤枠と同じロジック）
         if (block && block.geometry && block.geometry.coordinates) {
             const ring = block.geometry.coordinates[0];
@@ -1711,7 +1724,7 @@
             for (let i = 0; i < addrPoints.length; i++) {
                 const p = addrPoints[i];
                 if (!pointInRing(p.x, p.y, ring)) continue; // その街区の中にある番地点だけ
-                const dx = p.x - lng, dy = p.y - lat, d = dx * dx + dy * dy;
+                const dx = (p.x - lng) * cosLat, dy = p.y - lat, d = dx * dx + dy * dy;
                 if (d < bd) { bd = d; best = p; }
             }
             if (best) return best.a;
@@ -1720,8 +1733,8 @@
         let nb = null, nd = Infinity;
         for (let i = 0; i < addrPoints.length; i++) {
             const p = addrPoints[i];
-            const dx = p.x - lng, dy = p.y - lat, d = dx * dx + dy * dy;
-            if (d < nd) { nd = d; nb = p; }
+            const dx = (p.x - lng) * cosLat, dy = p.y - lat, d = dx * dx + dy * dy;
+            if (d < nd) { nb = p; nd = d; }
         }
         if (nb && distM(lng, lat, nb.x, nb.y) <= 400) return nb.a;
         return null;
@@ -1793,7 +1806,8 @@
     function showAreaLabel(text) {
         const el = document.getElementById('area-label');
         // 住所だけを表示。タップ＝枠線と住所表示の消去（消去前に確認ダイアログを出すので誤タップでも即消えない）
-        el.innerHTML = '<span id="area-label-text">' + text + '</span>';
+        // ※利用者入力(住所D/E列・AreaList区域名)が来るため必ず escHtml（保存型XSS対策）。
+        el.innerHTML = '<span id="area-label-text">' + escHtml(text) + '</span>';
         el.style.display = 'block';
         attachLongPress(document.getElementById('area-label-text'), () => askClearAreaSelection(), () => {});
     }
@@ -1884,6 +1898,15 @@
             clearTimeout(singleTapTimer);            // 予約済みの戸建て登録タイマーもキャンセル
             if (!dragged) return; // 動かさず離した → 何もしない（通常の click で吹き出しが開く）
             const ll = marker.getLngLat();
+            // 移動先が他のピンと同一座標になる場合は自動キャンセル（同座標スタックを作らない。判定はピンのグループ化と同じ6桁一致）
+            const destKey = ll.lat.toFixed(6) + '_' + ll.lng.toFixed(6);
+            const clash = (currentData || []).some(d => d.rowNumber !== rowNumber
+                && parseFloat(d.緯度).toFixed(6) + '_' + parseFloat(d.経度).toFixed(6) === destKey);
+            if (clash) {
+                renderMarkers(currentData); // 元の位置へ戻す
+                showToast('移動先に既にピンがあるため移動をキャンセルしました', true);
+                return;
+            }
             appConfirm('このピンをここへ移動しますか？', { okLabel: '移動する' }).then(ok => {
                 if (!ok) { renderMarkers(currentData); return; } // キャンセル → 元の位置へ戻す
                 showBusy('移動中…');
@@ -1928,7 +1951,7 @@
         try {
             map.resize(); map.triggerRepaint();
             if (glLost) setTimeout(() => {
-                if (glLost && document.visibilityState === 'visible') location.reload();
+                if (glLost && document.visibilityState === 'visible') reloadApp(); // キャッシュバスト付き再読込に統一（reloadApp は location.reload へフォールバック）
             }, 1200); // 復元イベントを少し待ち、戻らなければ再読込
         } catch (e) {}
     }
@@ -1943,6 +1966,8 @@
         if (infoCopy && infoCopy.style.display === 'flex') { closeInfoCopy(); return true; } // 最前面の情報コピーを先に閉じる
         const appModal = document.getElementById('app-modal');
         if (appModal && appModal.style.display === 'flex') { closeAppModal(); return true; } // 管理モーダル（割り当て/貸出/ユーザー/メンテ/進捗）も Esc・背景タップで閉じる
+        const areaModal = document.getElementById('area-modal');
+        if (areaModal && areaModal.style.display === 'flex') { closeAreaNav(); return true; } // 住所検索モーダルも Esc で閉じる（背景タップは従来から可）
         if (activeNewMarker) { activeNewMarker.remove(); activeNewMarker = null; closed = true; }
         currentMarkers.forEach(m => {
             const p = m.getPopup();
@@ -2192,7 +2217,7 @@
     }
 
     // 部屋マーク（個人宅/会社）の保存形式 ⇔ {部屋番号:'p'|'c'} 変換。
-    // V列文字列: 個人=数字そのまま("305")／会社=先頭C("C305")。旧データ(数字のみ)は全て個人として読める。
+    // U列文字列: 個人=数字そのまま("305")／会社=先頭C("C305")。旧データ(数字のみ)は全て個人として読める。
     function parseRoomMarks(str) {
         const m = {};
         String(str || '').split(',').forEach(tok => {
@@ -2204,7 +2229,7 @@
         });
         return m;
     }
-    // マップ→V列文字列。validRooms に無い部屋のマークは捨てる（部屋を外したら一緒に消える）。
+    // マップ→U列文字列。validRooms に無い部屋のマークは捨てる（部屋を外したら一緒に消える）。
     function encodeRoomMarks(map, validRooms) {
         return Object.keys(map)
             .map(Number)
@@ -2323,6 +2348,9 @@
             renderMarkers(latestData);
         }).catch((err) => {
             btn.disabled = false; btn.innerText = '登録';
+            // 失敗時は選択ボタンの無効化も解除して再操作できるようにする（pickNewAndSubmit で無効化したぶん）
+            const root = activeNewMarker && activeNewMarker.getPopup() ? activeNewMarker.getPopup().getElement() : null;
+            if (root) root.querySelectorAll('.choice-btn').forEach(b => { b.disabled = false; b.style.pointerEvents = ''; });
             handleServerError(err);
         }).finally(hideSaving);
     }
@@ -2440,8 +2468,10 @@
         sendErrorToServer('CommError', msg, 'handleServerError'); // 誰の端末で起きたかを ErrorLog に集約する
         // 認証エラー（トークン無効・期限切れ・権限なし）はログイン画面へ戻す。
         // サーバーの具体的な理由（権限なしなら対象メール入り）をそのまま表示し、原因を分かるようにする。
+        // 判定は GAS の error種別(code=AuthFailed/Forbidden)を優先し、文言一致はフォールバック（文言変更で壊れない）。
         // showLogin() は自動再サインインしないため、ここに来てもループにはならない。
-        if (msg.indexOf('Access Denied') >= 0 || msg.indexOf('利用権限') >= 0 || msg.indexOf('サインイン') >= 0) {
+        const code = (err && err.code) || '';
+        if (code === 'AuthFailed' || code === 'Forbidden' || msg.indexOf('Access Denied') >= 0 || msg.indexOf('利用権限') >= 0 || msg.indexOf('サインイン') >= 0) {
             showToast(msg, true);
             showLogin();
             return;
@@ -3205,8 +3235,10 @@
         const isShared = (s.group === SHARED_GROUP_NAME); // 全体利用（共同利用）への割り振りモード
         const body = document.getElementById('app-modal-body');
         const opt = (v, l, cur) => `<option value="${escHtml(String(v))}" ${String(cur) === String(v) ? 'selected' : ''}>${escHtml(String(l))}</option>`;
-        const groups = Array.from(new Set(lendState.users.map(u => u.group).filter(Boolean)));
-        const users = isShared ? [] : lendState.users.filter(u => !s.group || u.group === s.group);
+        // 無効化(active=false)ユーザーは貸出先に出さない（参照できない人への貸出＝区域の滞留を入口で防ぐ。最終防御はGAS lendArea）
+        const activeUsers = lendState.users.filter(u => u.active !== false);
+        const groups = Array.from(new Set(activeUsers.map(u => u.group).filter(Boolean)));
+        const users = isShared ? [] : activeUsers.filter(u => !s.group || u.group === s.group);
         if (s.email && s.email !== '__GROUP__' && !users.some(u => u.email === s.email)) s.email = '';
         const noChome = s.district && AREA_DATA[s.district] === null;
         const chomes = (s.district && !noChome) ? Object.keys(AREA_DATA[s.district]) : [];
@@ -3502,7 +3534,8 @@
                 popupHtml += createShugaViewHtml(items);
             } else {
                 styleKodateMarker(markerEl, firstItem);
-                popupHtml += createKodedateViewHtml(firstItem);
+                // 同一座標に複数の戸建て（世帯）がある場合はページャ付きで全件を辿れるようにする（座標重複でも世帯が消えない）
+                popupHtml += (items.length > 1) ? kodateGroupHtml(items, 0) : createKodedateViewHtml(firstItem);
             }
             popupHtml += `</div>`;
 
@@ -3518,6 +3551,7 @@
                 if (!isShuga) attachHistoryLongPress(popup.getElement(), firstItem.rowNumber, false); // 戸建て履歴の長押し編集
                 if (isShuga) bindRoomCopyCells(popup.getElement(), firstItem.rowNumber); // 部屋: タップ=操作欄 / 長押し=情報コピー
                 else bindTitleCopy(popup.getElement(), firstItem.rowNumber);              // 戸建て: 「戸建て」長押し=情報コピー
+                if (!isShuga && items.length > 1) bindKodateGroupPager(popup, marker, items); // 同座標の複数世帯ページャ（◀▶で切替）
                 fitPopupInView(marker, 0); // 部屋操作欄は最初から高さを確保するので追加余白は不要
             });
             // 吹き出しを閉じたら、展開中のUI（編集フォーム・詳細表示・属性4択・部屋操作欄）を初期状態へ戻す
@@ -3531,6 +3565,7 @@
             marker._isKodate = (firstItem.種別 !== '集合住宅'); // 広域表示の出し分け用
             marker._shugaSmall = isSmallShuga;                  // 小さめ集合住宅は更に広域(z<SHUGA_SMALL_HIDE_BELOW_ZOOM)で隠す
             marker._rowNumber = firstItem.rowNumber;            // 部屋更新時にポップアップを特定する用
+            if (!isShuga) marker._rowNumbers = items.map(it => it.rowNumber); // 同座標の複数世帯を全部覚える（ページャ・インプレース判定用）
 
             // このマーカーを開くときは、新規フォームや他の開いているポップアップを閉じる
             // （寄せる処理は popup の 'open' イベントで実高さを測って行う）
@@ -3548,6 +3583,39 @@
         });
 
         applyZoomVisibility(); // 現在のズームに応じて戸建ての表示/非表示を反映
+    }
+
+    // 同一座標に複数の戸建て（世帯）がある場合の吹き出し。◀▶ページャで全件を辿れるようにする（座標重複でも世帯が消えない）。
+    function kodateGroupHtml(items, idx) {
+        const n = items.length, i = ((idx % n) + n) % n;
+        const navBtn = (d, label) => `<button class="kg-nav" data-d="${d}" style="border:1px solid #b8c4cc; background:#eef3f6; color:#2c3e50; border-radius:6px; padding:2px 12px; font-size:14px; cursor:pointer;">${label}</button>`;
+        const pager = `<div class="kodate-group-nav" style="display:flex; align-items:center; justify-content:space-between; gap:6px; margin-bottom:6px; padding-bottom:4px; border-bottom:1px dashed #cfd8dd;">`
+            + navBtn(-1, '◀')
+            + `<span style="font-size:12px; font-weight:bold; color:#2c3e50;">同じ地点に ${n} 世帯（${i + 1}/${n}）</span>`
+            + navBtn(1, '▶')
+            + `</div>`;
+        return `<div class="kodate-group" data-idx="${i}">${pager}${createKodedateViewHtml(items[i])}</div>`;
+    }
+    // ページャの◀▶に切替処理を割り当てる（押すたび吹き出し内容・マーカー色・各種長押しを作り直して再バインド）。
+    function bindKodateGroupPager(popup, marker, items) {
+        const root = popup.getElement && popup.getElement();
+        if (!root) return;
+        root.querySelectorAll('.kg-nav').forEach(btn => {
+            btn.onclick = () => {
+                const wrap = root.querySelector('.kodate-group');
+                const n = items.length;
+                const cur = wrap ? (parseInt(wrap.dataset.idx) || 0) : 0;
+                const ni = (((cur + (parseInt(btn.dataset.d) || 0)) % n) + n) % n;
+                popup.setHTML('<div class="popup-content">' + kodateGroupHtml(items, ni) + '</div>');
+                styleKodateMarker(marker.getElement(), items[ni]); applyZoomScale(); // マーカー色を表示中の世帯に合わせる
+                const el = popup.getElement();
+                fillDerivedAddress(el);
+                attachHistoryLongPress(el, items[ni].rowNumber, false);
+                bindTitleCopy(el, items[ni].rowNumber);
+                bindKodateGroupPager(popup, marker, items); // 作り直したボタンへ再バインド
+                setTimeout(() => fitPopupInView(marker, 0), 30);
+            };
+        });
     }
 
     // 戸建て詳細ポップアップ画面
@@ -3596,7 +3664,7 @@
         let roomStatusMap = {};
         try { roomStatusMap = JSON.parse(first.部屋ステータス || '{}') || {}; } catch(e) { roomStatusMap = {}; }
         const hideNum = String(first.部屋番号非表示) === '1';
-        // 個人宅/会社（V列）→ {部屋番号:'p'|'c'} に展開し、セルにアイコンを付ける
+        // 個人宅/会社（U列）→ {部屋番号:'p'|'c'} に展開し、セルにアイコンを付ける
         const roomMarkMap = parseRoomMarks(first.個人宅);
         const memoText = cleanMemo(first);
         const memoCls = memoText.trim() ? '' : ' memo-empty'; // 空メモは簡易表示で隠す
@@ -3627,10 +3695,10 @@
         // 操作・履歴・色は通常の部屋と同じ仕組み（部屋ステータスS列・履歴Q列を予約キー「管理人」で流用）。
         let mgrHtml = '';
         if (String(first.管理人) === 'あり') {
+            // セルの表記は他の部屋と同様に固定（「管理人」）。状態は色だけで表す（roomVisual）。見出しは付けない。
             const mv = roomVisual(roomStatusMap[MGR_KEY]);
-            mgrHtml = `<div style="margin-top:8px; font-size:12px; font-weight:bold; color:#555;">👤 管理人</div>`
-                + `<table class="grid-table" style="width:auto; margin-top:2px;"><tbody><tr>`
-                + `<td class="cell-active" data-room="${MGR_KEY}" style="min-width:72px; background:${mv.bg}; color:${mv.color}; text-align:center;">${mv.char ? escHtml(mv.char) : '未'}</td>`
+            mgrHtml = `<table class="grid-table" style="width:auto; margin-top:8px;"><tbody><tr>`
+                + `<td class="cell-active" data-room="${MGR_KEY}" style="min-width:72px; background:${mv.bg}; color:${mv.color}; text-align:center;">管理人</td>`
                 + `</tr></tbody></table>`;
         }
 
@@ -3943,10 +4011,13 @@
     function applyKodateChange(rowNumber) {
         return (latest) => {
             currentData = latest;
+            saveDataCache(currentData); // インプレース更新でもキャッシュを最新化（次回起動の先行表示で旧状態が一瞬出るのを防ぐ）
             const item = currentData.find(d => d.rowNumber === rowNumber);
             const marker = currentMarkers.find(m => m._rowNumber === rowNumber);
             const popup = marker ? marker.getPopup() : null;
-            if (item && marker && popup) {
+            // 同一座標に複数世帯（ページャ付き吹き出し）のマーカーは、ページャを保つため全再描画に委ねる
+            const isGroup = !!(marker && marker._rowNumbers && marker._rowNumbers.length > 1);
+            if (item && marker && popup && !isGroup) {
                 styleKodateMarker(marker.getElement(), item); // ピンの色・形を更新
                 applyZoomScale();                             // ☆⇔○でサイズが変わるため再調整
                 popup.setHTML('<div class="popup-content">' + createKodedateViewHtml(item) + '</div>');
@@ -4053,6 +4124,7 @@
 
     // currentData の現在値で、集合住宅の吹き出し＋指定部屋の操作欄をその場再描画する（applyRoomChange の描画部分を分離）。
     function renderShugaRoom(buildingRow, roomNum) {
+        saveDataCache(currentData); // 部屋ステータス変更でもキャッシュを最新化（次回起動の先行表示で旧色が一瞬出るのを防ぐ）
         const item = currentData.find(d => d.rowNumber === buildingRow);
         const marker = currentMarkers.find(m => m._rowNumber === buildingRow);
         const popup = marker ? marker.getPopup() : null;
@@ -4174,6 +4246,7 @@
     // 集合住宅の吹き出しを、閉じずにその場で最新化する（履歴クリア後などに使用）
     function refreshShugaPopup(buildingRow, latest) {
         currentData = latest;
+        saveDataCache(currentData); // インプレース更新でもキャッシュを最新化（次回起動の先行表示で旧状態が一瞬出るのを防ぐ）
         const item = currentData.find(d => d.rowNumber === buildingRow);
         const marker = currentMarkers.find(m => m._rowNumber === buildingRow);
         const popup = marker ? marker.getPopup() : null;
