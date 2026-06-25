@@ -1281,8 +1281,10 @@
                 el.style.fontSize = Math.round(base.f * scale) + 'px';
             } else if (el.classList.contains('marker-facility')) {
                 const base = iconLarge ? { w: 46, f: 38 } : { w: 30, f: 24 }; // 施設＝絵文字。fontSize が見た目サイズ
-                el.style.width = el.style.height = Math.round(base.w * scale) + 'px';
-                el.style.fontSize = Math.round(base.f * scale) + 'px';
+                // 施設は目印なので低ズームで大きく見せる：z13で2.5倍、z16で等倍、その間は段階的(線形)に縮める（z13以下は2.5倍／z16以上は等倍）。
+                const facMult = zoom <= 13 ? 2.5 : zoom >= 16 ? 1.0 : 2.5 - (zoom - 13) * 0.5;
+                el.style.width = el.style.height = Math.round(base.w * scale * facMult) + 'px';
+                el.style.fontSize = Math.round(base.f * scale * facMult) + 'px';
             }
         });
     }
@@ -2029,6 +2031,13 @@
     // Mapbox標準のドラッグは長押し後の同一タッチでは効かないため、pointermoveで自前にマーカーを動かす。
     // touch/mouse を混在させると合成イベントで二重起動し、移動モードのdocumentリスナが残って以降のタップが
     // 効かなくなるため、pointer events に統一する。通常タップ（吹き出し）と区別するため長押し(500ms)で起動。
+    // 同時タッチ数を数える（ピンチ等＝2本指以上を検知して、マーカー移動の長押しを抑止するため）。document の capture で各マーカーより先に拾う。
+    let activeTouchPoints = 0;
+    document.addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch') activeTouchPoints++; }, true);
+    const _decTouchPoints = (e) => { if (e.pointerType === 'touch') activeTouchPoints = Math.max(0, activeTouchPoints - 1); };
+    document.addEventListener('pointerup', _decTouchPoints, true);
+    document.addEventListener('pointercancel', _decTouchPoints, true);
+
     function enableMarkerDragOnLongPress(marker, el, rowNumber) {
         let pressTimer = null, moving = false, dragged = false, sx = 0, sy = 0;
         const onMove = (cx, cy) => {
@@ -2069,6 +2078,7 @@
             });
         };
         const enter = () => {
+            if (activeTouchPoints >= 2) return; // 複数指（ピンチ等）が同時に検知されている間は移動モードに入らない
             moving = true; dragged = false;
             el.classList.add('marker-moving');
             map.dragPan.disable();                    // 移動中は地図がパンしないように
@@ -2079,7 +2089,10 @@
             document.addEventListener('pointerup', finishMove);
             document.addEventListener('pointercancel', finishMove);
         };
-        const startPress = (e) => { sx = e.clientX; sy = e.clientY; clearTimeout(pressTimer); pressTimer = setTimeout(enter, 500); };
+        const startPress = (e) => {
+            if (e.pointerType === 'touch' && activeTouchPoints >= 2) return; // 既に複数指＝ピンチ操作 → 移動の長押しを始めない
+            sx = e.clientX; sy = e.clientY; clearTimeout(pressTimer); pressTimer = setTimeout(enter, 500);
+        };
         const cancelPress = () => clearTimeout(pressTimer);
         const moveCancel = (e) => { if (!moving && (Math.abs(e.clientX - sx) > 10 || Math.abs(e.clientY - sy) > 10)) clearTimeout(pressTimer); };
         el.addEventListener('pointerdown', startPress);
