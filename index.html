@@ -137,7 +137,7 @@
         .popup-content button, .popup-content input, .popup-content select, .popup-content textarea,
         .popup-content .history-box, .popup-content .memo-section, .popup-content .grid-scroll,
         .popup-content .btn-row, .popup-content .choice-grid { box-sizing: border-box; max-width: 100%; }
-        .building-title { font-weight: bold; font-size: 15px; border-bottom: 2px solid #333; padding-bottom: 4px; padding-right: 30px; margin-bottom: 8px; } /* padding-right=✕ボタンに文字が潜らないよう確保 */
+        .building-title { font-weight: bold; font-size: 15px; line-height: 1.35; border-bottom: 2px solid #333; padding-top: 2px; padding-bottom: 6px; padding-right: 30px; margin-bottom: 8px; } /* padding-right=✕ボタンに文字が潜らないよう確保。line-height/上下padding は文字拡大時に上端・下端が欠けないよう確保 */
         
         /* フォーム・レイアウト */
         .form-group { margin-bottom: 6px; }
@@ -909,6 +909,40 @@
             case '混在':       return '#F2E394'; // 薄黄（ファミリーと同色）
             default:           return '#8C8C8C'; // 不明など（既定・グレー）
         }
+    }
+
+    // ── 集合住宅フォームの色付きセレクト（新規・編集 共通。オートロック/構成属性/管理人） ──
+    // 各 option に背景色を付け、選択中の値の色をセレクト本体にも反映する（閉じた状態でも色で分かる）。
+    // 構成属性はアイコン色(shugaColor)と同じ。オートロック=あり薄赤/なし薄青。管理人=あり薄黄/なし・不明薄グレー。
+    const SHUGA_ATTR_OPTS_ = [
+        { v: '不明',      label: '不明',      bg: '#8C8C8C', fg: '#ffffff' },
+        { v: 'ファミリー', label: 'ファミリー', bg: '#F2E394', fg: '#6b5a1e' },
+        { v: 'シングル',   label: 'シングル',   bg: '#5B8BB0', fg: '#ffffff' },
+        { v: '混在',      label: '混在',      bg: '#F2E394', fg: '#6b5a1e' }
+    ];
+    const SHUGA_LOCK_OPTS_ = [
+        { v: '不明', label: '不明', bg: '#E2E2E2', fg: '#444444' },
+        { v: 'なし', label: 'なし', bg: '#D9E8F2', fg: '#1f4a63' }, // 薄い青
+        { v: 'あり', label: 'あり', bg: '#F3D9D5', fg: '#7a342c' }  // 薄い赤
+    ];
+    const SHUGA_MGR_OPTS_ = [
+        { v: '不明', label: '不明', bg: '#E5E5E5', fg: '#444444' }, // 薄いグレー
+        { v: 'なし', label: 'なし', bg: '#E5E5E5', fg: '#444444' }, // 薄いグレー
+        { v: 'あり', label: 'あり', bg: '#FBF1C7', fg: '#6b5a1e' }  // 薄い黄
+    ];
+    function coloredSelectHtml(id, opts, current) {
+        const cur = opts.find(o => String(o.v) === String(current)) || opts[0];
+        const optionHtml = opts.map(o =>
+            `<option value="${escHtml(o.v)}" style="background:${o.bg}; color:${o.fg};" ${String(current) === String(o.v) ? 'selected' : ''}>${escHtml(o.label)}</option>`
+        ).join('');
+        return `<select id="${id}" style="background:${cur.bg}; color:${cur.fg}; font-weight:bold;" onchange="applySelectColor(this)">${optionHtml}</select>`;
+    }
+    // 選択変更時にセレクト本体の色を選択中 option の色へ更新する（閉じた状態の視認用）
+    function applySelectColor(sel) {
+        const o = sel.options[sel.selectedIndex];
+        if (!o) return;
+        sel.style.background = o.style.background;
+        sel.style.color = o.style.color;
     }
 
     // 集合住宅のオートロック有無（新方式=S列。旧データはメモ内から後方互換で取得）
@@ -2137,9 +2171,9 @@
                 </div>
                 <label style="font-size:11px; font-weight:bold;">緑=部屋あり（初期は全選択）。無い部屋をタップで外す</label>
                 <div id="setup-grid-container" style="max-height:120px; overflow:auto; margin-bottom:8px;"></div>
-                <div class="inline-group"><label>オートロック</label><select id="new-lock"><option value="不明" selected>不明</option><option value="なし">なし</option><option value="あり">あり</option></select></div>
-                <div class="inline-group"><label>構成属性</label><select id="new-attribute"><option value="不明">不明</option><option value="ファミリー">ファミリー</option><option value="シングル">シングル</option><option value="混在">混在</option></select></div>
-                <div class="inline-group detail-only"><label>管理人</label><select id="new-manager"><option value="不明" selected>不明</option><option value="なし">なし</option><option value="あり">あり</option></select></div>
+                <div class="inline-group"><label>オートロック</label>${coloredSelectHtml('new-lock', SHUGA_LOCK_OPTS_, '不明')}</div>
+                <div class="inline-group"><label>構成属性</label>${coloredSelectHtml('new-attribute', SHUGA_ATTR_OPTS_, '不明')}</div>
+                <div class="inline-group detail-only"><label>管理人</label>${coloredSelectHtml('new-manager', SHUGA_MGR_OPTS_, '不明')}</div>
                 <div class="form-group memo-empty"><label>メモ</label><input type="text" id="new-memo"></div>
                 <button class="submit-btn" id="reg-btn" onclick="submitNewLocation(${latVal}, ${lngVal}, '集合住宅')">登録</button>
                 <button class="detail-toggle" onclick="togglePopupDetail(this)">▼ 詳細を表示</button>
@@ -3698,7 +3732,7 @@
             // セルの表記は他の部屋と同様に固定（「管理人」）。状態は色だけで表す（roomVisual）。見出しは付けない。
             const mv = roomVisual(roomStatusMap[MGR_KEY]);
             mgrHtml = `<table class="grid-table" style="width:auto; margin-top:8px;"><tbody><tr>`
-                + `<td class="cell-active" data-room="${MGR_KEY}" style="min-width:72px; background:${mv.bg}; color:${mv.color}; text-align:center;">管理人</td>`
+                + `<td class="cell-active" data-room="${MGR_KEY}" style="min-width:72px; background:${mv.bg}; color:${mv.color}; text-align:center; font-size:0.85em;">管理人</td>`
                 + `</tr></tbody></table>`;
         }
 
@@ -3749,9 +3783,7 @@
         const opt = (v, label, cur) => `<option value="${v}" ${String(cur) === String(v) ? 'selected' : ''}>${label}</option>`;
         const floorOpts = Array.from({length:30},(_,i)=>i+1).map(v => opt(v, v + 'F', floors)).join('');
         const roomOpts = Array.from({length:20},(_,i)=>i+1).map(v => opt(v, String(v).padStart(2,'0'), maxRoom)).join('');
-        const lockOpts = ['不明','なし','あり'].map(v => opt(v, v, lock)).join('');
-        const mgrOpts = ['不明','なし','あり'].map(v => opt(v, v, item.管理人)).join('');
-        const attrOpts = ['不明','ファミリー','シングル','混在'].map(v => opt(v, v, item.属性)).join('');
+        // オートロック/構成属性/管理人は coloredSelectHtml で色付き生成（下のHTMLで直接呼ぶ）
 
         const html = `
             <div class="building-title">✏️ 建物情報を編集</div>
@@ -3771,9 +3803,9 @@
             </div>
             <label style="font-size:11px; font-weight:bold;">緑=有効。不要な部屋をタップで外す</label>
             <div id="setup-grid-container" style="max-height:120px; overflow:auto; margin-bottom:8px;"></div>
-            <div class="inline-group"><label>オートロック</label><select id="new-lock">${lockOpts}</select></div>
-            <div class="inline-group"><label>管理人</label><select id="new-manager">${mgrOpts}</select></div>
-            <div class="inline-group"><label>構成属性</label><select id="new-attribute">${attrOpts}</select></div>
+            <div class="inline-group"><label>オートロック</label>${coloredSelectHtml('new-lock', SHUGA_LOCK_OPTS_, lock)}</div>
+            <div class="inline-group"><label>構成属性</label>${coloredSelectHtml('new-attribute', SHUGA_ATTR_OPTS_, item.属性)}</div>
+            <div class="inline-group"><label>管理人</label>${coloredSelectHtml('new-manager', SHUGA_MGR_OPTS_, item.管理人)}</div>
             <div class="form-group"><label>メモ</label><input type="text" id="new-memo" value="${escHtml(memoText)}"></div>
             <div class="btn-row">
                 <button class="submit-btn" id="edit-save-btn" onclick="saveShugaEdit(${rowNumber}, this)">更新を保存</button>
