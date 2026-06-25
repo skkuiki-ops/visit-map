@@ -1029,13 +1029,16 @@
     // ── 施設（目印になる建物）の種類 ── 種別='施設'。種類は属性(I列)に保存。マーカーは絵文字のみ（丸なし）。
     const FACILITY_TYPES = [
         { v: '区の施設',          icon: '🏛️', color: '#7B5EA7' },
-        { v: 'コンビニ・スーパー', icon: '🏪', color: '#E08A3C' },
+        { v: 'コンビニ',          icon: '🏪', color: '#E08A3C' },
+        { v: 'スーパー',          icon: '🛒', color: '#4F8FBF' },
         { v: '病院',             icon: '🏥', color: '#C9544B' },
         { v: '公園',             icon: '🌳', color: '#4F9E5E' },
         { v: '学校',             icon: '🏫', color: '#D9A441' },
         { v: 'カフェ・レストラン', icon: '🍴', color: '#B07A4F' }
     ];
-    function facilityIcon(v) { const f = FACILITY_TYPES.find(t => t.v === v); return f ? f.icon : '📍'; }
+    // 旧値「コンビニ・スーパー」の後方互換（🏪で表示。編集で「コンビニ」「スーパー」に付け替え可）
+    const FACILITY_LEGACY_ICON_ = { 'コンビニ・スーパー': '🏪' };
+    function facilityIcon(v) { const f = FACILITY_TYPES.find(t => t.v === v); return f ? f.icon : (FACILITY_LEGACY_ICON_[v] || '📍'); }
     function facilityLabel(v) { const f = FACILITY_TYPES.find(t => t.v === v); return f ? f.v : (v || '施設'); }
 
     // 集合住宅のオートロック有無（新方式=S列。旧データはメモ内から後方互換で取得）
