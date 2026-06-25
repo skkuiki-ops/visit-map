@@ -87,6 +87,9 @@
         /* 下部ボタン群（メニュー=左下、住所検索=その隣、文字サイズ=右下） */
         #signout-btn { position: absolute; bottom: 10px; left: 10px; z-index: 9998; background: rgba(255,255,255,0.92); border: 1px solid #ccc; border-radius: 6px; padding: 8px 13px; font-size: 13px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
         #area-nav-btn { position: absolute; bottom: 10px; left: 128px; z-index: 9998; background: rgba(255,255,255,0.92); border: 1px solid #ccc; border-radius: 6px; padding: 8px 13px; font-size: 13px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+        /* ピンチ等のズーム中だけ薄く出る「縮尺（ズームレベル）」表示。左下メニューボタンの上。操作の邪魔をしない（pointer-events:none） */
+        #zoom-indicator { position: absolute; bottom: 52px; left: 10px; z-index: 9997; background: rgba(44,62,80,0.55); color: #fff; font-size: 12px; font-weight: bold; padding: 4px 11px; border-radius: 12px; pointer-events: none; opacity: 0; transition: opacity 0.4s ease; white-space: nowrap; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+        #zoom-indicator.show { opacity: 1; }
 
         /* 住所で移動モーダル */
         #area-modal { position: absolute; inset: 0; z-index: 10002; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; padding: 16px; }
@@ -179,6 +182,13 @@
         .marker-star { border: none !important; border-radius: 0 !important; box-shadow: none !important; background: transparent;
             clip-path: polygon(50% 2%, 61% 35%, 96% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 4% 35%, 39% 35%);
             filter: drop-shadow(0 1px 2.5px rgba(0,0,0,0.55)); }
+        /* 施設マーカー＝絵文字のみ（丸・枠・影なし）。視認性のため drop-shadow だけ付ける。サイズは applyZoomScale が制御。
+           ※!important は付けない＝同名クラスの後勝ちで .custom-marker を上書きしつつ、移動中(.marker-moving)の金色グローは効かせる */
+        .marker-facility { background: transparent; border: none; box-shadow: none; border-radius: 0; line-height: 1; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5)); }
+        /* 施設の種類ピッカー（2列ボタン） */
+        .fac-type-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin: 4px 0 8px; }
+        .fac-type-btn { padding: 9px 6px; border: 1.5px solid #cdd6dd; border-radius: 8px; background: #f5f8fa; color: #2c3e50; font-size: 13px; font-weight: bold; cursor: pointer; text-align: center; }
+        .fac-type-btn.fac-sel { background: #2c3e50; color: #fff; border-color: #2c3e50; }
 
         /* ── 文字サイズボタン（右下） ── */
         /* 右下のスケール操作（左=文字サイズ「文字」／右=ピン印サイズ「印」）。可変幅でも右下にきれいに並ぶよう flex でまとめる */
@@ -535,6 +545,8 @@
     <button id="scale-btn" onclick="toggleScale()">印 小</button>
 </div>
 <button id="signout-btn" onclick="toggleMenu()" style="display:none;">☰ メニュー</button>
+<!-- ピンチ等のズーム中だけ薄く出る縮尺（ズームレベル）表示 -->
+<div id="zoom-indicator"></div>
 
 <!-- メニューパネル（割り当て区域／管理機能／サインアウト。管理項目は admin のみ表示） -->
 <div id="menu-panel">
@@ -980,6 +992,18 @@
         return (v === 'あり') ? '#2E5E33' : GRAY;                                 // 管理人 あり=深い緑
     }
 
+    // ── 施設（目印になる建物）の種類 ── 種別='施設'。種類は属性(I列)に保存。マーカーは絵文字のみ（丸なし）。
+    const FACILITY_TYPES = [
+        { v: '区の施設',          icon: '🏛️', color: '#7B5EA7' },
+        { v: 'コンビニ・スーパー', icon: '🏪', color: '#E08A3C' },
+        { v: '病院',             icon: '🏥', color: '#C9544B' },
+        { v: '公園',             icon: '🌳', color: '#4F9E5E' },
+        { v: '学校',             icon: '🏫', color: '#D9A441' },
+        { v: 'カフェ・レストラン', icon: '🍴', color: '#B07A4F' }
+    ];
+    function facilityIcon(v) { const f = FACILITY_TYPES.find(t => t.v === v); return f ? f.icon : '📍'; }
+    function facilityLabel(v) { const f = FACILITY_TYPES.find(t => t.v === v); return f ? f.v : (v || '施設'); }
+
     // 集合住宅のオートロック有無（新方式=S列。旧データはメモ内から後方互換で取得）
     function getAutolock(item) {
         if (item.オートロック) return item.オートロック;
@@ -1180,6 +1204,22 @@
     }
     map.on('zoomend', applyZoomVisibility);
 
+    // ── ピンチ等のズーム中だけ、現在の縮尺（ズームレベル）を左下に薄く表示 ──
+    // 目的: 「どの縮尺で何のアイコンを隠すか」を相談するときの参考値を見えるようにする。
+    // ユーザー操作（ピンチ/スクロール/ダブルタップ）のみ表示（flyTo 等の自動移動では出さない）。操作が止まると自動で消える。
+    let zoomIndHideTimer = null;
+    function showZoomIndicator() {
+        const el = document.getElementById('zoom-indicator');
+        if (!el) return;
+        el.textContent = 'ズーム ' + map.getZoom().toFixed(1);
+        el.classList.add('show');
+        clearTimeout(zoomIndHideTimer);
+        zoomIndHideTimer = setTimeout(() => el.classList.remove('show'), 1200); // 操作が止まったら薄れて消える
+    }
+    function onUserZoom(e) { if (e && e.originalEvent) showZoomIndicator(); } // originalEvent あり＝ユーザー操作のみ
+    map.on('zoomstart', onUserZoom);
+    map.on('zoom', onUserZoom);
+
     // ズームレベルに応じてマーカーサイズを動的に変える（広域ほど小さく）
     // ベースサイズは全体的に1段階小さめ。☆形は本体が小さいため少し大きめ＆文字は控えめに。
     function applyZoomScale() {
@@ -1201,6 +1241,10 @@
                 el.style.fontSize = Math.round(base.f * scale * (star ? 1.05 : 1)) + 'px';
             } else if (el.classList.contains('marker-shuga')) {
                 const base = iconLarge ? { w: 46, f: 26 } : { w: 28, f: 16 };
+                el.style.width = el.style.height = Math.round(base.w * scale) + 'px';
+                el.style.fontSize = Math.round(base.f * scale) + 'px';
+            } else if (el.classList.contains('marker-facility')) {
+                const base = iconLarge ? { w: 46, f: 38 } : { w: 30, f: 24 }; // 施設＝絵文字。fontSize が見た目サイズ
                 el.style.width = el.style.height = Math.round(base.w * scale) + 'px';
                 el.style.fontSize = Math.round(base.f * scale) + 'px';
             }
@@ -2215,6 +2259,7 @@
                 <div class="inline-group detail-only"><label>管理人</label>${coloredSelectHtml('new-manager', SHUGA_MGR_OPTS_, '不明')}</div>
                 <div class="form-group memo-empty"><label>メモ</label><input type="text" id="new-memo"></div>
                 <button class="submit-btn" id="reg-btn" onclick="submitNewLocation(${latVal}, ${lngVal}, '集合住宅')">登録</button>
+                <div class="detail-only" style="text-align:right; margin-top:6px;"><button type="button" onclick="switchToFacilityForm(${latVal}, ${lngVal})" style="width:34%; padding:8px 0; background:#5B7C99; color:#fff; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer;">🏛 施設登録</button></div>
                 <button class="detail-toggle" onclick="togglePopupDetail(this)">▼ 詳細を表示</button>
             `;
         }
@@ -2383,6 +2428,58 @@
         else if (cur === 'p') gridRoomMark[roomNum] = 'c';
         else delete gridRoomMark[roomNum];
         renderRoomGrid(); // マークの変化を反映
+    }
+
+    // ── 施設（目印になる建物）の新規登録 ── 集合住宅フォームの「施設登録」から切替。住所/建物名/メモは流用、部屋の代わりに種類を選ぶ。
+    function switchToFacilityForm(lat, lng) {
+        const root = activeNewMarker && activeNewMarker.getPopup() ? activeNewMarker.getPopup().getElement() : null;
+        const container = root ? root.querySelector('.popup-content') : null;
+        if (!container) return;
+        const prevName = (document.getElementById('new-name') || {}).value || ''; // 集合住宅フォームで入力済みなら引き継ぐ
+        const prevMemo = (document.getElementById('new-memo') || {}).value || '';
+        const picker = FACILITY_TYPES.map(t =>
+            `<button type="button" class="fac-type-btn" data-v="${escHtml(t.v)}" onclick="pickFacilityType(this)">${t.icon} ${escHtml(t.v)}</button>`
+        ).join('');
+        container.innerHTML = `
+            <div class="building-title">🏛 施設を新規登録</div>
+            ${newAddrRowHtml()}
+            <div class="form-group"><label>建物名</label><input type="text" id="new-name" placeholder="例：小岩図書館" style="background:#FFF9DD;"></div>
+            <input type="hidden" id="new-fac-type" value="">
+            <div style="font-size:12px; font-weight:bold; margin:4px 0;">施設の種類（タップで選択）</div>
+            <div class="fac-type-grid">${picker}</div>
+            <div class="form-group"><label>メモ</label><input type="text" id="new-memo"></div>
+            <button class="submit-btn" id="reg-btn" onclick="submitNewFacility(${lat}, ${lng})">登録</button>
+        `;
+        if (prevName) document.getElementById('new-name').value = prevName;
+        if (prevMemo) document.getElementById('new-memo').value = prevMemo;
+        const el = document.getElementById('new-addr-text'); // 住所文字の長押し（番地の赤枠表示）を付け直す
+        if (el) attachLongPress(el, () => outlineNewAddr(), () => {});
+        prefillNearestBuildingName(lng, lat); // 最寄りPOI名を建物名へ（引数は経度,緯度の順。入力済みなら上書きしない）
+        if (activeNewMarker) setTimeout(() => fitPopupInView(activeNewMarker, 0), 30);
+    }
+    // 施設の種類ボタンのタップ：選択をハイライトし hidden に値をセット
+    function pickFacilityType(btn) {
+        const grid = btn.closest('.fac-type-grid');
+        if (grid) grid.querySelectorAll('.fac-type-btn').forEach(b => b.classList.remove('fac-sel'));
+        btn.classList.add('fac-sel');
+        const h = document.getElementById('new-fac-type');
+        if (h) h.value = btn.dataset.v;
+    }
+    // 施設の登録（種別='施設'、属性=種類）。addNew をそのまま使う（部屋系は空）。
+    function submitNewFacility(lat, lng) {
+        const type = document.getElementById('new-fac-type').value;
+        if (!type) { appAlert('施設の種類を選んでください'); return; }
+        const data = { type: '施設', name: document.getElementById('new-name').value, lat: parseFloat(lat), lng: parseFloat(lng),
+            memo: document.getElementById('new-memo').value, attribute: type, address: newPinAddress };
+        const btn = document.getElementById('reg-btn');
+        btn.disabled = true; btn.innerText = '登録中...';
+        showSaving();
+        apiCall('addNew', { data: data }).then((latest) => {
+            if (activeNewMarker) activeNewMarker.remove();
+            activeNewMarker = null;
+            showDone('登録しました');
+            renderMarkers(latest);
+        }).catch((err) => { btn.disabled = false; btn.innerText = '登録'; handleServerError(err); }).finally(hideSaving);
     }
 
     function submitNewLocation(lat, lng, type) {
@@ -2858,6 +2955,7 @@
         (currentData || []).forEach(item => {
             const lng = parseFloat(item.経度), lat = parseFloat(item.緯度);
             if (isNaN(lng) || isNaN(lat) || lng === 0 || lat === 0) return; // 地図描画と同じ条件で不正座標を除外
+            if (item.種別 === '施設') return; // 施設は目印で訪問対象でないため進捗集計から除外
             const addr = (item.住所 && item.住所 !== '-' && String(item.住所).trim() !== '') ? addrWithoutGo(item.住所) : (deriveAddress(lng, lat) || '');
             let district = '（住所未設定）', chomeKey = '（住所未設定）';
             const m = String(addr).match(/^(.+?)(\d+丁目)\d+番$/);
@@ -3028,7 +3126,7 @@
             const lng = parseFloat(d.経度), lat = parseFloat(d.緯度);
             return !isNaN(lng) && !isNaN(lat) && lng !== 0 && lat !== 0 && pointInRing(lng, lat, ring);
         });
-        const kodate = pins.filter(d => d.種別 !== '集合住宅');
+        const kodate = pins.filter(d => d.種別 === '戸建て'); // 施設は印刷に出さない（目印は今は対象外）
         const shuga = pins.filter(d => d.種別 === '集合住宅');
 
         // bbox[w,s,e,n]（枠＋ピンを内包）と中心
@@ -3605,6 +3703,10 @@
                 // 枠＝オートロックありのみ赤枠。なし・不明は枠なし
                 markerEl.style.border = (getAutolock(firstItem) === 'あり') ? '3px solid #A8554E' : 'none';
                 popupHtml += createShugaViewHtml(items);
+            } else if (firstItem.種別 === '施設') {
+                markerEl.className += ' marker-facility';
+                markerEl.innerHTML = facilityIcon(firstItem.属性); // 種類の絵文字のみ（丸・枠なし）
+                popupHtml += createFacilityViewHtml(firstItem);
             } else {
                 styleKodateMarker(markerEl, firstItem);
                 // 同一座標に複数の戸建て（世帯）がある場合はページャ付きで全件を辿れるようにする（座標重複でも世帯が消えない）
@@ -3615,6 +3717,8 @@
             const popup = new mapboxgl.Popup({ offset: 25, closeOnClick: false, maxWidth: 'none', anchor: 'bottom', focusAfterOpen: false }).setHTML(popupHtml);
 
             const isShuga = (firstItem.種別 === '集合住宅');
+            const isFacility = (firstItem.種別 === '施設');
+            const isKodate = !isShuga && !isFacility;
             // 吹き出しが開いたら、実高さを測ってピン＋吹き出しが画面に収まるよう寄せる。
             // 集合住宅は後から部屋操作欄が広がるぶん(約140px)を見込む。
             // 開くたびに操作欄を初期化（前回の部屋選択を持ち越さない＝確実に「部屋をタップして…」に）
@@ -3624,7 +3728,7 @@
                 if (!isShuga) attachHistoryLongPress(popup.getElement(), firstItem.rowNumber, false); // 戸建て履歴の長押し編集
                 if (isShuga) bindRoomCopyCells(popup.getElement(), firstItem.rowNumber); // 部屋: タップ=操作欄 / 長押し=情報コピー
                 else bindTitleCopy(popup.getElement(), firstItem.rowNumber);              // 戸建て: 「戸建て」長押し=情報コピー
-                if (!isShuga && items.length > 1) bindKodateGroupPager(popup, marker, items); // 同座標の複数世帯ページャ（◀▶で切替）
+                if (isKodate && items.length > 1) bindKodateGroupPager(popup, marker, items); // 同座標の複数世帯ページャ（◀▶で切替。戸建てのみ）
                 fitPopupInView(marker, 0); // 部屋操作欄は最初から高さを確保するので追加余白は不要
             });
             // 吹き出しを閉じたら、展開中のUI（編集フォーム・詳細表示・属性4択・部屋操作欄）を初期状態へ戻す
@@ -3635,10 +3739,10 @@
                 .setLngLat([group.lng, group.lat])
                 .setPopup(popup)
                 .addTo(map);
-            marker._isKodate = (firstItem.種別 !== '集合住宅'); // 広域表示の出し分け用
+            marker._isKodate = isKodate;                         // 戸建てのみ広域で隠す（施設・集合住宅は常時表示）
             marker._shugaSmall = isSmallShuga;                  // 小さめ集合住宅は更に広域(z<SHUGA_SMALL_HIDE_BELOW_ZOOM)で隠す
             marker._rowNumber = firstItem.rowNumber;            // 部屋更新時にポップアップを特定する用
-            if (!isShuga) marker._rowNumbers = items.map(it => it.rowNumber); // 同座標の複数世帯を全部覚える（ページャ・インプレース判定用）
+            if (isKodate) marker._rowNumbers = items.map(it => it.rowNumber); // 同座標の複数世帯を全部覚える（戸建てのページャ・インプレース判定用）
 
             // このマーカーを開くときは、新規フォームや他の開いているポップアップを閉じる
             // （寄せる処理は popup の 'open' イベントで実高さを測って行う）
@@ -3724,6 +3828,83 @@
             <button class="clear-btn detail-only" style="width:100%; margin-top:8px; background:#9E3B4A;" onclick="confirmDelete(${item.rowNumber})">🗑 このピンを削除</button>
             <button class="detail-toggle" onclick="togglePopupDetail(this)">▼ 詳細を表示</button>
         `;
+    }
+
+    // 施設（目印になる建物）の詳細吹き出し。訪問結果・部屋・履歴は持たず、種類・住所・メモ・編集・削除のみ。
+    function createFacilityViewHtml(item) {
+        const ic = facilityIcon(item.属性), lbl = facilityLabel(item.属性);
+        const memoText = cleanMemo(item);
+        const memoCls = memoText.trim() ? '' : ' memo-empty';
+        return `
+            <div class="building-title">${ic} ${escHtml(item['建物名 / 世帯名'] || '施設')}</div>
+            ${addrRowHtml(item)}
+            <div style="font-size:13px; color:#555; margin-bottom:6px;">種類: <b style="font-size:14px;">${ic} ${escHtml(lbl)}</b></div>
+            <div class="memo-section${memoCls}">
+                <label style="font-size:11px; font-weight:bold;">メモ</label>
+                <textarea id="memo-${item.rowNumber}" rows="1" style="width:100%; font-size:11px;" readonly onpointerdown="this.removeAttribute('readonly')">${escHtml(memoText)}</textarea>
+                <div class="btn-row detail-only">
+                    <button class="save-btn" onclick="saveMemo(${item.rowNumber})">メモ保存</button>
+                    <button class="clear-btn" onclick="clearMemo(${item.rowNumber})">メモ削除</button>
+                </div>
+            </div>
+            <button class="save-btn detail-only" style="background:#34495e; width:100%; margin-top:8px;" onclick="showFacilityEditForm(${item.rowNumber}, this)">✏️ 施設情報を編集</button>
+            <button class="clear-btn detail-only" style="width:100%; margin-top:6px; background:#9E3B4A;" onclick="confirmDelete(${item.rowNumber})">🗑 このピンを削除</button>
+            <button class="detail-toggle" onclick="togglePopupDetail(this)">▼ 詳細を表示</button>
+        `;
+    }
+    // 施設の吹き出しを、閉じずにその場で最新化する（メモ保存・履歴クリア相当など）
+    function refreshFacilityPopup(rowNumber, latest) {
+        currentData = latest;
+        saveDataCache(currentData);
+        const item = currentData.find(d => d.rowNumber === rowNumber);
+        const marker = currentMarkers.find(m => m._rowNumber === rowNumber);
+        const popup = marker ? marker.getPopup() : null;
+        if (item && popup) {
+            if (marker.getElement()) marker.getElement().innerHTML = facilityIcon(item.属性); // 種類変更時はマーカー絵文字も更新
+            popup.setHTML('<div class="popup-content">' + createFacilityViewHtml(item) + '</div>');
+            fillDerivedAddress(popup.getElement());
+            bindTitleCopy(popup.getElement(), rowNumber);
+            setTimeout(() => fitPopupInView(marker, 0), 30);
+        } else {
+            renderMarkers(latest);
+        }
+    }
+    // 施設情報の編集フォーム（種類・建物名・メモ）。詳細表示を差し替える。
+    function showFacilityEditForm(rowNumber, btn) {
+        const item = currentData.find(d => d.rowNumber === rowNumber);
+        if (!item) { showToast('編集対象が見つかりません', true); return; }
+        const container = btn.closest('.popup-content');
+        if (!container) return;
+        const picker = FACILITY_TYPES.map(t =>
+            `<button type="button" class="fac-type-btn${item.属性 === t.v ? ' fac-sel' : ''}" data-v="${escHtml(t.v)}" onclick="pickFacilityType(this)">${t.icon} ${escHtml(t.v)}</button>`
+        ).join('');
+        container.innerHTML = `
+            <div class="building-title">✏️ 施設情報を編集</div>
+            <div class="form-group"><label>建物名</label><input type="text" id="fac-edit-name" value="${escHtml(item['建物名 / 世帯名'] || '')}" style="background:#FFF9DD;"></div>
+            <input type="hidden" id="new-fac-type" value="${escHtml(item.属性 || '')}">
+            <div style="font-size:12px; font-weight:bold; margin:4px 0;">施設の種類</div>
+            <div class="fac-type-grid">${picker}</div>
+            <div class="form-group"><label>メモ</label><input type="text" id="fac-edit-memo" value="${escHtml(cleanMemo(item))}"></div>
+            <div class="btn-row">
+                <button class="submit-btn" id="fac-edit-save" onclick="saveFacilityEdit(${rowNumber}, this)">更新を保存</button>
+                <button class="clear-btn" onclick="refreshFacilityPopup(${rowNumber}, currentData)">閉じる</button>
+            </div>
+        `;
+        const marker = currentMarkers.find(m => m._rowNumber === rowNumber);
+        if (marker) setTimeout(() => fitPopupInView(marker, 0), 30);
+    }
+    // 施設の編集を保存（構造が変わるので renderMarkers で全再描画）
+    function saveFacilityEdit(rowNumber, btn) {
+        const type = document.getElementById('new-fac-type').value;
+        if (!type) { appAlert('施設の種類を選んでください'); return; }
+        const data = { rowNumber: rowNumber, name: document.getElementById('fac-edit-name').value,
+            facilityType: type, memo: document.getElementById('fac-edit-memo').value };
+        btn.disabled = true; btn.innerText = '保存中...';
+        showBusy('更新中…');
+        apiCall('updateFacility', { data: data }).then((latest) => {
+            showToast('施設情報を更新しました', false);
+            renderMarkers(latest);
+        }).catch((err) => { btn.disabled = false; btn.innerText = '更新を保存'; handleServerError(err); }).finally(hideBusy);
     }
 
     // 集合住宅詳細・グリッドテーブル画面
@@ -3931,12 +4112,12 @@
         if (!popup) return;
         const root = (popup.getElement && popup.getElement()) || popup._content;
         if (!root) return;
-        // ① 建物編集フォームを開いたまま閉じた場合は、通常の詳細表示へ作り直す
-        if (root.querySelector('#edit-save-btn')) {
+        // ① 建物/施設の編集フォームを開いたまま閉じた場合は、通常の詳細表示へ作り直す
+        if (root.querySelector('#edit-save-btn') || root.querySelector('#fac-edit-save')) {
             const item = currentData.find(d => d.rowNumber === rowNumber);
             const container = root.querySelector('.popup-content');
             if (item && container) {
-                container.innerHTML = createShugaViewHtml([item]);
+                container.innerHTML = (item.種別 === '施設') ? createFacilityViewHtml(item) : createShugaViewHtml([item]);
                 fillDerivedAddress(container);
             }
         }
@@ -4075,6 +4256,7 @@
     function applyInPlace(rowNumber, latest) {
         const item = (latest || []).find(d => d.rowNumber === rowNumber);
         if (item && item.種別 === '集合住宅') refreshShugaPopup(rowNumber, latest);
+        else if (item && item.種別 === '施設') refreshFacilityPopup(rowNumber, latest);
         else applyKodateChange(rowNumber)(latest);
     }
 
