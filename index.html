@@ -884,7 +884,7 @@
     /* GeolocateControl は位置更新のたびに「GPS精度の円が収まるズーム」へ自動で再フィットする。
        精度が粗いと大きく引いてしまい、こちらの zoom 21 を上書きするので、
        追従中は毎回 21 に補正して固定する（初回は住所検索と同じ flyTo、以降は素早い easeTo）。 */
-    let geoActive = false, geoFirst = false;
+    let geoActive = false, geoFirst = false, geoUserOff = false; // geoUserOff＝利用者が長押しで明示オフにした（自動再ONを抑止）
     geolocateControl.on('trackuserlocationstart', () => { geoActive = true; geoFirst = true; });
     geolocateControl.on('trackuserlocationend', () => { geoActive = false; });
     geolocateControl.on('geolocate', (pos) => {
@@ -904,7 +904,7 @@
     //  ・許可が未設定/拒否のときは自動ONしない（不意の許可ダイアログやエラーを出さない）。起動時の初回プロンプトは enterApp の trigger が担う。
     //  ・OFF→ON にすると現在地へカメラが寄る（geolocate ハンドラの flyTo）。OFF のとき限定なので、追従中の利用者の表示は邪魔しない。
     function ensureGeolocateOn() {
-        if (geoActive) return;
+        if (geoActive || geoUserOff) return; // 既にON、または利用者が長押しで明示オフにした間は自動ONしない
         try {
             if (navigator.permissions && navigator.permissions.query) {
                 navigator.permissions.query({ name: 'geolocation' }).then(function (st) {
@@ -913,6 +913,40 @@
             }
         } catch (e) {}
     }
+
+    // 現在地ボタンの「長押し」で確実にオフにする（タップは Mapbox 既定＝オン/中心化のトグルのまま）。
+    //  ・パンで追従が外れた状態(BACKGROUND)からのタップは ACTIVE_LOCK に戻るだけで切れないため、長押しは状態に依らず OFF にする。
+    //  ・長押しオフ中は geoUserOff=true で自動再ON(ensureGeolocateOn)を止める＝オフが続く。通常タップでオンに戻すと解除。
+    function turnGeolocateOffByUser() {
+        const wasOn = geoActive;
+        geoUserOff = true; // 自動再ONを止める
+        if (wasOn) {
+            // ACTIVE_LOCK→OFF（trackuserlocationend が同期発火し geoActive=false）。BACKGROUND だった場合は一旦 ACTIVE_LOCK に戻るだけなので、まだ ON ならもう一度。
+            try { geolocateControl.trigger(); if (geoActive) geolocateControl.trigger(); } catch (e) {}
+            showToast('現在地をオフにしました', false);
+        }
+    }
+    // 現在地ボタンに長押し(オフ)を割り当てる。コントロール追加直後にボタンが DOM に存在する。
+    function setupGeolocateLongPressOff() {
+        const btn = document.querySelector('.mapboxgl-ctrl-geolocate');
+        if (!btn) { setTimeout(setupGeolocateLongPressOff, 300); return; } // まだ無ければ少し待って再試行
+        let pressTimer = null, longFired = false, sx = 0, sy = 0;
+        btn.addEventListener('pointerdown', (e) => {
+            longFired = false; sx = e.clientX; sy = e.clientY;
+            clearTimeout(pressTimer);
+            pressTimer = setTimeout(() => { longFired = true; turnGeolocateOffByUser(); }, 500);
+        });
+        btn.addEventListener('pointermove', (e) => { if (Math.abs(e.clientX - sx) > 10 || Math.abs(e.clientY - sy) > 10) clearTimeout(pressTimer); });
+        ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => btn.addEventListener(ev, () => clearTimeout(pressTimer)));
+        btn.addEventListener('contextmenu', (e) => e.preventDefault()); // 長押し時のコールアウト抑止
+        // 長押し発火後の click（Mapbox のトグル＝再ON）を握りつぶす。document の capture で、ボタン自身の click より先に判定する。
+        document.addEventListener('click', (e) => {
+            if (!(e.target && e.target.closest && e.target.closest('.mapboxgl-ctrl-geolocate'))) return;
+            if (longFired) { e.stopImmediatePropagation(); e.preventDefault(); longFired = false; } // 長押し→トグルを無効化（オフを維持）
+            else geoUserOff = false; // 通常タップ＝利用者がオンに戻す意思 → 自動再ON を再び許可
+        }, true);
+    }
+    setupGeolocateLongPressOff();
 
     // GPS現在地（青ポチ）を訪問先ピンより前面に固定する。Mapbox v3 はマーカー(青ポチを含む)に
     // 動的な z-index を inline で付与し CSS の !important より優先されることがあるため、JS で上書きする。
@@ -1188,17 +1222,19 @@
 
     // 広域表示（ズームがこの値未満）のときは戸建てを隠す
     const KODATE_HIDE_BELOW_ZOOM = 16; // 17→16。もう少しだけ広域でも戸建てを表示（z16は約85%サイズ）
-    // 戸建てが消えた後、さらに広域（この値未満）になったら「小さめ集合住宅（12戸以下＝アパート型）」も隠す。
-    // 大きめ集合住宅（13戸以上＝マンション型）はそのまま表示し続ける。数値を下げるほど小さめも広域まで残る。
-    const SHUGA_SMALL_HIDE_BELOW_ZOOM = 14;
+    // 戸建てが消えた後、さらに広域（この値未満）になったら「小さめ集合住宅（12戸以下＝アパート型）」を隠す。
+    const SHUGA_SMALL_HIDE_BELOW_ZOOM = 15.5;
+    // さらに広域（この値未満）になったら「大きめ集合住宅（13戸以上＝マンション型）」も隠す。数値を下げるほど広域まで残る。
+    const SHUGA_LARGE_HIDE_BELOW_ZOOM = 14.0;
     function applyZoomVisibility() {
         const zoom = map.getZoom();
         const showKodate = zoom >= KODATE_HIDE_BELOW_ZOOM;
-        const showSmallShuga = zoom >= SHUGA_SMALL_HIDE_BELOW_ZOOM;
+        const showSmallShuga = zoom >= SHUGA_SMALL_HIDE_BELOW_ZOOM; // 小規模集合住宅（≤12戸）
+        const showLargeShuga = zoom >= SHUGA_LARGE_HIDE_BELOW_ZOOM; // 大規模集合住宅（≥13戸）
         currentMarkers.forEach(m => {
             if (m._isKodate) m.getElement().style.display = showKodate ? '' : 'none';
-            else if (m._shugaSmall) m.getElement().style.display = showSmallShuga ? '' : 'none';
-            // 大きめ集合住宅は常時表示（display は触らない）
+            else if (m._isShuga) m.getElement().style.display = (m._shugaSmall ? showSmallShuga : showLargeShuga) ? '' : 'none';
+            // 施設は常時表示（display は触らない）
         });
         applyZoomScale(); // ズームに応じてアイコンサイズも更新
     }
@@ -3739,8 +3775,9 @@
                 .setLngLat([group.lng, group.lat])
                 .setPopup(popup)
                 .addTo(map);
-            marker._isKodate = isKodate;                         // 戸建てのみ広域で隠す（施設・集合住宅は常時表示）
-            marker._shugaSmall = isSmallShuga;                  // 小さめ集合住宅は更に広域(z<SHUGA_SMALL_HIDE_BELOW_ZOOM)で隠す
+            marker._isKodate = isKodate;                         // 戸建ては広域(z<16)で隠す
+            marker._isShuga = isShuga;                           // 集合住宅は規模ごとに広域で隠す（小=z<15.5 / 大=z<14.0）。施設は常時表示
+            marker._shugaSmall = isSmallShuga;                  // 集合住宅のうち小規模(≤12戸=アパート型)か
             marker._rowNumber = firstItem.rowNumber;            // 部屋更新時にポップアップを特定する用
             if (isKodate) marker._rowNumbers = items.map(it => it.rowNumber); // 同座標の複数世帯を全部覚える（戸建てのページャ・インプレース判定用）
 
