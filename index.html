@@ -652,6 +652,7 @@
             didAutoGeolocate = true;
             const triggerGeo = () => { try { geolocateControl.trigger(); } catch (e) {} };
             if (map.loaded()) triggerGeo(); else map.once('load', triggerGeo);
+            setTimeout(ensureGeolocateOn, 2500); // 初回 trigger がタイミングで不発でも、許可済みなら少し後に再ONして取りこぼしを防ぐ
         }
         // 外部リンク(?area=...)で来た場合は、地図と街区データの準備後にその番地を表示する
         if (DEEP_LINK_AREA && !deepLinkDone) {
@@ -886,6 +887,21 @@
         }, 70);
     });
 
+    // 位置情報が「許可済み」なら、現在地追従が OFF のとき自動で ON にする（利用時に大抵オンを維持）。
+    //  ・既に追従中(geoActive)なら何もしない。trigger は OFF↔ON のトグルなので ON 中に呼ぶと切れてしまうため。
+    //  ・許可が未設定/拒否のときは自動ONしない（不意の許可ダイアログやエラーを出さない）。起動時の初回プロンプトは enterApp の trigger が担う。
+    //  ・OFF→ON にすると現在地へカメラが寄る（geolocate ハンドラの flyTo）。OFF のとき限定なので、追従中の利用者の表示は邪魔しない。
+    function ensureGeolocateOn() {
+        if (geoActive) return;
+        try {
+            if (navigator.permissions && navigator.permissions.query) {
+                navigator.permissions.query({ name: 'geolocation' }).then(function (st) {
+                    if (st.state === 'granted' && !geoActive) { try { geolocateControl.trigger(); } catch (e) {} }
+                }).catch(function () {});
+            }
+        } catch (e) {}
+    }
+
     // GPS現在地（青ポチ）を訪問先ピンより前面に固定する。Mapbox v3 はマーカー(青ポチを含む)に
     // 動的な z-index を inline で付与し CSS の !important より優先されることがあるため、JS で上書きする。
     // 値は「ピン(3)より上・吹き出し(50)より下」になるよう 49 にする。
@@ -948,12 +964,20 @@
         sel.style.background = o.style.background;
         sel.style.color = o.style.color;
     }
-    // 集合住宅 詳細の上部情報行（オートロック/構成/管理人）の文字色：不明=深いグレー、入力あり=その項目の深い色。
+    // 集合住宅 詳細の上部情報行（オートロック/構成/管理人）の文字色（値ごと。深い色）。
+    //  オートロック: あり→赤 / なし・不明→グレー
+    //  構成:        シングル→青 / ファミリー・混在→黄 / 不明→グレー
+    //  管理人:      あり→緑 / なし・不明→グレー
     function shugaInfoColor(field, v) {
-        if (!v || v === '不明') return '#555555';   // 不明 → 深いグレー
-        if (field === 'lock') return '#7a342c';     // オートロック → 深い赤
-        if (field === 'attr') return '#8a7117';     // 構成属性 → 深い黄色
-        return '#2E5E33';                           // 管理人 → 深い緑
+        v = v || '不明';
+        const GRAY = '#555555';
+        if (field === 'lock') return (v === 'あり') ? '#7a342c' : GRAY;          // あり=深い赤
+        if (field === 'attr') {
+            if (v === 'シングル') return '#1f4a63';                              // 深い青
+            if (v === 'ファミリー' || v === '混在') return '#8a7117';            // 深い黄
+            return GRAY;                                                          // 不明
+        }
+        return (v === 'あり') ? '#2E5E33' : GRAY;                                 // 管理人 あり=深い緑
     }
 
     // 集合住宅のオートロック有無（新方式=S列。旧データはメモ内から後方互換で取得）
@@ -1998,6 +2022,7 @@
     function recoverMap() {
         try {
             map.resize(); map.triggerRepaint();
+            ensureGeolocateOn(); // 他アプリから戻った時など、許可済みなら現在地追従を再ON（OFFになっていた場合）
             if (glLost) setTimeout(() => {
                 if (glLost && document.visibilityState === 'visible') reloadApp(); // キャッシュバスト付き再読込に統一（reloadApp は location.reload へフォールバック）
             }, 1200); // 復元イベントを少し待ち、戻らなければ再読込
