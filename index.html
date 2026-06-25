@@ -917,9 +917,9 @@
 
     // ── 集合住宅フォームの色付きセレクト（新規・編集 共通。オートロック/構成属性/管理人） ──
     // 各 option に背景色を付け、選択中の値の色をセレクト本体にも反映する（閉じた状態でも色で分かる）。
-    // 構成属性はアイコン色(shugaColor)と同じ。オートロック=あり薄赤/なし薄青。管理人=あり薄黄/なし・不明薄グレー。
+    // 構成属性はアイコン色(shugaColor)と同じ＋不明はオートロックの不明と同色。オートロック=あり薄赤/なし薄青。管理人=あり薄緑/なし・不明薄グレー。
     const SHUGA_ATTR_OPTS_ = [
-        { v: '不明',      label: '不明',      bg: '#8C8C8C', fg: '#ffffff' },
+        { v: '不明',      label: '不明',      bg: '#E2E2E2', fg: '#444444' }, // 不明はオートロックの不明と同色（薄グレー）
         { v: 'ファミリー', label: 'ファミリー', bg: '#F2E394', fg: '#6b5a1e' },
         { v: 'シングル',   label: 'シングル',   bg: '#5B8BB0', fg: '#ffffff' },
         { v: '混在',      label: '混在',      bg: '#F2E394', fg: '#6b5a1e' }
@@ -932,7 +932,7 @@
     const SHUGA_MGR_OPTS_ = [
         { v: '不明', label: '不明', bg: '#E5E5E5', fg: '#444444' }, // 薄いグレー
         { v: 'なし', label: 'なし', bg: '#E5E5E5', fg: '#444444' }, // 薄いグレー
-        { v: 'あり', label: 'あり', bg: '#FBF1C7', fg: '#6b5a1e' }  // 薄い黄
+        { v: 'あり', label: 'あり', bg: '#D6EAD9', fg: '#2E5E33' }  // 薄い緑
     ];
     function coloredSelectHtml(id, opts, current) {
         const cur = opts.find(o => String(o.v) === String(current)) || opts[0];
@@ -947,6 +947,13 @@
         if (!o) return;
         sel.style.background = o.style.background;
         sel.style.color = o.style.color;
+    }
+    // 集合住宅 詳細の上部情報行（オートロック/構成/管理人）の文字色：不明=深いグレー、入力あり=その項目の深い色。
+    function shugaInfoColor(field, v) {
+        if (!v || v === '不明') return '#555555';   // 不明 → 深いグレー
+        if (field === 'lock') return '#7a342c';     // オートロック → 深い赤
+        if (field === 'attr') return '#8a7117';     // 構成属性 → 深い黄色
+        return '#2E5E33';                           // 管理人 → 深い緑
     }
 
     // 集合住宅のオートロック有無（新方式=S列。旧データはメモ内から後方互換で取得）
@@ -3746,8 +3753,8 @@
         return `
             <div class="building-title">${escHtml(first['建物名 / 世帯名'])}</div>
             ${addrRowHtml(first)}
-            <div style="font-size:11px; color:#666; margin-bottom:4px;">
-                管理人: ${escHtml(first.管理人)} ｜ 構成: ${escHtml(first.属性)} ｜ オートロック: ${getAutolock(first)}
+            <div style="font-size:11px; color:#aaa; margin-bottom:4px;">
+                <span style="color:${shugaInfoColor('lock', getAutolock(first))};">オートロック: ${escHtml(getAutolock(first))}</span> ｜ <span style="color:${shugaInfoColor('attr', first.属性)};">構成: ${escHtml(first.属性 || '不明')}</span> ｜ <span style="color:${shugaInfoColor('mgr', first.管理人)};">管理人: ${escHtml(first.管理人 || '不明')}</span>
             </div>
             ${gridHtml}
             ${mgrHtml}
