@@ -1030,7 +1030,7 @@
     const FACILITY_TYPES = [
         { v: '区の施設',          icon: '🏛️', color: '#7B5EA7' },
         { v: 'コンビニ',          icon: '🏪', color: '#E08A3C' },
-        { v: 'スーパー',          icon: '🛒', color: '#4F8FBF' },
+        { v: 'スーパー',          icon: '🛍️', color: '#4F8FBF' },
         { v: '病院',             icon: '🏥', color: '#C9544B' },
         { v: '公園',             icon: '🌳', color: '#4F9E5E' },
         { v: '学校',             icon: '🏫', color: '#D9A441' },
@@ -1040,6 +1040,8 @@
     const FACILITY_LEGACY_ICON_ = { 'コンビニ・スーパー': '🏪' };
     function facilityIcon(v) { const f = FACILITY_TYPES.find(t => t.v === v); return f ? f.icon : (FACILITY_LEGACY_ICON_[v] || '📍'); }
     function facilityLabel(v) { const f = FACILITY_TYPES.find(t => t.v === v); return f ? f.v : (v || '施設'); }
+    // 種類ごとのアイコンサイズ倍率：公園・区の施設は等倍、それ以外は 3/5（0.6倍）
+    function facilitySizeMult(type) { return (type === '公園' || type === '区の施設') ? 1.0 : 0.6; }
 
     // 集合住宅のオートロック有無（新方式=S列。旧データはメモ内から後方互換で取得）
     function getAutolock(item) {
@@ -1286,8 +1288,9 @@
                 const base = iconLarge ? { w: 46, f: 38 } : { w: 30, f: 24 }; // 施設＝絵文字。fontSize が見た目サイズ
                 // 施設は目印なので低ズームで大きく見せる：z13で2.5倍、z16で等倍、その間は段階的(線形)に縮める（z13以下は2.5倍／z16以上は等倍）。
                 const facMult = zoom <= 13 ? 2.5 : zoom >= 16 ? 1.0 : 2.5 - (zoom - 13) * 0.5;
-                el.style.width = el.style.height = Math.round(base.w * scale * facMult) + 'px';
-                el.style.fontSize = Math.round(base.f * scale * facMult) + 'px';
+                const typeMult = facilitySizeMult(el.dataset.facType); // 公園・区の施設=等倍／他=3/5
+                el.style.width = el.style.height = Math.round(base.w * scale * facMult * typeMult) + 'px';
+                el.style.fontSize = Math.round(base.f * scale * facMult * typeMult) + 'px';
             }
         });
     }
@@ -3758,6 +3761,7 @@
             } else if (firstItem.種別 === '施設') {
                 markerEl.className += ' marker-facility';
                 markerEl.innerHTML = facilityIcon(firstItem.属性); // 種類の絵文字のみ（丸・枠なし）
+                markerEl.dataset.facType = firstItem.属性 || ''; // 種類ごとのサイズ調整(applyZoomScale)用
                 popupHtml += createFacilityViewHtml(firstItem);
             } else {
                 styleKodateMarker(markerEl, firstItem);
