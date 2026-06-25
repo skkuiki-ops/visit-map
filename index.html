@@ -98,6 +98,9 @@
         #area-modal-body { padding: 12px; overflow-y: auto; display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; }
         .area-opt { background: #5E9DB8; color: #fff; border: none; border-radius: 6px; padding: 10px 14px; font-size: 14px; cursor: pointer; min-width: 72px; -webkit-touch-callout: none; user-select: none; touch-action: manipulation; }
         .area-opt-num { min-width: 0; width: 46px; padding: 9px 0; text-align: center; }
+        /* 番地選択：1行5個・横幅いっぱいに分割（各ボタンは少し横長に） */
+        #area-modal-body.is-banchi { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+        #area-modal-body.is-banchi .area-opt-num { width: 100%; min-width: 0; box-sizing: border-box; }
         /* 地区選択をSVGマップで表示するステップ（位置・形は江戸川区の地区図を模式化） */
         #area-view-toggle { flex: 0 0 auto; min-width: 56px; text-align: center; background: #f0f0f0; border: 1px solid #ccc; border-radius: 6px; padding: 4px 8px; font-size: 12px; cursor: pointer; }
         /* 地図表示中だけ右上(✕の下)に出す「丁目表示」ON/OFFトグル（住所検索のみ） */
@@ -137,7 +140,7 @@
         .popup-content button, .popup-content input, .popup-content select, .popup-content textarea,
         .popup-content .history-box, .popup-content .memo-section, .popup-content .grid-scroll,
         .popup-content .btn-row, .popup-content .choice-grid { box-sizing: border-box; max-width: 100%; }
-        .building-title { font-weight: bold; font-size: 15px; line-height: 1.35; border-bottom: 2px solid #333; padding-top: 2px; padding-bottom: 6px; padding-right: 30px; margin-bottom: 8px; } /* padding-right=✕ボタンに文字が潜らないよう確保。line-height/上下padding は文字拡大時に上端・下端が欠けないよう確保 */
+        .building-title { font-weight: bold; font-size: 15px; line-height: 1.35; border-bottom: 2px solid #333; padding-top: 2px; padding-bottom: 6px; padding-right: 52px; margin-bottom: 8px; } /* padding-right=拡大した✕ボタン(大モード52px)に文字が潜らないよう確保。line-height/上下padding は文字拡大時に上端・下端が欠けないよう確保 */
         
         /* フォーム・レイアウト */
         .form-group { margin-bottom: 6px; }
@@ -454,17 +457,18 @@
         .detail-toggle { display: block; width: auto; margin: 8px auto 0; padding: 4px 12px; background: #eef1f4; color: #8a97a5; border: 1px solid #dfe4e9; border-radius: 4px; font-size: 12px; font-weight: normal; cursor: pointer; }
         body.large-ui .detail-toggle { font-size: 13px !important; padding: 5px 14px !important; }
 
-        /* ── 表示の重なり順：右上の固定ボタン(9990) ＞ 吹き出し(50) ＞ GPS青ポチ ＞ 訪問先ピン(3) ──
-              Mapbox v3 はマーカー(青ポチ含む)に動的 z-index を付けるため、固定UI(右上コントロール)は明示的に前面へ。
+        /* ── 表示の重なり順：下部ボタン(9998)/住所ラベル(9999)/モーダル(10000〜) ＞ 吹き出し(9995) ＞ 右上の固定ボタン(9990) ＞ GPS青ポチ ＞ 訪問先ピン(3) ──
+              吹き出しを右上コントロール(コンパス/現在地/更新)より前面にする＝吹き出し右上の✕が右上ボタンと干渉しない。
+              下部ボタン・住所ラベル・各種モーダル/オーバーレイは引き続き吹き出しより前面。
               青ポチはラッパーに z-index が付き CSS だけでは負けることがあるので JS でも前面化する（raiseUserDot）。 */
-        .mapboxgl-ctrl-top-right { z-index: 9990; } /* コンパス・現在地・更新は固定UI＝地図要素より常に前面 */
-        .mapboxgl-popup { z-index: 50 !important; } /* 吹き出しは常に最前面 */
+        .mapboxgl-ctrl-top-right { z-index: 9990; } /* コンパス・現在地・更新（吹き出しが開いている間は吹き出しが前面になる） */
+        .mapboxgl-popup { z-index: 9995 !important; } /* 右上コントロールより前面（✕の干渉解消）。下部ボタン/ラベル/モーダルよりは背面 */
         /* 吹き出しの縁を年長者にも分かりやすく（枠線＋少し強めの影。やり過ぎない範囲で境界を明確化） */
         .mapboxgl-popup-content { border: 1.5px solid #b3bfc8; border-radius: 8px; box-shadow: 0 3px 14px rgba(0,0,0,0.20); }
         /* 吹き出しの✕（閉じる）はMapbox既定だと極小でタップしづらいため、押しやすい大きさに */
-        .mapboxgl-popup-close-button { width: 32px; height: 32px; padding: 0; font-size: 24px; line-height: 1; color: #5a6b73; border-radius: 0 8px 0 8px; }
+        .mapboxgl-popup-close-button { width: 44px; height: 44px; padding: 0; font-size: 34px; line-height: 1; color: #5a6b73; border-radius: 0 8px 0 8px; }
         .mapboxgl-popup-close-button:hover, .mapboxgl-popup-close-button:active { background: rgba(0,0,0,0.07); color: #2c3e50; }
-        body.large-ui .mapboxgl-popup-close-button { width: 38px; height: 38px; font-size: 28px; }
+        body.large-ui .mapboxgl-popup-close-button { width: 52px; height: 52px; font-size: 40px; }
         .custom-marker { z-index: 3 !important; }   /* 訪問先ピン */
         /* ── GPS現在地（青ポチ）：ピンより前面、ただしクリックは透過してピン操作を邪魔しない ── */
         .mapboxgl-user-location-dot { z-index: 5 !important; pointer-events: none !important; width: 11px !important; height: 11px !important; }
@@ -1390,6 +1394,7 @@
         const chomeToggle = document.getElementById('area-chome-toggle');
         const body = document.getElementById('area-modal-body');
         if (chomeToggle) chomeToggle.style.display = 'none'; // 既定は隠し、地図表示(住所検索)のときだけ出す
+        body.classList.remove('is-banchi'); // 番地グリッド(5列)は banchi ステップでのみ付与（他ステップでは外す）
         let html = '';
         if (step === 'district') {
             title.textContent = '地区を選択';
@@ -1430,6 +1435,8 @@
             toggle.style.display = 'none';
             body.classList.remove('is-map');
             body.classList.remove('is-list');
+            body.classList.add('is-banchi'); // 番地ボタンは5列グリッド（横幅いっぱい）
+
             title.textContent = areaSel.district + areaSel.chome + '丁目 の番地を選択';
             back.style.visibility = 'visible';
             back.onclick = () => renderAreaStep('chome');
