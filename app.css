@@ -1,0 +1,469 @@
+        body { margin: 0; padding: 0; font-family: sans-serif; user-select: none; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+
+        /* ログイン画面（サインインするまで地図を覆う） */
+        #login-overlay { position: absolute; inset: 0; z-index: 10000; background: #faf7f2; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; text-align: center; }
+        #login-overlay.hidden { display: none; }
+        #login-overlay h1 { font-size: 20px; font-weight: bold; color: #2c3e50; margin: 0 0 8px; }
+        #login-overlay p { font-size: 13px; color: #666; margin: 0 0 24px; max-width: 320px; line-height: 1.6; }
+        /* 起動中ローディング（認証が解決するまで表示。チラ見え防止＝OKなら地図 / NGならログイン画面へ） */
+        #startup-overlay { position: absolute; inset: 0; z-index: 10002; background: #faf7f2; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px; text-align: center; }
+        #startup-overlay.hidden { display: none; }
+        #startup-overlay .su-spin { width: 30px; height: 30px; border: 3px solid #d8d2c6; border-top-color: #2c3e50; border-radius: 50%; animation: busy-spin 0.8s linear infinite; }
+        #startup-overlay .su-text { font-size: 15px; color: #2c3e50; font-weight: bold; }
+        #google-btn { min-height: 44px; }
+        #login-note { font-size: 11px; color: #999; margin-top: 16px; max-width: 320px; line-height: 1.5; }
+        /* 下部ボタン群（メニュー=左下、住所検索=その隣、文字サイズ=右下） */
+        #signout-btn { position: absolute; bottom: 10px; left: 10px; z-index: 9998; background: rgba(255,255,255,0.92); border: 1px solid #ccc; border-radius: 6px; padding: 8px 13px; font-size: 13px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+        #area-nav-btn { position: absolute; bottom: 10px; left: 128px; z-index: 9998; background: rgba(255,255,255,0.92); border: 1px solid #ccc; border-radius: 6px; padding: 8px 13px; font-size: 13px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+        /* ピンチ等のズーム中だけ薄く出る「縮尺（ズームレベル）」表示。左下メニューボタンの上。操作の邪魔をしない（pointer-events:none） */
+        #zoom-indicator { position: absolute; bottom: 52px; left: 10px; z-index: 9997; background: rgba(44,62,80,0.55); color: #fff; font-size: 12px; font-weight: bold; padding: 4px 11px; border-radius: 12px; pointer-events: none; opacity: 0; transition: opacity 0.4s ease; white-space: nowrap; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+        #zoom-indicator.show { opacity: 1; }
+
+        /* 住所で移動モーダル */
+        #area-modal { position: absolute; inset: 0; z-index: 10002; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; padding: 16px; }
+        #area-modal-card { background: #fff; border-radius: 10px; width: min(360px, 92vw); max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 4px 20px rgba(0,0,0,0.3); overflow: hidden; position: relative; }
+        #area-modal-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #eee; }
+        #area-modal-title { flex: 1; font-weight: bold; font-size: 14px; text-align: center; }
+        /* 左右ボタンを同じ幅にして、タイトルを常に中央に置く */
+        #area-back-btn, #area-close-btn { flex: 0 0 auto; min-width: 64px; text-align: center; background: #f0f0f0; border: 1px solid #ccc; border-radius: 6px; padding: 4px 8px; font-size: 12px; cursor: pointer; }
+        #area-modal-body { padding: 12px; overflow-y: auto; display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; }
+        .area-opt { background: #5E9DB8; color: #fff; border: none; border-radius: 6px; padding: 10px 14px; font-size: 14px; cursor: pointer; min-width: 72px; -webkit-touch-callout: none; user-select: none; touch-action: manipulation; }
+        .area-opt-num { min-width: 0; width: 46px; padding: 9px 0; text-align: center; }
+        /* 番地選択：1行5個・横幅いっぱいに分割（各ボタンは少し横長に） */
+        #area-modal-body.is-banchi { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+        #area-modal-body.is-banchi .area-opt-num { width: 100%; min-width: 0; box-sizing: border-box; }
+        /* 地区選択をSVGマップで表示するステップ（位置・形は江戸川区の地区図を模式化） */
+        #area-view-toggle { flex: 0 0 auto; min-width: 56px; text-align: center; background: #f0f0f0; border: 1px solid #ccc; border-radius: 6px; padding: 4px 8px; font-size: 12px; cursor: pointer; }
+        /* 地図表示中だけ右上(✕の下)に出す「丁目表示」ON/OFFトグル（住所検索のみ） */
+        #area-chome-toggle { position: absolute; top: 52px; right: 10px; z-index: 5; background: #f0f0f0; border: 1px solid #ccc; border-radius: 14px; padding: 4px 11px; font-size: 12px; font-weight: bold; color: #555; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.18); -webkit-touch-callout: none; user-select: none; touch-action: manipulation; }
+        #area-chome-toggle.on { background: #5E9DB8; color: #fff; border-color: #5E9DB8; }
+        #area-modal-body.is-map { display: block; padding: 8px; }
+        #area-modal-body.is-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+        #area-modal-body.is-list .area-opt { min-width: 0; width: 100%; box-sizing: border-box; }
+        .area-map { width: 100%; }
+        .area-map svg { width: 100%; height: auto; max-height: 62vh; display: block; touch-action: manipulation; } /* 横向き等の低い画面でもモーダル内に収める */
+        .area-map .dist { fill: #cfe3ec; stroke: #2E6E88; stroke-width: 2.5; stroke-linejoin: round; cursor: pointer; transition: fill .12s; }
+        .area-map .dist:hover { fill: #9cc7da; }
+        .area-map .dist:active { fill: #5E9DB8; }
+        .area-map .lbl { fill: #102733; font-size: 38px; font-weight: bold; text-anchor: middle; dominant-baseline: middle; pointer-events: none; user-select: none; }
+        .area-map .lbl.sm { font-size: 34px; }
+        /* 住所検索の「丁目マップ」：地区図の上に重ねる丁目番号バッジ（オレンジ系でピンや地区と区別） */
+        .area-map .chome-badge { cursor: pointer; -webkit-touch-callout: none; }
+        .area-map .chome-badge circle { fill: rgba(195,195,195,0.6); stroke: #8a8a8a; stroke-width: 3; }
+        .area-map .chome-badge:hover circle { fill: rgba(165,165,165,0.78); }
+        .area-map .chome-badge:active circle { fill: rgba(135,135,135,0.88); }
+        .area-map .chome-badge text { fill: #555555; font-size: 30px; font-weight: bold; text-anchor: middle; dominant-baseline: central; pointer-events: none; user-select: none; }
+        /* 全体利用の区域：地区グリッド（地区名＋貸出中数） */
+        .shared-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+        .shared-grid .shared-cell { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; padding: 10px 4px; }
+        .shared-cell .sc-name { font-size: 14px; }
+        .shared-cell .sc-num { font-size: 20px; font-weight: bold; }
+        .shared-cell.is-empty { background: #c7cdd1; color: #eef0f1; cursor: default; }
+        /* 移動後の地域名ラベル（画面上部・常時表示・タップで枠/表示を消去） */
+        #area-label { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 9999; background: rgba(44,62,80,0.92); color: #fff; font-weight: bold; font-size: 14px; padding: 8px 16px; border-radius: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); max-width: 92%; text-align: center; cursor: pointer; -webkit-touch-callout: none; user-select: none; touch-action: manipulation; }
+
+        /* ポップアップ共通 */
+        /* touch-action: 吹き出し・住所モーダル上のピンチで画面全体がズームしてしまうのを防ぐ（スクロールは可） */
+        .mapboxgl-popup, .popup-content, #area-modal { touch-action: pan-x pan-y; }
+        .popup-content { width: 290px; max-height: 60vh; overflow-y: auto; overflow-x: hidden; font-size: 13px; color: #333; box-sizing: border-box; }
+        /* width:100%のボタン/入力がpadding分はみ出して画面が横スクロールするのを防ぐ（box-sizingで幅内に収める）。
+           ※部屋セルの横スクロールは .grid-scroll が独立scroll(overflow-x:auto)なので、ここの指定では消えず維持される。 */
+        .popup-content button, .popup-content input, .popup-content select, .popup-content textarea,
+        .popup-content .history-box, .popup-content .memo-section, .popup-content .grid-scroll,
+        .popup-content .btn-row, .popup-content .choice-grid { box-sizing: border-box; max-width: 100%; }
+        .building-title { font-weight: bold; font-size: 15px; line-height: 1.35; border-bottom: 2px solid #333; padding-top: 2px; padding-bottom: 6px; padding-right: 52px; margin-bottom: 8px; } /* padding-right=拡大した✕ボタン(大モード52px)に文字が潜らないよう確保。line-height/上下padding は文字拡大時に上端・下端が欠けないよう確保 */
+        
+        /* フォーム・レイアウト */
+        .form-group { margin-bottom: 6px; }
+        .form-group label { display: block; font-size: 11px; font-weight: bold; margin-bottom: 2px; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; box-sizing: border-box; padding: 4px; font-size: 12px; }
+        .btn-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+        .submit-btn { display: block; width: 100%; padding: 8px; background: #5E9DB8; color: white; border: none; font-weight: bold; border-radius: 4px; cursor: pointer; }
+        .btn-row .submit-btn { width: auto; flex: 1; } /* ボタン列の中（編集フォームの保存/閉じる）では横並びを保つ */
+        .clear-btn { background: #C75F56; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; }
+        .save-btn { background: #5FA97D; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; }
+
+        /* グリッド（表）スタイル */
+        .grid-table { width: 100%; border-collapse: collapse; margin-top: 6px; text-align: center; font-size: 11px; }
+        .grid-table th, .grid-table td { border: 1px solid #ccc; padding: 6px 5px; }
+        .grid-table th { background: #f4f4f4; }
+        /* 階ラベル（左端）: 狭く・濃色・反転 */
+        .grid-floor { background: #2c3e50; color: #fff; font-weight: bold; width: 22px; min-width: 22px; padding: 2px 0; font-size: 10px; position: sticky; left: 0; }
+        .cell-active { background-color: #E6F1F4; cursor: pointer; font-weight: bold; }
+        .cell-inactive { background-color: #eaeaea; color: #aaa; }
+        /* 操作中の部屋セルを目立たせる */
+        .cell-operating { outline: 3px solid #E07A4E; outline-offset: -3px; }
+        
+        /* 履歴・メモスタイル */
+        .history-box { min-height: 66px; max-height: 90px; overflow-y: auto; background: #f9f9f9; border: 1px solid #ddd; padding: 4px; margin-top: 4px; font-size: 11px; }
+        .history-item { border-bottom: 1px dashed #eee; padding: 2px 0; }
+        .memo-section { margin-top: 8px; border-top: 1px solid #ddd; padding-top: 6px; }
+
+        /* マーカー（ピン）の見た目（サイズはJSのapplyZoomScaleで動的調整） */
+        /* 屋外・年配者向けの視認性強化：太字・濃い影・文字の縁取りでくっきり見せる */
+        .custom-marker { display: flex; justify-content: center; align-items: center; font-weight: 900; border-radius: 50%; cursor: pointer; background: white; box-shadow: 0 2px 5px rgba(0,0,0,0.55); text-shadow: 0 1px 1.5px rgba(0,0,0,0.45); }
+        /* タップ判定を見た目より少し広げる（近接ピンでも操作しやすく。透明な当たり判定。星形(拒/外)はclip-pathで形状どおりになる） */
+        .custom-marker::before { content: ''; position: absolute; inset: -8px; }
+        .marker-kodedate { width: 24px; height: 24px; font-size: 13px; border: 2.5px solid #222; }
+        .marker-shuga { width: 28px; height: 28px; font-size: 16px; background: #8C8C8C; border: 2px solid white; border-radius: 6px; }
+        /* 戸建ての「訪問拒否(拒)」「外国語(外)」は外枠を☆形にする（塗り＝属性色／白文字） */
+        .marker-star { border: none !important; border-radius: 0 !important; box-shadow: none !important; background: transparent;
+            clip-path: polygon(50% 2%, 61% 35%, 96% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 4% 35%, 39% 35%);
+            filter: drop-shadow(0 1px 2.5px rgba(0,0,0,0.55)); }
+        /* 施設マーカー＝絵文字のみ（丸・枠・影なし）。視認性のため drop-shadow だけ付ける。サイズは applyZoomScale が制御。
+           ※!important は付けない＝同名クラスの後勝ちで .custom-marker を上書きしつつ、移動中(.marker-moving)の金色グローは効かせる */
+        .marker-facility { background: transparent; border: none; box-shadow: none; border-radius: 0; line-height: 1; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5)); }
+        /* 施設の種類ピッカー（2列ボタン） */
+        .fac-type-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin: 4px 0 8px; }
+        .fac-type-btn { padding: 9px 6px; border: 1.5px solid #cdd6dd; border-radius: 8px; background: #f5f8fa; color: #2c3e50; font-size: 13px; font-weight: bold; cursor: pointer; text-align: center; }
+        .fac-type-btn.fac-sel { background: #2c3e50; color: #fff; border-color: #2c3e50; }
+
+        /* ── 文字サイズボタン（右下） ── */
+        /* 右下のスケール操作（左=文字サイズ「文字」／右=ピン印サイズ「印」）。可変幅でも右下にきれいに並ぶよう flex でまとめる */
+        #scale-group { position: absolute; bottom: 10px; right: 10px; z-index: 9998; display: flex; gap: 6px; }
+        #scale-btn, #text-btn { background: rgba(255,255,255,0.92); border: 1px solid #ccc; border-radius: 6px; padding: 8px 13px; font-size: 13px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.2); white-space: nowrap; }
+        #scale-btn.filtering { border-color: #C75F56; box-shadow: 0 0 0 2px rgba(199,95,86,0.4), 0 1px 3px rgba(0,0,0,0.2); } /* アイコンフィルタ有効中の目印 */
+
+        /* ── 属性・訪問結果の横並びレイアウト（ラベル左・セレクト右） ── */
+        .inline-group { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+        .inline-group label { min-width: 6.5em; font-size: 11px; font-weight: bold; white-space: nowrap; flex-shrink: 0; margin: 0; }
+        .inline-group select { flex: 1; max-width: 200px; box-sizing: border-box; padding: 4px; font-size: 12px; }
+
+        /* ── 属性・訪問結果の選択ボタン（ネイティブselectの代替。色は凡例と同系） ── */
+        .choice-grid { display: grid; gap: 5px; margin: 2px 0 8px; flex-basis: 100%; } /* flex行内で展開された時は折り返して全幅を使う */
+        .choice-grid.c4 { grid-template-columns: repeat(4, 1fr); }
+        .choice-grid.c5 { grid-template-columns: repeat(5, 1fr); }
+        .choice-grid.c6 { grid-template-columns: repeat(6, 1fr); }
+        .choice-grid.c3 { grid-template-columns: repeat(3, 1fr); }
+        .choice-btn { padding: 9px 2px; border-radius: 6px; font-size: 13px; font-weight: bold; text-align: center; cursor: pointer; border: 1.5px solid #c8cfd6; background: #fff; -webkit-touch-callout: none; user-select: none; touch-action: manipulation; }
+        body.large-ui .choice-btn { font-size: 15px !important; padding: 11px 2px !important; }
+        /* 属性の現在値ボタン（住所行・部屋番号行の右端に置くコンパクト表示。タップで4択に展開） */
+        .attr-cur { min-width: 8.5em; padding: 4px 14px; margin-left: auto; }
+        body.large-ui .attr-cur { font-size: 14px !important; padding: 5px 14px !important; }
+
+        /* ── 処理中インジケーター（サーバー通信中に表示） ── */
+        /* 更新中の操作ブロック用オーバーレイ（クリックを吸収して操作不可にする） */
+        /* busy はモーダル類（住所10002・管理10003・確認10005）より上＝どの画面の操作でも見える最前面に置く */
+        #busy-overlay { position: absolute; inset: 0; z-index: 10006; background: rgba(0,0,0,0.06); display: none; cursor: progress; }
+        /* 住所の「号」選択モーダル */
+        #go-pick-overlay { position: absolute; inset: 0; z-index: 10007; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; }
+        #go-pick-card { background: #fff; border-radius: 10px; padding: 16px; width: 88%; max-width: 360px; max-height: 80vh; overflow: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+        #go-pick-title { font-size: 16px; font-weight: bold; margin-bottom: 10px; text-align: center; }
+        #go-pick-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+        .go-pick-btn { padding: 12px 0; font-size: 16px; border: 1px solid #ccc; border-radius: 6px; background: #f7f7f7; cursor: pointer; }
+        .go-pick-btn.cur { background: #3D7FA8; color: #fff; border-color: #3D7FA8; }
+        #go-pick-cancel { display: block; width: 100%; margin-top: 12px; padding: 12px; font-size: 15px; border: 1px solid #ccc; border-radius: 6px; background: #eef1f4; cursor: pointer; }
+        /* アイコン移動モードの振動（rotate個別プロパティ＝Mapboxの位置transformを保ちつつ回転） */
+        /* アイコン移動モード：金色の縁＋外側に向かって薄くなるグロー（現在地の青丸の外側のイメージ） */
+        .custom-marker.marker-moving { box-shadow: 0 0 0 3px #FFD700, 0 0 10px 4px rgba(255,200,0,0.55), 0 0 22px 11px rgba(255,200,0,0.22) !important; z-index: 10000; }
+        /* 履歴の編集モーダル */
+        #hist-edit-overlay { position: absolute; inset: 0; z-index: 10007; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; }
+        #hist-edit-card { background: #fff; border-radius: 10px; padding: 18px; width: 88%; max-width: 340px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+        #hist-edit-title { font-size: 16px; font-weight: bold; margin-bottom: 12px; text-align: center; }
+        #hist-edit-dt { width: 100%; padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
+        /* 進捗モニタリングの達成度バー */
+        .prog-bar { height: 9px; border-radius: 5px; background: #d2d8dd; overflow: hidden; margin-top: 3px; }
+        .prog-bar > span { display: block; height: 100%; border-radius: 5px; }
+        #busy-indicator { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 10007; background: rgba(44,62,80,0.92); color: #fff; padding: 10px 18px; border-radius: 20px; font-size: 14px; display: none; align-items: center; gap: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.35); }
+        #busy-indicator .spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.35); border-top-color: #fff; border-radius: 50%; animation: busy-spin 0.7s linear infinite; }
+        /* 楽観的更新の「保存中」バッジ：操作はブロックしない（pointer-events:none）。画面下に控えめに出す。 */
+        #saving-indicator { position: absolute; bottom: 26px; left: 50%; transform: translateX(-50%); z-index: 10005; background: rgba(44,62,80,0.82); color: #fff; padding: 6px 13px; border-radius: 16px; font-size: 13px; display: none; align-items: center; gap: 7px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); pointer-events: none; }
+        #saving-indicator .spinner { width: 12px; height: 12px; border: 2px solid rgba(255,255,255,0.35); border-top-color: #fff; border-radius: 50%; animation: busy-spin 0.7s linear infinite; }
+        /* 完了バッジ（楽観更新・新規登録の「○○しました」）。「保存中…」と同じ位置・近い色で出し、緑の上部トーストの代わりにする */
+        #done-indicator { position: absolute; bottom: 26px; left: 50%; transform: translateX(-50%); z-index: 10006; background: rgba(44,62,80,0.92); color: #fff; padding: 6px 14px; border-radius: 16px; font-size: 13px; display: none; align-items: center; gap: 7px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); pointer-events: none; transition: opacity 0.32s ease; }
+        #done-indicator .done-check { color: #8ee0a8; font-weight: bold; font-size: 15px; line-height: 1; }
+        @keyframes busy-spin { to { transform: rotate(360deg); } }
+
+        /* ── メニューパネル・汎用モーダル（割り当て区域／貸出／ユーザー管理） ── */
+        #menu-panel { position: absolute; bottom: 42px; left: 10px; z-index: 9999; background: rgba(255,255,255,0.98); border: 1px solid #ccc; border-radius: 8px; padding: 6px; display: none; box-shadow: 0 2px 8px rgba(0,0,0,0.25); min-width: 200px; }
+        #menu-panel.show { display: block; }
+        .menu-item { display: block; width: 100%; text-align: left; background: none; border: none; padding: 11px 12px; font-size: 15px; cursor: pointer; border-radius: 6px; }
+        .menu-item:active { background: #eef3f6; }
+        .menu-item.need-lend, .menu-item.need-manage, .menu-item.need-sys { display: none; } /* 役割で出し分け */
+        body.role-lend .menu-item.need-lend, body.role-manage .menu-item.need-manage, body.role-sys .menu-item.need-sys { display: block; background: #eef4f7; border-left: 3px solid #5E9DB8; } /* 権限項目は淡い青＋左の青帯で区別 */
+        /* カテゴリ色分け：区域＝緑カード、使い方＝橙カード（管理メニューの青カードと別カテゴリと分かるよう色で区別） */
+        .menu-item.cat-area { background: #edf5ec; border-left: 3px solid #6FA86E; }
+        .menu-item.cat-help { background: #fbf2e0; border-left: 3px solid #D9A441; }
+        .menu-section { display: none; font-size: 11px; color: #7f8c93; font-weight: bold; padding: 9px 12px 3px; border-top: 1px solid #e1e6e9; margin-top: 4px; } /* 管理者メニューの見出し（adminのみ） */
+        body.role-lend .menu-section { display: block; }
+        /* 印刷用表示（admin・PC/タブレット。A4横・左=詳細地図/右=広域地図・白黒・大きめ文字。年配者向け） */
+        @media (max-width: 768px) { body.role-lend .menu-item.pc-only { display: none; } } /* スマホでは出さない */
+        #print-view { display: none; position: fixed; inset: 0; z-index: 10010; background: #fff; color: #000; overflow: auto; padding: 14px 18px; }
+        #print-view * { box-sizing: border-box; }
+        .print-head { font-size: 22px; font-weight: bold; border-bottom: 3px solid #000; padding-bottom: 6px; margin-bottom: 8px; }
+        .print-legend { font-size: 15px; border: 1.5px solid #000; padding: 8px 10px; margin-bottom: 10px; line-height: 1.9; }
+        .print-main { display: flex; gap: 14px; align-items: flex-start; }
+        .print-left, .print-right { flex: 0 0 auto; }
+        .print-panel-title { font-size: 16px; font-weight: bold; margin-bottom: 4px; }
+        .print-map-wrap { position: relative; border: 1.5px solid #000; overflow: hidden; }
+        .print-map-wrap img.basemap { display: block; width: 100%; height: 100%; object-fit: cover; filter: grayscale(1) brightness(0.95) contrast(1.15); } /* 建物が見える程度の白黒化（飛ばし過ぎない）。クリーンな白背景＋建物線はA案の専用スタイルで */
+        .print-map-wrap .ov { position: absolute; inset: 0; pointer-events: none; }
+        .print-credit { font-size: 10px; color: #666; margin-top: 4px; }
+        .print-card { position: absolute; background: rgba(255,255,255,0.96); border: 1.5px solid #000; border-radius: 3px; padding: 3px 5px; box-shadow: 0 1px 3px rgba(0,0,0,0.35); }
+        .print-card-h { font-weight: bold; font-size: 14px; white-space: nowrap; }
+        .print-grid { border-collapse: collapse; margin-top: 2px; }
+        .print-grid td { border: 1px solid #000; width: 40px; height: 36px; text-align: center; vertical-align: middle; padding: 0; }
+        .print-grid td.pf { background: #000; color: #fff; font-size: 12px; width: 26px; }
+        .print-grid td.pe { border: none; }
+        .print-grid td.pv { background: #d6d6d6; } /* 訪問済み＝網掛け */
+        .print-grid .pn { font-size: 16px; line-height: 1.05; color: #222; } /* 部屋番号を大きく */
+        .print-grid .ps { font-size: 16px; font-weight: bold; line-height: 1.15; }
+        .print-grid .pm { font-size: 13px; font-weight: bold; line-height: 1.1; color: #000; } /* 個人宅/会社マーク（番号の代わり） */
+        @media print {
+            /* @page の向き(landscape/portrait)は枠の縦横比に応じて #print-page-style で動的設定 */
+            body.printing > *:not(#print-view) { display: none !important; }
+            #print-view { position: static !important; overflow: visible !important; padding: 0 !important; }
+            .print-hide { display: none !important; }
+            .print-grid td.pf, .print-grid td.pv, .print-map-wrap img.basemap { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        }
+        #app-modal { position: absolute; inset: 0; z-index: 10003; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; padding: 16px; touch-action: pan-x pan-y; }
+        #app-modal-card { background: #fff; border-radius: 10px; width: min(430px, 94vw); max-height: 84vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+        #app-modal-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #eee; }
+        #app-modal-title { flex: 1; font-weight: bold; font-size: 15px; }
+        #app-modal-head button { min-width: 48px; background: #f0f0f0; border: 1px solid #ccc; border-radius: 6px; padding: 4px 8px; font-size: 13px; cursor: pointer; }
+        #app-modal-body { padding: 12px; overflow-y: auto; font-size: 14px; }
+        #app-modal-body select, #app-modal-body input { box-sizing: border-box; padding: 8px; font-size: 15px; border: 1px solid #bbb; border-radius: 6px; }
+        /* アイコンのフィルタ（印ボタン長押し）。チェックした種類だけ地図に表示する */
+        #icon-filter-modal { position: absolute; inset: 0; z-index: 10004; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; padding: 16px; touch-action: pan-x pan-y; }
+        #icon-filter-card { background: #fff; border-radius: 10px; width: min(420px, 94vw); max-height: 86vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+        #icon-filter-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #eee; }
+        #icon-filter-head .ttl { flex: 1; font-weight: bold; font-size: 15px; }
+        #icon-filter-head button { min-width: 44px; background: #f0f0f0; border: 1px solid #ccc; border-radius: 6px; padding: 5px 9px; font-size: 13px; cursor: pointer; }
+        #icon-filter-actions { display: flex; gap: 8px; padding: 8px 12px; border-bottom: 1px solid #eee; }
+        #icon-filter-actions button { flex: 1; padding: 9px; border: 1px solid #b8c4cc; border-radius: 6px; background: #eef3f6; color: #2c3e50; font-size: 13px; font-weight: bold; cursor: pointer; }
+        #icon-filter-body { padding: 8px 12px 14px; overflow-y: auto; }
+        .iff-sec { margin-bottom: 10px; }
+        .iff-sec-ttl { font-size: 12px; font-weight: bold; color: #555; margin: 8px 0 4px; }
+        .iff-opts { display: flex; flex-wrap: wrap; gap: 6px; }
+        .iff-opt { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1.5px solid #cdd6dd; border-radius: 8px; background: #f8fafc; font-size: 13px; cursor: pointer; user-select: none; -webkit-user-select: none; }
+        .iff-opt.on { border-color: #2c3e50; background: #e7eef3; font-weight: bold; }
+        .iff-sw { width: 15px; height: 15px; border-radius: 4px; border: 1px solid rgba(0,0,0,0.22); flex-shrink: 0; }
+        .iff-ic { font-size: 15px; line-height: 1; flex-shrink: 0; }
+        .iff-note { font-size: 11px; color: #888; margin-top: 8px; line-height: 1.6; }
+        /* アプリの使い方（図解ヘルプ）。クラスは vmh- 接頭辞で既存と衝突回避。現物の配色に合わせる */
+        .vmh-fsbar { display: flex; align-items: center; gap: 4px; justify-content: flex-end; margin: -2px 0 8px; }
+        .vmh-fsbar .vmh-lab { font-size: 10px; color: #9aa7ad; margin-right: 2px; }
+        .vmh-fsbtn { font-size: 12px; border: 1px solid #cbd5da; border-radius: 5px; padding: 3px 12px; color: #5a737e; background: #fff; cursor: pointer; font-weight: bold; }
+        .vmh-fsbtn.on { background: #2c5b6e; color: #fff; border-color: #2c5b6e; }
+        .vmh-root { font-size: 14px; color: #333; }
+        .vmh-large { font-size: 18px; }
+        .vmh-large * { font-weight: bold !important; }
+        .vmh-large .vmh-sec > .vmh-h { font-size: 19px; }  /* 見出し（アコーディオン）も拡大。.vmh-sec>を付けて詳細度で確実に効かせる */
+        .vmh-large .vmh-sec > .vmh-h::before { font-size: 13px; }  /* 見出しの▶▼も合わせて拡大 */
+        .vmh-large .vmh-note { font-size: 16px; }
+        .vmh-large .vmh-sub, .vmh-large .vmh-ssnote, .vmh-large .vmh-psub { font-size: 14px; }
+        .vmh-large .vmh-mk .vmh-i, .vmh-large .vmh-shline, .vmh-large .vmh-steps .vmh-s { font-size: 16.5px; }
+        .vmh-large .vmh-pttl, .vmh-large .vmh-soon { font-size: 18px; }
+        .vmh-large .vmh-plbl, .vmh-large .vmh-prow { font-size: 17px; }
+        .vmh-large .vmh-soon small { font-size: 15px; }
+        .vmh-large .vmh-gt { font-size: 22px; }
+        .vmh-large .vmh-rcell { font-size: 16px; width: 33px; height: 25px; }
+        /* 大モード：説明文中の各種アイコン（マーカーチップ/建物SVG/小ボタン/番号丸など）も拡大 */
+        .vmh-large .vmh-chip { width: 31px; height: 31px; font-size: 15px; }
+        .vmh-large .vmh-sh { width: 35px; height: 31px; }
+        .vmh-large .vmh-shline svg, .vmh-large .vmh-sh svg { width: 20px; height: 20px; }
+        .vmh-large .vmh-em { font-size: 16px; }
+        .vmh-large .vmh-hicon { width: 28px; height: 24px; }
+        .vmh-large .vmh-hicon svg { width: 17px; height: 17px; }
+        .vmh-large .vmh-num { width: 24px; height: 24px; font-size: 14px; }
+        .vmh-large .vmh-must { font-size: 13px; }
+        .vmh-large .vmh-mbtn { font-size: 14px; padding: 2px 9px; }
+        .vmh-large .vmh-attrb { font-size: 16px; }
+        .vmh-large .vmh-b { font-size: 16px; }
+        .vmh-large .vmh-cg3s .vmh-b { font-size: 14px; }
+        #help-fs-header { display: flex; align-items: center; gap: 3px; margin-right: 6px; }
+        #help-fs-header .vmh-fsbtn { min-width: 0; font-size: 12px; border: 1px solid #cbd5da; border-radius: 5px; padding: 3px 11px; color: #5a737e; background: #fff; font-weight: bold; }
+        #help-fs-header .vmh-fsbtn.on { background: #2c5b6e; color: #fff; border-color: #2c5b6e; }
+        .vmh-sec { border: 1px solid #a9c3cf; border-radius: 8px; margin-bottom: 9px; overflow: hidden; }
+        .vmh-sec > .vmh-h { background: #2c5b6e; color: #fff; font-weight: bold; padding: 9px 12px; font-size: 14px; display: flex; align-items: center; gap: 7px; cursor: pointer; list-style: none; }
+        .vmh-sec > .vmh-h::-webkit-details-marker { display: none; }
+        .vmh-sec > .vmh-h::before { content: '▶'; font-size: 10px; color: #bcd9e6; flex-shrink: 0; }
+        .vmh-sec[open] > .vmh-h::before { content: '▼'; }
+        .vmh-sec > .vmh-in { padding: 10px 12px; background: #eef3f6; } /* 説明部はごく薄いブルーグレー＝白い吹き出し(.vmh-pop)と差を出す */
+        .vmh-note { font-size: 12.5px; color: #44555d; margin: 0 0 9px; line-height: 1.7; }
+        .vmh-sub { font-size: 11px; color: #67808a; font-weight: bold; margin: 9px 0 6px; }
+        /* 2つ目以降のサブ見出し（── 集合住宅 ── など）の上に極細線＋余白を入れて区切りを明確に */
+        .vmh-sub:not(:first-child) { border-top: 1px solid #e2e9ec; margin-top: 15px; padding-top: 12px; }
+        .vmh-ssnote { font-size: 11px; color: #8a99a0; margin: 5px 0 2px; }
+        .vmh-chip { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; font-size: 12px; font-weight: bold; flex-shrink: 0; line-height: 1; box-shadow: 0 1px 2px rgba(0,0,0,.25); }
+        .vmh-em { font-size: 13px; }  /* 🏢など絵文字チップ用（大モードで拡大できるようインライン指定をクラス化） */
+        .vmh-ko { background: #fff; border: 2px solid #333; border-radius: 50%; }
+        .vmh-star { color: #fff; clip-path: polygon(50% 2%,61% 35%,96% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,4% 35%,39% 35%); box-shadow: none; }
+        .vmh-sh { border: 2px solid #fff; border-radius: 6px; width: 27px; height: 24px; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
+        .vmh-mk { display: grid; grid-template-columns: 1fr 1fr; gap: 9px 10px; }
+        .vmh-mk .vmh-i { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #444; }
+        .vmh-mk .vmh-full { grid-column: 1 / -1; }
+        .vmh-shline { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #444; margin: 5px 0; flex-wrap: wrap; }
+        .vmh-hicon { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 19px; background: #F2E394; border: 2px solid #fff; border-radius: 5px; box-shadow: 0 1px 2px rgba(0,0,0,.35); }
+        .vmh-pop { width: 100%; max-width: 290px; border: 1.5px solid #b3bfc8; border-radius: 8px; box-shadow: 0 3px 14px rgba(0,0,0,.20); padding: 10px; background: #fff; margin: 4px auto 2px; }
+        .vmh-pttl { font-weight: bold; font-size: 15px; border-bottom: 2px solid #333; padding-bottom: 4px; margin-bottom: 8px; }
+        .vmh-psub { font-size: 11px; color: #666; margin-bottom: 4px; }
+        .vmh-prow { display: flex; align-items: center; gap: 6px; font-size: 14px; color: #555; margin: -2px 0 8px; flex-wrap: wrap; }
+        .vmh-attrb { min-width: 8.5em; margin-left: auto; background: #F2E394; color: #6b5a1e; border: 1.5px solid #F2E394; border-radius: 6px; padding: 4px 14px; font-size: 13px; font-weight: bold; text-align: center; }
+        .vmh-plbl { font-weight: bold; font-size: 14px; margin: 2px 0 4px; }
+        .vmh-cg3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 5px; margin: 2px 0 8px; }
+        .vmh-cg3 .vmh-b { padding: 9px 2px; border-radius: 6px; font-size: 13px; font-weight: bold; text-align: center; border: 1.5px solid #c8cfd6; }
+        .vmh-cg3s .vmh-b { padding: 7px 2px; font-size: 12px; }
+        .vmh-dtog { display: block; width: auto; margin: 6px auto 0; padding: 3px 12px; background: #eef1f4; color: #8a97a5; border: 1px solid #dfe4e9; border-radius: 4px; font-size: 12px; text-align: center; }
+        .vmh-steps { margin: 10px 0 2px; }
+        .vmh-steps .vmh-s { display: flex; align-items: flex-start; margin: 10px 0; font-size: 13px; }
+        /* ②以降のステップの上に極細線＋余白を入れて①②を見分けやすく */
+        .vmh-steps .vmh-s:not(:first-child) { border-top: 1px solid #e9eef1; margin-top: 6px; padding-top: 13px; }
+        .vmh-num { display: inline-flex; width: 19px; height: 19px; border-radius: 50%; background: #2c5b6e; color: #fff; font-size: 11px; font-weight: bold; align-items: center; justify-content: center; margin-right: 8px; flex-shrink: 0; margin-top: 1px; }
+        .vmh-act { font-weight: bold; line-height: 1.7; }
+        .vmh-dt { color: #555; line-height: 1.8; margin-top: 3px; }
+        .vmh-must { display: inline-block; font-size: 10.5px; font-weight: bold; background: #3E8E54; color: #fff; border-radius: 10px; padding: 1px 8px; margin-left: 6px; white-space: nowrap; }
+        .vmh-mbtn { display: inline-flex; align-items: center; justify-content: center; padding: 1px 7px; border-radius: 5px; border: 1px solid #c8cfd6; font-size: 11px; font-weight: bold; line-height: 1.5; vertical-align: middle; margin: 1px 2px; }
+        .vmh-rcell { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 23px; border: 1px solid #cfd8de; border-radius: 3px; font-size: 14px; font-weight: bold; flex-shrink: 0; }
+        .vmh-gt { border-collapse: collapse; margin: 2px auto 0; width: auto; text-align: center; font-size: 19px; }
+        .vmh-gt td { border: 1px solid #ccc; padding: 10px 9px; font-weight: bold; }
+        .vmh-gt td:not(.vmh-fl) { min-width: 42px; }
+        .vmh-gt .vmh-fl { background: #2c3e50; color: #fff; width: 26px; min-width: 26px; padding: 2px 0; font-size: 11px; }
+        .vmh-gt .vmh-ina { background: #eaeaea; color: #aaa; }
+        .vmh-gt .vmh-sel { outline: 3px solid #E07A4E; outline-offset: -3px; }
+        .vmh-rarea { border: 1px solid #6FAEC0; background: #f0f7f9; padding: 6px; margin-top: 8px; font-size: 12px; }
+        .vmh-soon { text-align: center; color: #8aa0a8; font-size: 14px; font-weight: bold; padding: 16px 10px; background: #f7f9fa; border: 1px dashed #d5dde1; border-radius: 8px; line-height: 1.7; }
+        .vmh-soon small { display: block; font-weight: normal; font-size: 12px; color: #a7b3b8; margin-top: 4px; }
+        /* 情報コピー（ピン吹き出しの長押しで開く小モーダル） */
+        #info-copy-modal { position: absolute; inset: 0; z-index: 10007; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; padding: 16px; }
+        #info-copy-card { background: #fff; border-radius: 10px; width: min(360px, 92vw); max-height: 84vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+        #info-copy-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #eee; }
+        #info-copy-head span { flex: 1; font-weight: bold; font-size: 15px; }
+        #info-copy-head button { min-width: 48px; background: #f0f0f0; border: 1px solid #ccc; border-radius: 6px; padding: 4px 8px; font-size: 13px; cursor: pointer; }
+        #info-copy-body { padding: 12px; overflow-y: auto; font-size: 14px; }
+        .copy-opt { display: flex; align-items: flex-start; gap: 8px; padding: 8px; border: 1px solid #e3e6e8; border-radius: 8px; margin-bottom: 6px; cursor: pointer; }
+        .copy-opt input { margin-top: 3px; flex-shrink: 0; width: 18px; height: 18px; }
+        .copy-opt .co-label { font-weight: bold; font-size: 12px; color: #555; }
+        .copy-opt .co-val { font-size: 13px; color: #222; word-break: break-all; }
+        .lend-row { display: flex; align-items: center; gap: 8px; padding: 8px 4px; border-bottom: 1px dashed #e3e3e3; }
+        .lend-row .grow { flex: 1; min-width: 0; }
+        .lend-item { border: 1px solid #cfe3ec; border-radius: 6px; padding: 8px; margin-bottom: 6px; background: #f7fbfc; }
+        /* ユーザー管理は1行=1ユーザー。区切りをはっきりさせる（濃い実線） */
+        .user-row { display: flex; flex-direction: column; gap: 6px; border: 1px solid #c4ccd3; border-radius: 8px; padding: 10px; margin-bottom: 8px; background: #eef4f8; }
+        .user-row.ua-owner { background: #e6e9ec; }
+        .user-row.ua-inactive { opacity: 0.6; background: #eceef0; }
+        .ua-row1 { display: flex; gap: 8px; }
+        .ua-row1 .ua-email { flex: 3 1 0; min-width: 0; }
+        .ua-row1 .ua-name { flex: 2 1 0; min-width: 0; }
+        .ua-row2 { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+        .ua-row2 .ua-group { flex: 1 1 120px; min-width: 96px; }
+        .ua-row2 .ua-status { flex: 0 0 auto; }
+        .ua-row2 .ua-role { flex: 1 1 140px; min-width: 116px; }
+        .ua-row2 .ua-del { flex: 0 0 auto; margin-left: auto; }
+        .ua-filter { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; align-items: center; }
+        .ua-filter #ua-filter-q { flex: 2; min-width: 130px; }
+        #ua-filter-count { font-size: 12px; color: #666; white-space: nowrap; }
+        .due-over { color: #C75F56; font-weight: bold; } /* 返却期日超過 */
+        .due-soon { color: #B0763C; font-weight: bold; } /* 期日まで2週間以内（落ち着いたアンバー） */
+        #lend-preview-back { position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%); z-index: 9999; background: #34495e; color: #fff; border: none; border-radius: 20px; padding: 11px 20px; font-size: 15px; font-weight: bold; box-shadow: 0 2px 8px rgba(0,0,0,0.35); cursor: pointer; }
+
+        /* ── 確認ダイアログ（ネイティブ confirm/alert の代替・独自UI） ── */
+        #app-confirm-overlay { position: absolute; inset: 0; z-index: 10005; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; padding: 20px; }
+        #app-confirm-card { background: #fff; border-radius: 12px; width: min(340px, 92vw); box-shadow: 0 6px 24px rgba(0,0,0,0.35); padding: 18px 16px 14px; }
+        #app-confirm-msg { font-size: 16px; color: #2c3e50; line-height: 1.6; white-space: pre-line; margin-bottom: 16px; text-align: center; }
+        #app-confirm-btns { display: flex; gap: 10px; }
+        #app-confirm-btns button { flex: 1; padding: 12px 8px; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; -webkit-touch-callout: none; user-select: none; touch-action: manipulation; }
+        #app-confirm-cancel { background: #eef1f4; color: #555; border: 1px solid #d5dade; }
+        #app-confirm-ok { background: #5E9DB8; color: #fff; border: none; }
+        #app-confirm-ok.danger { background: #C75F56; } /* 削除・クリア等の破壊的操作は赤 */
+        body.large-ui #app-confirm-msg { font-size: 18px !important; }
+        body.large-ui #app-confirm-btns button { font-size: 17px !important; padding: 13px 8px !important; }
+
+        /* ── モバイル自動拡大（マーカーサイズはJS管理のため指定なし） ── */
+        @media (max-width: 600px) {
+            .popup-content { width: min(320px, 92vw) !important; font-size: 14px !important; }
+            .building-title { font-size: 16px !important; }
+            .grid-table { font-size: 12px !important; }
+            .form-group label { font-size: 13px !important; }
+            .form-group input, .form-group select, .form-group textarea { font-size: 14px !important; padding: 6px !important; }
+            .inline-group label { font-size: 13px !important; }
+            .inline-group select { font-size: 14px !important; padding: 6px !important; }
+            .submit-btn { padding: 10px !important; font-size: 15px !important; }
+            .history-box { font-size: 12px !important; }
+        }
+
+        /* ── 手動「大」モード（＝旧「特大」相当。マーカーサイズはJS管理） ── */
+        /* 「大」でも横幅は「標準」と同じに保つ（width 指定なし＝標準幅を継承）。文字だけ大きくする */
+        body.large-ui .popup-content { font-size: 18px !important; }
+        body.large-ui .building-title { font-size: 21px !important; }
+        body.large-ui .grid-table { font-size: 22px !important; } /* 集合住宅セルの文字を2周り大きく */
+        body.large-ui .grid-floor { font-size: 14px !important; }
+        body.large-ui .form-group label { font-size: 16px !important; }
+        body.large-ui .form-group input, body.large-ui .form-group select, body.large-ui .form-group textarea { font-size: 17px !important; padding: 9px !important; }
+        body.large-ui .inline-group label { font-size: 16px !important; }
+        body.large-ui .inline-group select { font-size: 17px !important; padding: 9px !important; }
+        /* 階数・最大部屋数は常時リスト表示（size付き）。デフォルト選択でも先頭の 1・2 が隠れないようにする */
+        select.numlist { height: auto; width: 100%; box-sizing: border-box; }
+        body.large-ui .form-group select.numlist { padding: 2px !important; }
+        /* 階数「2階」(漢字)と最大部屋数「03」(数字)で行高がずれないよう line-height を固定して揃える */
+        select.numlist option { padding: 2px 4px; text-align: center; line-height: 1.25; }
+        body.large-ui select.numlist option { font-size: 16px !important; padding: 3px 4px; line-height: 1.25; }
+        body.large-ui .submit-btn { padding: 10px 14px !important; font-size: 18px !important; }
+        body.large-ui .clear-btn, body.large-ui .save-btn { font-size: 15px !important; padding: 6px 14px !important; }
+        body.large-ui .history-box { font-size: 15px !important; }
+
+        /* ── 吹き出しの簡易表示（既定）／詳細表示の切替 ──
+              既定（.detail なし）＝簡易：補助ボタン(.detail-only)・空メモ(.memo-empty)を隠す。
+              最下部の「詳細を表示」ボタンで .detail を付けると現行のフル表示に戻る（再押下で簡易）。
+              ※集合住宅グリッドのセル横スクロール(.grid-scroll の overflow-x:auto)は簡易表示でも従来どおり維持する。 */
+        .popup-content:not(.detail) .detail-only { display: none !important; }
+        .popup-content:not(.detail) .memo-empty { display: none !important; }
+        /* 詳細表示は項目が多いので、縦を長めにしてスクロールを減らす */
+        .popup-content.detail { max-height: 82vh !important; }
+        .detail-toggle { display: block; width: auto; margin: 8px auto 0; padding: 4px 12px; background: #eef1f4; color: #8a97a5; border: 1px solid #dfe4e9; border-radius: 4px; font-size: 12px; font-weight: normal; cursor: pointer; }
+        body.large-ui .detail-toggle { font-size: 13px !important; padding: 5px 14px !important; }
+
+        /* ── 表示の重なり順：下部ボタン(9998)/住所ラベル(9999)/モーダル(10000〜) ＞ 吹き出し(9995) ＞ 右上の固定ボタン(9990) ＞ GPS青ポチ ＞ 訪問先ピン(3) ──
+              吹き出しを右上コントロール(コンパス/現在地/更新)より前面にする＝吹き出し右上の✕が右上ボタンと干渉しない。
+              下部ボタン・住所ラベル・各種モーダル/オーバーレイは引き続き吹き出しより前面。
+              青ポチはラッパーに z-index が付き CSS だけでは負けることがあるので JS でも前面化する（raiseUserDot）。 */
+        .mapboxgl-ctrl-top-right { z-index: 9990; } /* コンパス・現在地・更新（吹き出しが開いている間は吹き出しが前面になる） */
+        .mapboxgl-popup { z-index: 9995 !important; } /* 右上コントロールより前面（✕の干渉解消）。下部ボタン/ラベル/モーダルよりは背面 */
+        /* 吹き出しの縁を年長者にも分かりやすく（枠線＋少し強めの影。やり過ぎない範囲で境界を明確化） */
+        .mapboxgl-popup-content { border: 1.5px solid #b3bfc8; border-radius: 8px; box-shadow: 0 3px 14px rgba(0,0,0,0.20); }
+        /* 吹き出しの✕（閉じる）はMapbox既定だと極小でタップしづらいため、押しやすい大きさに */
+        .mapboxgl-popup-close-button { width: 44px; height: 44px; padding: 0; font-size: 34px; line-height: 1; color: #5a6b73; border-radius: 0 8px 0 8px; }
+        .mapboxgl-popup-close-button:hover, .mapboxgl-popup-close-button:active { background: rgba(0,0,0,0.07); color: #2c3e50; }
+        body.large-ui .mapboxgl-popup-close-button { width: 52px; height: 52px; font-size: 40px; }
+        .custom-marker { z-index: 3 !important; }   /* 訪問先ピン */
+        /* ── GPS現在地（青ポチ）：ピンより前面、ただしクリックは透過してピン操作を邪魔しない ── */
+        .mapboxgl-user-location-dot { z-index: 5 !important; pointer-events: none !important; width: 11px !important; height: 11px !important; }
+        .mapboxgl-user-location-dot::after { width: 15px !important; height: 15px !important; } /* 白枠を本体に合わせて縮小 */
+        .mapboxgl-user-location-dot::before { width: 11px !important; height: 11px !important; } /* 拍動する薄い青リングを一回り小さく復活 */
+        .mapboxgl-user-location-accuracy-circle { display: none !important; } /* 周囲の薄い青（精度円）は引き続き非表示 */
+
+        /* ── 文字サイズ「中(text-md)／大(text-lg)」：右下「文字」ボタンで切替。large-ui(=小)を基準に吹き出し内の文字をさらに拡大 ── */
+        /* large-ui ルールより後に定義＝同詳細度・!important で後勝ち。@media 外なので全幅で効く */
+        /* 中：年配の方が読みやすい一段大きいサイズ */
+        body.text-md .popup-content { font-size: 22px !important; }
+        body.text-md .building-title { font-size: 25px !important; }
+        body.text-md .grid-table { font-size: 27px !important; }
+        body.text-md .grid-floor { font-size: 17px !important; }
+        body.text-md .form-group label { font-size: 19px !important; }
+        body.text-md .form-group input, body.text-md .form-group select, body.text-md .form-group textarea { font-size: 20px !important; }
+        body.text-md .inline-group label { font-size: 19px !important; }
+        body.text-md .inline-group select { font-size: 20px !important; }
+        body.text-md select.numlist option { font-size: 19px !important; }
+        body.text-md .submit-btn { font-size: 22px !important; }
+        body.text-md .clear-btn, body.text-md .save-btn { font-size: 18px !important; }
+        body.text-md .history-box { font-size: 18px !important; }
+        body.text-md .detail-toggle { font-size: 15px !important; }
+        body.text-md .choice-btn { font-size: 18px !important; }
+        body.text-md .attr-cur { font-size: 17px !important; }
+        /* 大：80代でもはっきり読める特大。視認性のためフォントも太くする */
+        body.text-lg .popup-content { font-size: 27px !important; font-weight: 500 !important; }
+        body.text-lg .building-title { font-size: 31px !important; font-weight: 700 !important; }
+        body.text-lg .grid-table { font-size: 33px !important; font-weight: 700 !important; }
+        body.text-lg .grid-floor { font-size: 20px !important; }
+        body.text-lg .form-group label { font-size: 22px !important; font-weight: 700 !important; }
+        body.text-lg .form-group input, body.text-lg .form-group select, body.text-lg .form-group textarea { font-size: 24px !important; }
+        body.text-lg .inline-group label { font-size: 22px !important; font-weight: 700 !important; }
+        body.text-lg .inline-group select { font-size: 24px !important; }
+        body.text-lg select.numlist option { font-size: 22px !important; }
+        body.text-lg .submit-btn { font-size: 26px !important; font-weight: 700 !important; }
+        body.text-lg .clear-btn, body.text-lg .save-btn { font-size: 21px !important; font-weight: 700 !important; }
+        body.text-lg .history-box { font-size: 21px !important; }
+        body.text-lg .detail-toggle { font-size: 18px !important; }
+        body.text-lg .choice-btn { font-size: 22px !important; font-weight: 700 !important; }
+        body.text-lg .attr-cur { font-size: 20px !important; font-weight: 700 !important; }
