@@ -77,6 +77,11 @@
         #login-overlay.hidden { display: none; }
         #login-overlay h1 { font-size: 20px; font-weight: bold; color: #2c3e50; margin: 0 0 8px; }
         #login-overlay p { font-size: 13px; color: #666; margin: 0 0 24px; max-width: 320px; line-height: 1.6; }
+        /* 起動中ローディング（認証が解決するまで表示。チラ見え防止＝OKなら地図 / NGならログイン画面へ） */
+        #startup-overlay { position: absolute; inset: 0; z-index: 10002; background: #faf7f2; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px; text-align: center; }
+        #startup-overlay.hidden { display: none; }
+        #startup-overlay .su-spin { width: 30px; height: 30px; border: 3px solid #d8d2c6; border-top-color: #2c3e50; border-radius: 50%; animation: busy-spin 0.8s linear infinite; }
+        #startup-overlay .su-text { font-size: 15px; color: #2c3e50; font-weight: bold; }
         #google-btn { min-height: 44px; }
         #login-note { font-size: 11px; color: #999; margin-top: 16px; max-width: 320px; line-height: 1.5; }
         /* 下部ボタン群（メニュー=左下、住所検索=その隣、文字サイズ=右下） */
@@ -259,6 +264,7 @@
         .print-grid td.pv { background: #d6d6d6; } /* 訪問済み＝網掛け */
         .print-grid .pn { font-size: 16px; line-height: 1.05; color: #222; } /* 部屋番号を大きく */
         .print-grid .ps { font-size: 16px; font-weight: bold; line-height: 1.15; }
+        .print-grid .pm { font-size: 13px; font-weight: bold; line-height: 1.1; color: #000; } /* 個人宅/会社マーク（番号の代わり） */
         @media print {
             /* @page の向き(landscape/portrait)は枠の縦横比に応じて #print-page-style で動的設定 */
             body.printing > *:not(#print-view) { display: none !important; }
@@ -504,8 +510,14 @@
 
 <div id="map"></div>
 
-<!-- ログイン画面（サインインまで地図を覆う） -->
-<div id="login-overlay">
+<!-- 起動中ローディング（認証解決まで表示。既定で表示し、解決後に地図 or ログインへ） -->
+<div id="startup-overlay">
+    <div class="su-spin"></div>
+    <div class="su-text">アプリを起動中です…</div>
+</div>
+
+<!-- ログイン画面（認証がNGのときだけ表示。既定は hidden） -->
+<div id="login-overlay" class="hidden">
     <h1>map tool</h1>
     <p>続行するには Google アカウントでサインインしてください。<br>スプレッドシートに共有されたアカウントのみ利用できます。</p>
     <button id="google-btn" onclick="signInWithGoogle()" style="padding:12px 26px; font-size:16px; border-radius:24px; border:none; background:#2c3e50; color:#fff; cursor:pointer;">Google でサインイン</button>
@@ -590,7 +602,7 @@
     const MY_TOKEN = 'pk.eyJ1IjoidG9ydW8xMTA0IiwiYSI6ImNtcTdlOGp2MzBhY3QycXBocno2OHQ5dmoifQ.bfkHvR5OmkacGJsDorHL5Q';
     mapboxgl.accessToken = MY_TOKEN;
     // ↓ デプロイした GAS Webアプリの URL（.../exec）に置き換える
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwj2t-3F5ZixfXUOvVjFsoW4dJjPEExjfBDio33aTNfBo_4QVFy3qZDLx6cm6uuHHD4/exec";
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzIG6mST1FYUFxN5oqmgK8UIEkbftGfveqIDiUy0B1AcSiWF5Xi0Ya5RgySnWc0yUUE/exec";
     // ↓ Google Cloud で発行した OAuth クライアントID（code_api.gs と同一値）
     const GOOGLE_CLIENT_ID = "273556684740-01e17ja1as1pchs4cvlfqvh67vbt51l3.apps.googleusercontent.com";
     // ↓ 地図スタイル（Mapbox Studio のスタイルURL。標準に戻す場合は 'mapbox://styles/mapbox/streets-v12'）
@@ -618,6 +630,7 @@
 
     // サインイン後（新規サインイン／セッション復帰の共通処理）：UIを切り替えてデータ取得
     function enterApp() {
+        document.getElementById('startup-overlay').classList.add('hidden'); // 起動中ローディングを隠す
         document.getElementById('login-overlay').classList.add('hidden');
         document.getElementById('signout-btn').style.display = '';
         document.getElementById('area-nav-btn').style.display = '';
@@ -665,6 +678,11 @@
             showLogin();
         }
     });
+    // 安全弁: 認証解決が異常に遅い/失敗しても固まらないよう、一定時間後に起動中ならログイン画面へ落とす
+    setTimeout(function () {
+        const su = document.getElementById('startup-overlay');
+        if (su && !su.classList.contains('hidden') && !appEntered) showLogin();
+    }, 12000);
 
     window.addEventListener('load', initScale);
     window.addEventListener('load', () => {
@@ -746,6 +764,7 @@
     // ログイン画面を再表示（認証エラー時・未ログイン時）。自動再サインインはしない（無限ループ防止）。
     function showLogin() {
         try { localStorage.removeItem(DATA_CACHE_KEY); } catch (e) {} // 無効トークン時も前データを残さない
+        document.getElementById('startup-overlay').classList.add('hidden'); // 起動中ローディングを隠す（NG＝ログインへ）
         document.getElementById('signout-btn').style.display = 'none';
         document.getElementById('login-overlay').classList.remove('hidden');
     }
@@ -951,6 +970,15 @@
     }
 
     // 部屋セルの見た目（状態に応じた色・文字）。未訪問は既定色のまま。落ち着いたトーンに調整。
+    // 管理人を「特別な部屋」として部屋ステータス(S列)・履歴(Q列)で扱うための予約キー。
+    // 通常の部屋番号(101〜)とは衝突しない文字列キー。操作・履歴・色は通常の部屋と同じ仕組みに乗せる。
+    const MGR_KEY = '管理人';
+    function isMgrKey(rk) { return String(rk) === MGR_KEY; }
+    // 履歴/最新ステータスの接頭辞。部屋＝「101号室」／管理人＝「管理人」。GAS の roomTag_ と表記を揃える。
+    function roomTag(rk) { return isMgrKey(rk) ? MGR_KEY : (rk + '号室'); }
+    // onclick テンプレートに埋める JS リテラル。数値部屋はそのまま、管理人は文字列なのでクォートする。
+    function roomKeyJs(rk) { return isMgrKey(rk) ? ("'" + rk + "'") : rk; }
+
     function roomVisual(status) {
         status = status || '';
         const ab = String(status).match(/不在\((\d+)回目\)/); // 不在は回数を抽出（上限なし）
@@ -2931,10 +2959,15 @@
         ovD += `<polygon points="${ring.map(p => dProj.x(p[0]).toFixed(1) + ',' + dProj.y(p[1]).toFixed(1)).join(' ')}" fill="none" stroke="#000" stroke-width="2.5"/>`;
         kodate.forEach(d => {
             const kc = kodateVisual(d).char;
-            if (kc !== '拒' && kc !== '外') return; // 通常の戸建ては印を出さない（拒/外だけ★で表示）
             const cx = dProj.x(+d.経度), cy = dProj.y(+d.緯度);
-            ovD += `<polygon points="${starPts_(cx, cy, 15, 6)}" fill="#fff" stroke="#000" stroke-width="1.5"/>`
-                + `<text x="${cx.toFixed(1)}" y="${cy.toFixed(1)}" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="bold" fill="#000">${escHtml(kc)}</text>`;
+            if (kc === '拒' || kc === '外') { // 訪問拒否/外国語の戸建てだけ ★＋記号で表示
+                ovD += `<polygon points="${starPts_(cx, cy, 15, 6)}" fill="#fff" stroke="#000" stroke-width="1.5"/>`
+                    + `<text x="${cx.toFixed(1)}" y="${cy.toFixed(1)}" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="bold" fill="#000">${escHtml(kc)}</text>`;
+            } else if (kc === '🏢') { // 会社の戸建て＝アプリの丸形🏢に合わせ ○＋🏢 で表示（「会」だと「会えた」と紛らわしいため）
+                ovD += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="12" fill="#fff" stroke="#000" stroke-width="2"/>`
+                    + `<text x="${cx.toFixed(1)}" y="${cy.toFixed(1)}" text-anchor="middle" dominant-baseline="central" font-size="14" style="filter:grayscale(1);">🏢</text>`;
+            }
+            // それ以外（通常の戸建て）は印を出さない
         });
         const nextTop = { L: topPad, R: topPad };
         let cardsHtml = '';
@@ -2979,18 +3012,24 @@
         const pps = document.getElementById('print-page-style'); if (pps) pps.textContent = ''; // 用紙向きの指定を解除（通常印刷に影響させない）
         document.removeEventListener('keydown', printEscHandler, true);
     }
-    // 集合住宅1棟の部屋グリッド（白黒・印刷用）。記号は「拒=訪問拒否 / 外=外国語」だけ表示（他は部屋番号のみ）。
+    // 集合住宅1棟の部屋グリッド（白黒・印刷用）。個人宅/会社の部屋は番号を消して「個人」「会社」を表示（アプリと同じ）。
+    // それ以外は部屋番号＋記号（拒=訪問拒否 / 外=外国語 のみ。会えた/不在/投函等は出さない）。
     function printRoomGrid(item) {
         const floors = parseInt(item.階数 || 1), maxRoom = parseInt(item.最大部屋番号 || 1);
         const valid = String(item.有効部屋リスト || '').split(',').map(Number);
         let map = {}; try { map = JSON.parse(item.部屋ステータス || '{}') || {}; } catch (e) { map = {}; }
         const hideNum = String(item.部屋番号非表示) === '1';
+        const marks = parseRoomMarks(item.個人宅); // 個人宅/会社マーク（U列）→ {部屋番号:'p'|'c'}
         let grid = '<table class="print-grid"><tbody>';
         for (let f = floors; f >= 1; f--) {
             grid += `<tr><td class="pf">${f}F</td>`;
             for (let r = 1; r <= maxRoom; r++) {
                 const rn = f * 100 + r;
                 if (!valid.includes(rn)) { grid += '<td class="pe"></td>'; continue; }
+                if (marks[rn]) { // アプリと同じく、個人宅/会社は番号を消して「個人」「会社」を表示
+                    grid += `<td class="pc"><div class="pm">${marks[rn] === 'c' ? '会社' : '個人'}</div></td>`;
+                    continue;
+                }
                 const ch = roomVisual(map[rn]).char, mark = (ch === '拒' || ch === '外') ? ch : '';
                 const numLabel = hideNum ? cornerLabel(f, r, floors, maxRoom) : String(rn);
                 grid += `<td class="pc"><div class="pn">${escHtml(String(numLabel))}</div>${mark ? `<div class="ps">${escHtml(mark)}</div>` : ''}</td>`;
@@ -3584,6 +3623,17 @@
         }
         gridHtml += '</tbody></table></div>';
 
+        // 管理人「あり」のときだけ、部屋グリッドの下に管理人マトリックス（1セル）を出す。
+        // 操作・履歴・色は通常の部屋と同じ仕組み（部屋ステータスS列・履歴Q列を予約キー「管理人」で流用）。
+        let mgrHtml = '';
+        if (String(first.管理人) === 'あり') {
+            const mv = roomVisual(roomStatusMap[MGR_KEY]);
+            mgrHtml = `<div style="margin-top:8px; font-size:12px; font-weight:bold; color:#555;">👤 管理人</div>`
+                + `<table class="grid-table" style="width:auto; margin-top:2px;"><tbody><tr>`
+                + `<td class="cell-active" data-room="${MGR_KEY}" style="min-width:72px; background:${mv.bg}; color:${mv.color}; text-align:center;">${mv.char ? escHtml(mv.char) : '未'}</td>`
+                + `</tr></tbody></table>`;
+        }
+
         return `
             <div class="building-title">${escHtml(first['建物名 / 世帯名'])}</div>
             ${addrRowHtml(first)}
@@ -3591,6 +3641,7 @@
                 管理人: ${escHtml(first.管理人)} ｜ 構成: ${escHtml(first.属性)} ｜ オートロック: ${getAutolock(first)}
             </div>
             ${gridHtml}
+            ${mgrHtml}
             <div id="room-action-area" style="margin-top:8px; border:1px solid #6FAEC0; padding:6px; background:#f0f7f9; min-height:200px;">${roomActionPlaceholder()}</div>
 
             <div class="memo-section${memoCls}">
@@ -3775,7 +3826,7 @@
         if (item && item.履歴データ) {
             try {
                 const arr = JSON.parse(item.履歴データ);
-                const prefix = roomNum + '号室'; // 「○号室: 結果」も「○号室 属性：…」も拾えるよう号室までで一致
+                const prefix = roomTag(roomNum); // 部屋＝「○号室」／管理人＝「管理人」。結果も属性ログも接頭辞一致で拾う
                 historyHtml = arr.map((h, i) => ({ h, i }))
                     .filter(x => String(x.h.status).indexOf(prefix) === 0)
                     .map(x => {
@@ -3789,16 +3840,16 @@
         const curRoomVal = roomStatusOf(item, roomNum);
 
         const hideNum = item && String(item.部屋番号非表示) === '1';
-        const title = hideNum ? '🚪 部屋' : `🚪 ${roomNum}号室`;
+        const title = isMgrKey(roomNum) ? '👤 管理人' : (hideNum ? '🚪 部屋' : `🚪 ${roomNum}号室`);
 
         // レイアウトは戸建ての詳細と統一（見出し＋選択ボタン）。属性を上、訪問結果を下に。
         const html = `
             <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px;">
                 <span style="font-weight:bold; font-size:12px;">${title}</span>
-                ${attrLineHtml(curRoomVal, `saveRoomState(${buildingRow}, ${roomNum}, '%v')`, true)}
+                ${attrLineHtml(curRoomVal, `saveRoomState(${buildingRow}, ${roomKeyJs(roomNum)}, '%v')`, true)}
             </div>
             <div style="font-weight:bold; font-size:12px; margin:2px 0 4px;">訪問結果</div>
-            ${resultChoiceHtml(curRoomVal, `saveRoomStatus(${buildingRow}, ${roomNum}, '%v')`)}
+            ${resultChoiceHtml(curRoomVal, `saveRoomStatus(${buildingRow}, ${roomKeyJs(roomNum)}, '%v')`)}
             <div style="font-weight:bold; font-size:14px; margin-top:4px;">部屋の履歴:</div>
             <div class="history-box" style="min-height:46px; max-height:60px; margin-top:2px;">${historyHtml || '<div style="color:#aaa;">履歴なし</div>'}</div>
         `;
@@ -3996,7 +4047,7 @@
     function addRoomProvisionalHistory(historyJson, roomNum, status) {
         let arr = [];
         try { arr = JSON.parse(historyJson || '[]') || []; } catch (e) { arr = []; }
-        arr.unshift({ status: `${roomNum}号室: ${status}`, time: '…', user: '' });
+        arr.unshift({ status: roomTag(roomNum) + ': ' + status, time: '…', user: '' });
         return JSON.stringify(arr);
     }
 
@@ -4039,7 +4090,7 @@
                 const it = currentData[i];
                 let rsMap = {}; try { rsMap = JSON.parse(it.部屋ステータス || '{}') || {}; } catch (e) {}
                 rsMap[String(roomNum)] = finalStatus;
-                const patch = { 部屋ステータス: JSON.stringify(rsMap), 最新ステータス: `${roomNum}号室: ${finalStatus}` };
+                const patch = { 部屋ステータス: JSON.stringify(rsMap), 最新ステータス: roomTag(roomNum) + ': ' + finalStatus };
                 if (addHistory) patch.履歴データ = addRoomProvisionalHistory(it.履歴データ, roomNum, finalStatus);
                 currentData[i] = Object.assign({}, it, patch);
                 renderShugaRoom(buildingRow, roomNum);
@@ -4147,8 +4198,8 @@
         if (!item || !item.履歴データ) return [];
         let arr; try { arr = JSON.parse(item.履歴データ); } catch (e) { return []; }
         if (!Array.isArray(arr)) return [];
-        if (roomNum != null && !isNaN(roomNum)) {
-            const prefix = roomNum + '号室';
+        if (roomNum != null && roomNum !== '') { // 数値部屋＋管理人キーは部屋単位で抽出（戸建て=null は建物全体）
+            const prefix = roomTag(roomNum);
             return arr.filter(h => String(h.status).indexOf(prefix) === 0)
                       .map(h => ((h.time || '') + ' ' + String(h.status).slice(prefix.length).replace(/^[:：\s]+/, '').replace(/属性：/g, '')).trim());
         }
@@ -4160,7 +4211,7 @@
         if (!item) { showToast('情報が見つかりませんでした', true); return; }
         const lat = parseFloat(item.緯度), lng = parseFloat(item.経度);
         let addr = effectiveAddress_(item);
-        if (roomNum != null) addr = (addr ? addr + ' ' : '') + roomNum + '号室';
+        if (roomNum != null) addr = (addr ? addr + ' ' : '') + roomTag(roomNum); // 部屋＝「○号室」／管理人＝「管理人」
         infoCopyCtx = {
             addr: addr,
             histList: histRecords_(item, roomNum),
@@ -4234,7 +4285,8 @@
     function bindRoomCopyCells(popupEl, rowNumber) {
         if (!popupEl) return;
         popupEl.querySelectorAll('td.cell-active[data-room]').forEach(cell => {
-            const rn = parseInt(cell.getAttribute('data-room'));
+            const raw = cell.getAttribute('data-room');
+            const rn = /^\d+$/.test(raw) ? parseInt(raw) : raw; // 管理人など非数値キーは文字列のまま
             attachLongPress(cell, () => showRoomAction(rowNumber, rn, cell), () => openInfoCopyMenu(rowNumber, rn));
         });
     }
