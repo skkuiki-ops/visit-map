@@ -2,6 +2,11 @@
 <html>
 <head>
     <meta charset="utf-8">
+    <!-- CSP(段階的): connect-src で情報持ち出し(XSS時のトークン外部送信)を遮断、object-src/base-uri を厳格化。
+         script-src は 'unsafe-inline'/'unsafe-eval' を当面維持(既存のインラインハンドラ・互換チェッカーの eval 用)＝既存機能はそのまま・低リスク。
+         ※GitHub Pages はレスポンスヘッダ不可のため <meta> で付与。<meta> では仕様上 frame-ancestors と Report-Only は無効。
+         許可ドメインは監査で補完済み(GASの302先 script.googleusercontent.com / 国土地理院 / Mapbox tiles・worker / Firebase auth)。 -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://api.mapbox.com https://www.gstatic.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://api.mapbox.com; img-src 'self' data: blob: https://*.mapbox.com; font-src 'self' data:; connect-src 'self' https://script.google.com https://script.googleusercontent.com https://msearch.gsi.go.jp https://api.mapbox.com https://events.mapbox.com https://*.tiles.mapbox.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://*.firebaseapp.com; worker-src 'self' blob:; frame-src https://*.firebaseapp.com https://accounts.google.com https://apis.google.com; manifest-src 'self'; form-action 'self'; object-src 'none'; base-uri 'none'">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>s.k.visit-map</title>
     <link rel="icon" type="image/png" href="icon-192.png">
