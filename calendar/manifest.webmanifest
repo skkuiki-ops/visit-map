@@ -1,4 +1,5 @@
 {
+  "id": "/calendar/",
   "name": "奉仕予定カレンダー",
   "short_name": "予定カレンダー",
   "start_url": "./index.html",
