@@ -503,22 +503,46 @@
         if (s.indexOf('投函') >= 0) return '投函';
         return '未訪問';
     }
-    // フィルタ利用中、このピンを表示するか（チェックした値のどれかに一致すれば表示＝和集合）。
+    // 各属性枠が対象とする種別（種別枠は全種別のゲート）。「欲しい種別」の推定に使う。
+    const ICON_FILTER_SECTION_TYPE = {
+        '訪問結果': '戸建て', '戸建て属性': '戸建て',
+        '構成': '集合住宅', 'オートロック': '集合住宅', '管理人': '集合住宅',
+        '施設種類': '施設'
+    };
+    // フィルタ利用中、このピンを表示するか（＝かつ/AND 条件）。
+    //  ・同じ枠内の複数チェック … どれかに一致でOK（OR。1ピンは1つの値しか持てないため）。
+    //  ・別の枠どうし … すべて満たす（AND）。例: オートロック=あり かつ 管理人=あり の集合住宅だけ。
+    //  ・種別を選ばなくても、属性枠（例:オートロック）を選べばその枠が対象とする種別へ自動で絞る。
+    //    ある種別に無関係な枠（戸建てに対するオートロック等）は無視する（種別ごとの枠構造を踏襲）。
     function iconFilterShows(item) {
         if (!item || !iconFilterActive()) return true;
-        if (iconFilter['種別'].has(item.種別)) return true;
-        if (item.種別 === '戸建て') {
-            if (iconFilter['訪問結果'].has(kodateVisitKey(item))) return true;
-            if (iconFilter['戸建て属性'].has(item.属性 || '通常')) return true;
-        } else if (item.種別 === '集合住宅') {
-            if (iconFilter['構成'].has(item.属性 || '不明')) return true;
-            if (iconFilter['オートロック'].has(getAutolock(item))) return true;
-            if (iconFilter['管理人'].has(item.管理人 || '不明')) return true;
-        } else if (item.種別 === '施設') {
-            if (iconFilter['施設種類'].has(item.属性)) return true;
-            if (item.属性 === 'コンビニ・スーパー' && (iconFilter['施設種類'].has('コンビニ') || iconFilter['施設種類'].has('スーパー'))) return true; // 旧値の後方互換
+        const t = item.種別;
+        // 1) 「欲しい種別」を決める。種別枠が選択されていればそれ。無ければ選択中の属性枠が対象とする種別の集合。
+        let wantedTypes = null; // null = 種別の制約なし（全種別OK）
+        if (iconFilter['種別'].size > 0) {
+            wantedTypes = iconFilter['種別'];
+        } else {
+            const ws = new Set();
+            Object.keys(ICON_FILTER_SECTION_TYPE).forEach(function(k) { if (iconFilter[k].size > 0) ws.add(ICON_FILTER_SECTION_TYPE[k]); });
+            if (ws.size > 0) wantedTypes = ws;
         }
-        return false;
+        if (wantedTypes && !wantedTypes.has(t)) return false;
+        // 2) その種別に該当する属性枠すべてで AND 判定（選択がある枠のみ。無関係な枠は無視）。
+        if (t === '戸建て') {
+            if (iconFilter['訪問結果'].size > 0 && !iconFilter['訪問結果'].has(kodateVisitKey(item))) return false;
+            if (iconFilter['戸建て属性'].size > 0 && !iconFilter['戸建て属性'].has(item.属性 || '通常')) return false;
+        } else if (t === '集合住宅') {
+            if (iconFilter['構成'].size > 0 && !iconFilter['構成'].has(item.属性 || '不明')) return false;
+            if (iconFilter['オートロック'].size > 0 && !iconFilter['オートロック'].has(getAutolock(item))) return false;
+            if (iconFilter['管理人'].size > 0 && !iconFilter['管理人'].has(item.管理人 || '不明')) return false;
+        } else if (t === '施設') {
+            if (iconFilter['施設種類'].size > 0) {
+                const okFac = iconFilter['施設種類'].has(item.属性)
+                    || (item.属性 === 'コンビニ・スーパー' && (iconFilter['施設種類'].has('コンビニ') || iconFilter['施設種類'].has('スーパー'))); // 旧値の後方互換
+                if (!okFac) return false;
+            }
+        }
+        return true;
     }
     function renderIconFilterBody() {
         const body = document.getElementById('icon-filter-body');
@@ -530,7 +554,7 @@
                 return `<label class="iff-opt${on ? ' on' : ''}" onclick="toggleIconFilterOpt(this,'${sec.key}','${o.v}')">${sw}${escHtml(o.label)}</label>`;
             }).join('');
             return `<div class="iff-sec"><div class="iff-sec-ttl">${escHtml(sec.title)}</div><div class="iff-opts">${opts}</div></div>`;
-        }).join('') + `<div class="iff-note">チェックした種類だけを地図に表示します（未選択＝全部表示）。フィルタ利用中はズームによる自動非表示は行いません。</div>`;
+        }).join('') + `<div class="iff-note">チェックした条件すべてに当てはまるピンだけ表示します（別の枠どうしは「かつ」／同じ枠内はどれか・未選択＝全部表示）。フィルタ利用中はズームによる自動非表示は行いません。</div>`;
     }
     function openIconFilter() {
         renderIconFilterBody();
