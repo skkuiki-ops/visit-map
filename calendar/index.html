@@ -13,8 +13,9 @@
   <meta name="apple-mobile-web-app-title" content="予定カレンダー">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="icon" type="image/svg+xml" href="icon.svg">
-  <!-- Googleサインイン（本人確認用） -->
-  <script src="https://accounts.google.com/gsi/client" async></script>
+  <!-- Firebase Authentication（Googleログイン）。visit-map 本体と同一プロジェクト sk-visit-map を流用 -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <style>
     /* 配色・寸法はここに集約（規約: 定数管理の徹底） */
     :root {
@@ -73,7 +74,14 @@
       padding: 32px 20px; text-align: center; margin-top: 10px;
     }
     .auth-msg { color: var(--text); font-size: 14px; line-height: 1.7; margin: 0 0 18px; }
-    #gsiButton { display: flex; justify-content: center; }
+    .login-google-btn {
+      background: var(--primary); color: #fff; border: none;
+      padding: 12px 28px; font-size: 16px; font-weight: bold;
+      border-radius: 24px; cursor: pointer;
+      transition: filter 0.12s ease, transform 0.06s ease;
+    }
+    .login-google-btn:hover { filter: brightness(1.12); }
+    .login-google-btn:active { transform: translateY(1px); }
     .auth-error { color: #c0392b; font-weight: bold; font-size: 13.5px; margin-top: 16px; }
 
     /* 前後月ボタンとセレクトボックスの統合コントローラー */
@@ -344,9 +352,14 @@
     <button class="logout-btn" onclick="signOut()">ログアウト</button>
   </div>
 
-  <div id="authGate" class="auth-gate">
+  <!-- 起動中（認証解決まで表示）。Firebase の自動ログイン復帰は非同期のため、解決前にログイン画面を出さない -->
+  <div id="startupGate" class="auth-gate">
+    <p class="auth-msg">アプリを起動中です…</p>
+  </div>
+
+  <div id="authGate" class="auth-gate" style="display:none;">
     <p class="auth-msg">閲覧にはGoogleログインが必要です。<br>訪問マップ（visit-map）の利用者として登録されたGoogleアカウントでログインしてください。</p>
-    <div id="gsiButton"></div>
+    <button id="googleBtn" class="login-google-btn" onclick="signInWithGoogle()">Google でサインイン</button>
     <p id="authError" class="auth-error" style="display:none;"></p>
   </div>
 
@@ -401,114 +414,52 @@
   'use strict';
 
   // ====== 設定（デプロイ時に差し替え）======
-  // CLIENT_ID は visit-map 本体と「同一」の Google OAuth クライアントID（カレンダーGAS の CONFIG.OAUTH_CLIENT_ID とも一致）。
-  //   → 同一 Client ID にすることで visit-map とログインを共有する（＝ログイン流用）。
   // API_URL は このカレンダー専用 GAS ウェブアプリの /exec URL（visit-map 本体とは別の /exec）。
-  const CLIENT_ID = '273556684740-01e17ja1as1pchs4cvlfqvh67vbt51l3.apps.googleusercontent.com'; // visit-map と同一（公開値）。OAuth ID 変更時のみ更新
-  const API_URL = 'https://script.google.com/macros/s/AKfycbylsp_zyEcR1CG8lEobvG-NfZMo7IjDYhnKTcRfDC7UGg7KJYRyk9z5eSG9rhLTn_QONQ/exec'; // ★カレンダーGAS の /exec に差し替え（未設定だとログイン画面に「設定が未完了」と表示）
+  const API_URL = 'https://script.google.com/macros/s/AKfycbxQKf2BE4tr0Jx32deqAt9HmCr89bhhhRoE6H-WVuG-mNcyo67yamGqYoJKZ9yvtkk0-A/exec'; // ★カレンダーGAS の /exec に差し替え
+
+  // Firebase Authentication（visit-map 本体と同一プロジェクト sk-visit-map を流用＝ログイン共有）。
+  //   config は公開前提の値（秘密ではない）。本体 web/app.js の firebaseConfig と同値。
+  //   refresh token を indexedDB に保持し、IDトークンを無音で自動更新する（自前のトークン保持・失効前更新は不要）。
+  const firebaseConfig = {
+    apiKey: 'AIzaSyC5ItYNNlpwkO2s54dAOjGS1d51MCYLVEk',
+    authDomain: 'sk-visit-map.firebaseapp.com',
+    projectId: 'sk-visit-map',
+    appId: '1:742821746922:web:83729214d2ffe155255f93'
+  };
+  firebase.initializeApp(firebaseConfig);
+  const fbAuth = firebase.auth();
 
   let cachedRawEvents = [];
   let currentYear = new Date().getFullYear();
   let currentMonth = new Date().getMonth() + 1;
-  let idToken = ''; // Googleサインインで取得したIDトークン（サーバ側で検証される）
   let myGroup = ''; // ログイン中ユーザーの所属グループ（サーバが UserList から返す）。既定選択に使う
-  let gsiRetries = 0; // GISライブラリ読込待ちの再試行回数
-  let appEntered = false; // 既にアプリ画面へ入ったか（トークン更新時に再読み込みしないためのフラグ）
-  let tokenRefreshTimer = null; // 失効前サイレント更新のタイマー
-  const CAL_TOK_KEY = 'cal_idtoken'; // localStorage 保存キー（リロードでも再ログイン不要にする）
+  let appEntered = false; // 既にアプリ画面へ入ったか（トークン更新で画面を作り直さないためのフラグ）
 
-  // ===== ログイン（Google Identity Services）=====
-  function initGsi() {
-    // 設定差し替え漏れを早期に検知（プレースホルダのままだと無反応になるため）
-    if (CLIENT_ID.indexOf('XXXX') !== -1 || API_URL.indexOf('XXXX') !== -1) {
-      console.warn('CLIENT_ID / API_URL が未設定です。index.html の定数を実値に差し替えてください。');
-      showAuthError('設定が未完了です（管理者へご連絡ください）。');
-      return;
-    }
-    // ライブラリ(gsi/client)は async 読込のため、未ロードなら少し待って再試行
-    if (!(window.google && google.accounts && google.accounts.id)) {
-      if (++gsiRetries > 25) { // 約5秒待っても読めなければ案内（FedCM/Cookieブロック等）
-        showAuthError('Googleログインを読み込めませんでした。通信環境やブラウザのCookie設定をご確認のうえ、ページを再読み込みしてください。');
-        return;
+  // ===== ログイン（Firebase Authentication / Googleログイン）=====
+  // 本体 web/app.js と同型。ルーティングは onAuthStateChanged（init で登録）に委譲する。
+  // Firebase が indexedDB の refresh token で自動復帰・自動更新する＝自前のセッション保持/失効前更新は不要。
+
+  // ログイン画面の「Google でサインイン」ボタンから呼ぶ
+  function signInWithGoogle() {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    fbAuth.signInWithPopup(provider).catch(function (e) {
+      // ポップアップが塞がれる環境（PWA/一部モバイル）ではリダイレクト方式へフォールバック
+      if (e && (e.code === 'auth/popup-blocked' || e.code === 'auth/cancelled-popup-request' || e.code === 'auth/operation-not-supported-in-this-environment')) {
+        fbAuth.signInWithRedirect(provider);
+      } else {
+        showAuthError('サインインに失敗しました: ' + ((e && e.message) || e));
       }
-      setTimeout(initGsi, 200);
-      return;
-    }
-    google.accounts.id.initialize({
-      client_id: CLIENT_ID,
-      callback: handleCredentialResponse,
-      auto_select: true // visit-map と同じ Google セッションがあれば無操作で自動サインイン（ログイン流用）
     });
-    google.accounts.id.renderButton(
-      document.getElementById('gsiButton'),
-      { theme: 'filled_blue', size: 'large', text: 'signin_with', shape: 'pill' }
-    );
-    if (appEntered) {
-      // localStorage から復元済み（再ログイン不要）。失効前にだけ静かにトークンを更新する。
-      scheduleTokenRefresh();
-    } else {
-      // 未ログイン → 既存 Google セッションがあれば One Tap で無操作サインイン（失敗時は上のボタンで手動）
-      try { google.accounts.id.prompt(); } catch (e) {}
-    }
-  }
-
-  function handleCredentialResponse(response) {
-    idToken = (response && response.credential) || '';
-    if (!idToken) { showAuthError('ログインに失敗しました。'); return; }
-    saveSession(idToken);   // リロードでも再ログイン不要にするため保存
-    scheduleTokenRefresh(); // 失効前に静かに更新
-    showAuthError('');
-    // 画面遷移は初回のみ。更新時(appEntered=true)は idToken だけ差し替え、再読み込みしない
-    if (!appEntered) { appEntered = true; showApp(); loadSchedule(); }
-  }
-
-  // 表示専用のJWTデコード（署名検証はしない＝信頼用途では使わない）
-  function decodeJwt(token) {
-    try {
-      const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-      const json = decodeURIComponent(atob(b64).split('').map(function(c) {
-        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-      }).join(''));
-      return JSON.parse(json);
-    } catch (e) { return null; }
-  }
-
-  // ===== セッション保持（リロードしても再ログインしないための保存・復元） =====
-  function saveSession(token) {
-    try { localStorage.setItem(CAL_TOK_KEY, token); } catch (e) {}
-  }
-  function clearSession() {
-    try { localStorage.removeItem(CAL_TOK_KEY); } catch (e) {}
-  }
-  // 保存済みトークンが「まだ有効」なら返す。失効間際・壊れていれば破棄して null。
-  function loadValidSession() {
-    try {
-      const token = localStorage.getItem(CAL_TOK_KEY);
-      if (!token) return null;
-      const payload = decodeJwt(token);
-      if (!payload || !payload.exp) { clearSession(); return null; }
-      if (payload.exp * 1000 <= Date.now() + 30000) { clearSession(); return null; } // 失効30秒前は使わない
-      return token;
-    } catch (e) { clearSession(); return null; }
-  }
-  // 失効3分前に One Tap(auto_select) で静かにトークンを再発行する（タブを開いている間の継続用）
-  function scheduleTokenRefresh() {
-    if (tokenRefreshTimer) clearTimeout(tokenRefreshTimer);
-    try {
-      const payload = decodeJwt(idToken);
-      const ms = payload.exp * 1000 - Date.now() - 180000;
-      tokenRefreshTimer = setTimeout(function () {
-        try { google.accounts.id.prompt(); } catch (e) {}
-      }, Math.max(ms, 5000));
-    } catch (e) {}
   }
 
   function showApp() {
+    document.getElementById('startupGate').style.display = 'none';
     document.getElementById('authGate').style.display = 'none';
     document.getElementById('appContent').style.display = '';
     document.getElementById('accountBar').style.display = 'flex';
   }
   function showGate() {
+    document.getElementById('startupGate').style.display = 'none';
     document.getElementById('appContent').style.display = 'none';
     document.getElementById('accountBar').style.display = 'none';
     document.getElementById('authGate').style.display = '';
@@ -518,16 +469,11 @@
     el.textContent = msg || '';
     el.style.display = msg ? 'block' : 'none';
   }
+  // サインアウト：Firebase からサインアウト → onAuthStateChanged(null) が showGate() を呼ぶ
   function signOut() {
-    idToken = '';
     appEntered = false;
-    if (tokenRefreshTimer) { clearTimeout(tokenRefreshTimer); tokenRefreshTimer = null; }
-    clearSession();
-    if (window.google && google.accounts && google.accounts.id) {
-      google.accounts.id.disableAutoSelect();
-    }
     showAuthError('');
-    showGate();
+    fbAuth.signOut();
   }
 
   // ===== 安全化ユーティリティ（XSS対策） =====
@@ -616,8 +562,9 @@
   }
 
   // ===== データ取得 =====
-  function loadSchedule() {
-    if (!idToken) { showGate(); return; }
+  async function loadSchedule() {
+    const user = fbAuth.currentUser;
+    if (!user) { showGate(); return; }
     currentYear = Number(document.getElementById('yearSelector').value);
     currentMonth = Number(document.getElementById('monthSelector').value);
     const view = document.getElementById('calendarView');
@@ -627,6 +574,15 @@
     goalZone.innerHTML = '';
     document.getElementById('checkboxZone').innerHTML = '<span class="hint">データ読み込み中…</span>';
     document.getElementById('filterActions').style.display = 'none';
+
+    // Firebase の有効なIDトークン(JWT)を都度取得（期限切れは無音で自動更新される）。
+    let idToken = '';
+    try {
+      idToken = await user.getIdToken();
+    } catch (e) {
+      view.innerHTML = `<div class="state-msg error">ログインの確認に失敗しました。<br>ログアウトして再度ログインしてください。</div>`;
+      return;
+    }
 
     // CORSプリフライトを避けるため Content-Type は text/plain（簡易リクエスト）。
     // 認証情報(idToken)はヘッダーではなく本文に入れる。
@@ -876,17 +832,25 @@
     // Esc でモーダルを閉じる
     document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closePopup(); });
 
-    // 保存済みトークンがまだ有効なら、認証画面を出さずにそのままアプリへ入る（リロードでも再ログイン不要）
-    const saved = loadValidSession();
-    if (saved) {
-      idToken = saved;
-      appEntered = true;
-      showApp();
-      loadSchedule();
-    } else {
-      showGate();
-    }
-    initGsi(); // GIS を初期化。復元済みなら失効前更新を予約、未ログインなら One Tap を試行
+    // 認証のルーティングは Firebase の onAuthStateChanged に委譲する（DOMセットアップ後に登録）。
+    // ログイン済みなら indexedDB の refresh token で自動復帰し showApp()、未ログインなら showGate()。
+    fbAuth.onAuthStateChanged(function (user) {
+      if (user) {
+        showAuthError('');
+        if (!appEntered) { appEntered = true; showApp(); loadSchedule(); } // 初回のみ画面遷移（トークン更新時は何もしない）
+      } else {
+        showGate();
+      }
+    });
+    // リダイレクト方式サインイン（PWA/一部モバイル）の失敗を可視化する
+    fbAuth.getRedirectResult().catch(function (e) {
+      showAuthError('サインインに失敗しました: ' + ((e && e.message) || e));
+    });
+    // 安全弁: 認証解決が異常に遅い/失敗しても固まらないよう、一定時間後に起動中ならログイン画面へ落とす
+    setTimeout(function () {
+      const su = document.getElementById('startupGate');
+      if (su && su.style.display !== 'none' && !appEntered) showGate();
+    }, 12000);
   }
 
   window.addEventListener('load', init);
