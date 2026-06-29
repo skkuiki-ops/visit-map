@@ -12,7 +12,7 @@
     const MY_TOKEN = 'pk.eyJ1IjoidG9ydW8xMTA0IiwiYSI6ImNtcTdlOGp2MzBhY3QycXBocno2OHQ5dmoifQ.bfkHvR5OmkacGJsDorHL5Q';
     mapboxgl.accessToken = MY_TOKEN;
     // ↓ デプロイした GAS Webアプリの URL（.../exec）に置き換える
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzBumpfaVa-15ax6fjyflo82saWKw0PMLOILyvO-riz7e1ZVZ4_feN0mc-Lhv6If5--/exec";
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwPY8B3k3HxEEbp1JDbX8uS9mfOz9LkOcg4jn2J6YmDXIFsoUfbcJd-Gbj-rmuapa0P/exec";
     // ↓ Google Cloud で発行した OAuth クライアントID（code_api.gs と同一値）
     const GOOGLE_CLIENT_ID = "273556684740-01e17ja1as1pchs4cvlfqvh67vbt51l3.apps.googleusercontent.com";
     // ↓ 地図スタイル（Mapbox Studio のスタイルURL。標準に戻す場合は 'mapbox://styles/mapbox/streets-v12'）
@@ -372,8 +372,7 @@
         }
     }
 
-    // ── 集合住宅フォームの色付きセレクト（新規・編集 共通。オートロック/構成属性/管理人） ──
-    // 各 option に背景色を付け、選択中の値の色をセレクト本体にも反映する（閉じた状態でも色で分かる）。
+    // ── 集合住宅フォームの属性候補（新規・編集 共通。オートロック/構成属性/管理人）。色付きボタンで選ぶ ──
     // 構成属性はアイコン色(shugaColor)と同じ＋不明はオートロックの不明と同色。オートロック=あり薄赤/なし薄青。管理人=あり薄緑/なし・不明薄グレー。
     const SHUGA_ATTR_OPTS_ = [
         { v: '不明',      label: '不明',      bg: '#E2E2E2', fg: '#444444' }, // 不明はオートロックの不明と同色（薄グレー）
@@ -391,19 +390,38 @@
         { v: 'なし', label: 'なし', bg: '#E5E5E5', fg: '#444444' }, // 薄いグレー
         { v: 'あり', label: 'あり', bg: '#D6EAD9', fg: '#2E5E33' }  // 薄い緑
     ];
-    function coloredSelectHtml(id, opts, current) {
-        const cur = opts.find(o => String(o.v) === String(current)) || opts[0];
-        const optionHtml = opts.map(o =>
-            `<option value="${escHtml(o.v)}" style="background:${o.bg}; color:${o.fg};" ${String(current) === String(o.v) ? 'selected' : ''}>${escHtml(o.label)}</option>`
-        ).join('');
-        return `<select id="${id}" style="background:${cur.bg}; color:${cur.fg}; font-weight:bold;" onchange="applySelectColor(this)">${optionHtml}</select>`;
+    // hidden input(id) に値を保持し、ボタンのタップで値と見た目を切り替える（保存は従来どおり id.value を読む）。
+    //  kind='single' … あり/なし の排他。選択中をもう一度タップで解除＝不明（未選択）。
+    //  kind='compose'… ファミリー/シングルを独立トグル。両方オン＝「混在」、両方オフ＝不明。
+    // 「不明」はボタンに出さず未選択で表す。オン時の色は SHUGA_*_OPTS_（＝選択後に表示される色）と同じ。
+    function coloredButtonsHtml(id, opts, current, kind) {
+        const cur = String(current == null ? '不明' : current);
+        const hide = (kind === 'compose') ? ['不明', '混在'] : ['不明']; // 構成はファミリー/シングルのみ出し、両押しで混在
+        const btns = opts.filter(o => hide.indexOf(o.v) < 0).map(o => {
+            const on = (kind === 'compose') ? (cur === o.v || cur === '混在') : (cur === o.v);
+            const onStyle = `background:${o.bg}; border-color:${o.bg}; color:${o.fg};`;
+            return `<button type="button" class="choice-btn${on ? ' sel' : ''}" data-v="${escHtml(o.v)}" data-on="${onStyle}" style="${on ? onStyle : ''}" onclick="toggleShugaBtn(this)">${escHtml(o.label)}</button>`;
+        }).join('');
+        return `<div class="choice-grid c2 shuga-pick" data-kind="${kind}"><input type="hidden" id="${id}" value="${escHtml(cur)}">${btns}</div>`;
     }
-    // 選択変更時にセレクト本体の色を選択中 option の色へ更新する（閉じた状態の視認用）
-    function applySelectColor(sel) {
-        const o = sel.options[sel.selectedIndex];
-        if (!o) return;
-        sel.style.background = o.style.background;
-        sel.style.color = o.style.color;
+    // ボタンのタップ：見た目(style/sel)を切り替え、hidden input の値を再計算する。
+    function toggleShugaBtn(btn) {
+        const grid = btn.closest('.shuga-pick'); if (!grid) return;
+        const kind = grid.dataset.kind;
+        const input = grid.querySelector('input[type="hidden"]');
+        const btns = Array.from(grid.querySelectorAll('.choice-btn'));
+        const setOn = (b, on) => { b.classList.toggle('sel', on); b.setAttribute('style', on ? b.dataset.on : ''); };
+        if (kind === 'single') {
+            const wasOn = btn.classList.contains('sel');
+            btns.forEach(b => setOn(b, false));
+            if (!wasOn) setOn(btn, true); // 同じボタン再タップ＝解除（不明）。別ボタン＝切替
+        } else {
+            setOn(btn, !btn.classList.contains('sel')); // 構成は独立トグル
+        }
+        const onVals = btns.filter(b => b.classList.contains('sel')).map(b => b.dataset.v);
+        input.value = (kind === 'compose')
+            ? (onVals.length >= 2 ? '混在' : (onVals[0] || '不明'))
+            : (onVals[0] || '不明');
     }
     // 集合住宅 詳細の上部情報行（オートロック/構成/管理人）の文字色（値ごと。深い色）。
     //  オートロック: あり→赤 / なし・不明→グレー
@@ -1889,9 +1907,9 @@
                 </div>
                 <label style="font-size:11px; font-weight:bold;">緑=部屋あり（初期は全選択）。無い部屋をタップで外す</label>
                 <div id="setup-grid-container" style="max-height:120px; overflow:auto; margin-bottom:8px;"></div>
-                <div class="inline-group"><label>オートロック</label>${coloredSelectHtml('new-lock', SHUGA_LOCK_OPTS_, '不明')}</div>
-                <div class="inline-group"><label>構成属性</label>${coloredSelectHtml('new-attribute', SHUGA_ATTR_OPTS_, '不明')}</div>
-                <div class="inline-group detail-only"><label>管理人</label>${coloredSelectHtml('new-manager', SHUGA_MGR_OPTS_, '不明')}</div>
+                <div class="inline-group"><label>オートロック</label>${coloredButtonsHtml('new-lock', SHUGA_LOCK_OPTS_, '不明', 'single')}</div>
+                <div class="inline-group"><label>構成属性</label>${coloredButtonsHtml('new-attribute', SHUGA_ATTR_OPTS_, '不明', 'compose')}</div>
+                <div class="inline-group detail-only"><label>管理人</label>${coloredButtonsHtml('new-manager', SHUGA_MGR_OPTS_, '不明', 'single')}</div>
                 <div class="form-group memo-empty"><label>メモ</label><input type="text" id="new-memo"></div>
                 <button class="submit-btn" id="reg-btn" onclick="submitNewLocation(${latVal}, ${lngVal}, '集合住宅')">登録</button>
                 <div class="detail-only" style="text-align:right; margin-top:6px;"><button type="button" onclick="switchToFacilityForm(${latVal}, ${lngVal})" style="width:34%; padding:8px 0; background:#5B7C99; color:#fff; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer;">🏛 施設登録</button></div>
@@ -3697,7 +3715,7 @@
         const opt = (v, label, cur) => `<option value="${v}" ${String(cur) === String(v) ? 'selected' : ''}>${label}</option>`;
         const floorOpts = Array.from({length:30},(_,i)=>i+1).map(v => opt(v, v + 'F', floors)).join('');
         const roomOpts = Array.from({length:20},(_,i)=>i+1).map(v => opt(v, String(v).padStart(2,'0'), maxRoom)).join('');
-        // オートロック/構成属性/管理人は coloredSelectHtml で色付き生成（下のHTMLで直接呼ぶ）
+        // オートロック/構成属性/管理人は coloredButtonsHtml で色付きボタン生成（下のHTMLで直接呼ぶ）
 
         const html = `
             <div class="building-title">✏️ 建物情報を編集</div>
@@ -3717,9 +3735,9 @@
             </div>
             <label style="font-size:11px; font-weight:bold;">緑=有効。不要な部屋をタップで外す</label>
             <div id="setup-grid-container" style="max-height:120px; overflow:auto; margin-bottom:8px;"></div>
-            <div class="inline-group"><label>オートロック</label>${coloredSelectHtml('new-lock', SHUGA_LOCK_OPTS_, lock)}</div>
-            <div class="inline-group"><label>構成属性</label>${coloredSelectHtml('new-attribute', SHUGA_ATTR_OPTS_, item.属性)}</div>
-            <div class="inline-group"><label>管理人</label>${coloredSelectHtml('new-manager', SHUGA_MGR_OPTS_, item.管理人)}</div>
+            <div class="inline-group"><label>オートロック</label>${coloredButtonsHtml('new-lock', SHUGA_LOCK_OPTS_, lock, 'single')}</div>
+            <div class="inline-group"><label>構成属性</label>${coloredButtonsHtml('new-attribute', SHUGA_ATTR_OPTS_, item.属性, 'compose')}</div>
+            <div class="inline-group"><label>管理人</label>${coloredButtonsHtml('new-manager', SHUGA_MGR_OPTS_, item.管理人, 'single')}</div>
             <div class="form-group"><label>メモ</label><input type="text" id="new-memo" value="${escHtml(memoText)}"></div>
             <div class="btn-row">
                 <button class="submit-btn" id="edit-save-btn" onclick="saveShugaEdit(${rowNumber}, this)">更新を保存</button>
