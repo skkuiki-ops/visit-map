@@ -12,7 +12,7 @@
     const MY_TOKEN = 'pk.eyJ1IjoidG9ydW8xMTA0IiwiYSI6ImNtcTdlOGp2MzBhY3QycXBocno2OHQ5dmoifQ.bfkHvR5OmkacGJsDorHL5Q';
     mapboxgl.accessToken = MY_TOKEN;
     // ↓ デプロイした GAS Webアプリの URL（.../exec）に置き換える
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbykjQxs8OiYnFC5GeuIu3YDonu9QwHVEUWQ-xj0FIOhVv58H_7m7OKraO0nnPiG2Zo/exec";
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbxtskt48ntXza0s4T-fUHhgoGZiWQyKEsRwf35T_xX_kyylhvoM3CXReqnbQ0mN62gS/exec";
     // ↓ Google Cloud で発行した OAuth クライアントID（code_api.gs と同一値）
     const GOOGLE_CLIENT_ID = "273556684740-01e17ja1as1pchs4cvlfqvh67vbt51l3.apps.googleusercontent.com";
     // ↓ 地図スタイル（Mapbox Studio のスタイルURL。標準に戻す場合は 'mapbox://styles/mapbox/streets-v12'）
@@ -4445,7 +4445,8 @@
             buildingName: (isShuga && item) ? (item['建物名 / 世帯名'] || '') : '',
             app: rowForLink ? (location.origin + location.pathname + '?pin=' + rowForLink) : '',
             map: (!isNaN(lat) && !isNaN(lng)) ? ('https://www.google.com/maps/search/?api=1&query=' + lat + ',' + lng) : '',
-            rowReady: ctx.rowReady || null
+            rowReady: ctx.rowReady || null,
+            curResult: isNewPin ? '' : (isShuga ? roomStatusOf(item, ctx.roomNum) : (item.最新ステータス || '')) // 不在の回数計算の元（現在の訪問結果）
         };
         // 新規（戸建て）＝登録完了で rowNumber／アプリリンクを後から注入する
         if (reportCtx.rowReady) {
@@ -4479,11 +4480,12 @@
             : `<input type="hidden" id="rep-interest" value="">`;
         document.getElementById('report-form-body').innerHTML = metaHtml
             + `<div class="rep-2col"><div class="rep-row"><label>訪問日</label><input type="date" id="rep-visitdate" value="${todayStr}"></div>`
-            + `<div class="rep-row rep-hl"><label>お名前</label><input type="text" id="rep-name" placeholder="任意"></div></div>`
+            + `<div class="rep-row rep-hl"><label>訪問結果<span class="req">＊</span></label><select id="rep-result"><option value="">選択してください</option><option>未訪問</option><option>会えた</option><option>不在</option><option>投函</option></select></div></div>`
             + `<div class="rep-2col"><div class="rep-row"><label>住所（町名）</label><input type="text" id="rep-town" value="${escHtml(parts.town)}"></div>`
             + `<div class="rep-row"><label>住所（番地）</label><input type="text" id="rep-banchi" value="${escHtml(parts.banchi)}"></div></div>`
-            + `<div class="rep-2col"><div class="rep-row rep-hl"><label>性別</label><select id="rep-gender"><option value="">—</option><option>男性</option><option>女性</option><option>その他</option></select></div>`
-            + `<div class="rep-row rep-hl"><label>年代</label><select id="rep-age"><option value="">—</option><option>10代</option><option>20代</option><option>30代</option><option>40代</option><option>50代</option><option>60代</option><option>70代</option><option>80代以上</option></select></div></div>`
+            + `<div class="rep-2col"><div class="rep-row rep-hl"><label>お名前</label><input type="text" id="rep-name" placeholder="任意"></div>`
+            + `<div class="rep-row rep-hl"><label>性別</label><select id="rep-gender"><option value="">—</option><option>男性</option><option>女性</option><option>その他</option></select></div></div>`
+            + `<div class="rep-row rep-hl"><label>年代</label><select id="rep-age"><option value="">—</option><option>10代</option><option>20代</option><option>30代</option><option>40代</option><option>50代</option><option>60代</option><option>70代</option><option>80代以上</option></select></div>`
             + langRow + interestRow
             + `<div class="rep-row rep-hl"><label>訪問の内容</label><textarea id="rep-content" placeholder="状況や対応の記録（任意）"></textarea></div>`
             + `<div class="rep-actions"><button class="rep-cancel" onclick="closeReportForm()">キャンセル</button><button class="rep-submit" onclick="submitReportForm()">送信して登録</button></div>`;
@@ -4512,6 +4514,8 @@
         const val = id => { const el = document.getElementById(id); return el ? String(el.value || '').trim() : ''; };
         const language = val('rep-language');
         if (c.reportType === '外国語' && !language) { showToast('言語を入力してください', true); return; } // 失敗時は reportCtx を保持＝再入力できる
+        const visitResult = val('rep-result');
+        if (!visitResult) { showToast('訪問結果を選択してください', true); return; } // 必須（未訪問/会えた/不在/投函）
         // 送信確定。二重登録を防ぐため即クリア＋送信/キャンセルボタンを無効化する（新規登録ボタン等と同じ作法）。
         reportSubmitting = true;
         reportCtx = null;
@@ -4519,12 +4523,14 @@
         const cancelBtn = document.querySelector('#report-form-body .rep-cancel');
         if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '送信中…'; }
         if (cancelBtn) cancelBtn.disabled = true;
+        // 訪問結果：未訪問は記録なし('')／不在は現在値から回数を進める(nextAbsence)／他はそのまま。ピンの見た目は属性(拒否/外国語)優先のまま＝結果は履歴(＋戸建てはK列)に残る。
+        const resultToSend = (visitResult === '未訪問') ? '' : (visitResult === '不在' ? nextAbsence(c.curResult) : visitResult);
         const fields = {
             reportType: c.reportType, kind: c.kind,
             visitDate: val('rep-visitdate'), town: val('rep-town'), banchi: val('rep-banchi'),
             name: val('rep-name'), gender: val('rep-gender'), age: val('rep-age'),
             language: language, interest: val('rep-interest'), content: val('rep-content'),
-            mapLink: c.map
+            visitResult: resultToSend, mapLink: c.map
         };
         showBusy('送信中…');
         // 新規（戸建て）は登録(addNew)が裏で進行中のことがある。rowNumber が未確定なら完了を待ってから送信する。
