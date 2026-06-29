@@ -129,7 +129,9 @@
         .inline-group { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
         .inline-group label { min-width: 6.5em; font-size: 11px; font-weight: bold; white-space: nowrap; flex-shrink: 0; margin: 0; }
         .inline-group select { flex: 1; max-width: 200px; box-sizing: border-box; padding: 4px; font-size: 12px; }
-        .inline-group .shuga-pick { flex: 1; max-width: 200px; margin: 0; flex-basis: auto; } /* オートロック/構成/管理人のボタン選択を label の右に収める */
+        .inline-group .shuga-pick { flex: 1; max-width: none; min-width: 0; margin: 0; flex-basis: auto; } /* オートロック/構成/管理人のボタン選択を label の右に2つ横並び */
+        .shuga-pick .choice-btn { white-space: nowrap; padding: 8px 2px; font-size: 12.5px; overflow: hidden; } /* 2つを1行に収める。長いラベル(ファミリー等)は折り返さず字を小さめに */
+        body.large-ui .shuga-pick .choice-btn { font-size: 13px !important; padding: 9px 2px !important; }
 
         /* ── 属性・訪問結果の選択ボタン（ネイティブselectの代替。色は凡例と同系） ── */
         .choice-grid { display: grid; gap: 5px; margin: 2px 0 8px; flex-basis: 100%; } /* flex行内で展開された時は折り返して全幅を使う */
@@ -458,6 +460,7 @@
         body.text-md .history-box { font-size: 18px !important; }
         body.text-md .detail-toggle { font-size: 15px !important; }
         body.text-md .choice-btn { font-size: 18px !important; }
+        body.text-md .shuga-pick .choice-btn { font-size: 14px !important; } /* オートロック等は1行維持のため控えめ */
         body.text-md .attr-cur { font-size: 17px !important; }
         /* 大：80代でもはっきり読める特大。視認性のためフォントも太くする */
         body.text-lg .popup-content { font-size: 27px !important; font-weight: 500 !important; }
@@ -474,4 +477,5 @@
         body.text-lg .history-box { font-size: 21px !important; }
         body.text-lg .detail-toggle { font-size: 18px !important; }
         body.text-lg .choice-btn { font-size: 22px !important; font-weight: 700 !important; }
+        body.text-lg .shuga-pick .choice-btn { font-size: 15px !important; } /* オートロック等は1行維持のため控えめ */
         body.text-lg .attr-cur { font-size: 20px !important; font-weight: 700 !important; }

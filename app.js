@@ -12,7 +12,7 @@
     const MY_TOKEN = 'pk.eyJ1IjoidG9ydW8xMTA0IiwiYSI6ImNtcTdlOGp2MzBhY3QycXBocno2OHQ5dmoifQ.bfkHvR5OmkacGJsDorHL5Q';
     mapboxgl.accessToken = MY_TOKEN;
     // ↓ デプロイした GAS Webアプリの URL（.../exec）に置き換える
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyeuqfAMONTZCoAtEZIhiuSQpvSjr6LUsHt2ijqg7nsCborSghg4-Asj7Sj4XOTYQGg/exec";
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbw5O7ed8fBTPBLtqVAXBom_zSBs6-9pFOt6gZOL8zEsBzrQW2pNLtu5CFzvIsoCAFsT/exec";
     // ↓ Google Cloud で発行した OAuth クライアントID（code_api.gs と同一値）
     const GOOGLE_CLIENT_ID = "273556684740-01e17ja1as1pchs4cvlfqvh67vbt51l3.apps.googleusercontent.com";
     // ↓ 地図スタイル（Mapbox Studio のスタイルURL。標準に戻す場合は 'mapbox://styles/mapbox/streets-v12'）
@@ -375,20 +375,20 @@
     // ── 集合住宅フォームの属性候補（新規・編集 共通。オートロック/構成属性/管理人）。色付きボタンで選ぶ ──
     // 構成属性はアイコン色(shugaColor)と同じ＋不明はオートロックの不明と同色。オートロック=あり薄赤/なし薄青。管理人=あり薄緑/なし・不明薄グレー。
     const SHUGA_ATTR_OPTS_ = [
-        { v: '不明',      label: '不明',      bg: '#E2E2E2', fg: '#444444' }, // 不明はオートロックの不明と同色（薄グレー）
-        { v: 'ファミリー', label: 'ファミリー', bg: '#F2E394', fg: '#6b5a1e' },
-        { v: 'シングル',   label: 'シングル',   bg: '#5B8BB0', fg: '#ffffff' },
-        { v: '混在',      label: '混在',      bg: '#F2E394', fg: '#6b5a1e' }
+        { v: '不明',      label: '不明',      bg: '#E2E2E2', fg: '#444444', bd: '#9aa0a6' }, // 不明はオートロックの不明と同色（薄グレー）
+        { v: 'ファミリー', label: 'ファミリー', bg: '#F2E394', fg: '#6b5a1e', bd: '#8a7117' },
+        { v: 'シングル',   label: 'シングル',   bg: '#5B8BB0', fg: '#ffffff', bd: '#1f4a63' },
+        { v: '混在',      label: '混在',      bg: '#F2E394', fg: '#6b5a1e', bd: '#8a7117' }
     ];
     const SHUGA_LOCK_OPTS_ = [
-        { v: '不明', label: '不明', bg: '#E2E2E2', fg: '#444444' },
-        { v: 'なし', label: 'なし', bg: '#D9E8F2', fg: '#1f4a63' }, // 薄い青
-        { v: 'あり', label: 'あり', bg: '#F3D9D5', fg: '#7a342c' }  // 薄い赤
+        { v: '不明', label: '不明', bg: '#E2E2E2', fg: '#444444', bd: '#9aa0a6' },
+        { v: 'なし', label: 'なし', bg: '#D9E8F2', fg: '#1f4a63', bd: '#1f4a63' }, // 薄い青／枠＝深い青
+        { v: 'あり', label: 'あり', bg: '#F3D9D5', fg: '#7a342c', bd: '#7a342c' }  // 薄い赤／枠＝深い赤
     ];
     const SHUGA_MGR_OPTS_ = [
-        { v: '不明', label: '不明', bg: '#E5E5E5', fg: '#444444' }, // 薄いグレー
-        { v: 'なし', label: 'なし', bg: '#E5E5E5', fg: '#444444' }, // 薄いグレー
-        { v: 'あり', label: 'あり', bg: '#D6EAD9', fg: '#2E5E33' }  // 薄い緑
+        { v: '不明', label: '不明', bg: '#E5E5E5', fg: '#444444', bd: '#9aa0a6' }, // 薄いグレー
+        { v: 'なし', label: 'なし', bg: '#E5E5E5', fg: '#444444', bd: '#9aa0a6' }, // 薄いグレー
+        { v: 'あり', label: 'あり', bg: '#D6EAD9', fg: '#2E5E33', bd: '#2E5E33' }  // 薄い緑／枠＝深い緑
     ];
     // hidden input(id) に値を保持し、ボタンのタップで値と見た目を切り替える（保存は従来どおり id.value を読む）。
     //  kind='single' … あり/なし の排他。選択中をもう一度タップで解除＝不明（未選択）。
@@ -399,8 +399,10 @@
         const hide = (kind === 'compose') ? ['不明', '混在'] : ['不明']; // 構成はファミリー/シングルのみ出し、両押しで混在
         const btns = opts.filter(o => hide.indexOf(o.v) < 0).map(o => {
             const on = (kind === 'compose') ? (cur === o.v || cur === '混在') : (cur === o.v);
-            const onStyle = `background:${o.bg}; border-color:${o.bg}; color:${o.fg};`;
-            return `<button type="button" class="choice-btn${on ? ' sel' : ''}" data-v="${escHtml(o.v)}" data-on="${onStyle}" style="${on ? onStyle : ''}" onclick="toggleShugaBtn(this)">${escHtml(o.label)}</button>`;
+            // 枠＝系統の深い色(bd)を常に表示。未選択は枠＋同系の文字、選択で背景(bg)＋文字(fg)が乗る（枠の色は不変）。
+            const offStyle = `border-color:${o.bd}; color:${o.bd};`;
+            const onStyle = `background:${o.bg}; border-color:${o.bd}; color:${o.fg};`;
+            return `<button type="button" class="choice-btn${on ? ' sel' : ''}" data-v="${escHtml(o.v)}" data-on="${onStyle}" data-off="${offStyle}" style="${on ? onStyle : offStyle}" onclick="toggleShugaBtn(this)">${escHtml(o.label)}</button>`;
         }).join('');
         return `<div class="choice-grid c2 shuga-pick" data-kind="${kind}"><input type="hidden" id="${id}" value="${escHtml(cur)}">${btns}</div>`;
     }
@@ -410,7 +412,7 @@
         const kind = grid.dataset.kind;
         const input = grid.querySelector('input[type="hidden"]');
         const btns = Array.from(grid.querySelectorAll('.choice-btn'));
-        const setOn = (b, on) => { b.classList.toggle('sel', on); b.setAttribute('style', on ? b.dataset.on : ''); };
+        const setOn = (b, on) => { b.classList.toggle('sel', on); b.setAttribute('style', on ? b.dataset.on : b.dataset.off); };
         if (kind === 'single') {
             const wasOn = btn.classList.contains('sel');
             btns.forEach(b => setOn(b, false));
@@ -1914,9 +1916,14 @@
                     </div>
                 </div>
                 <div class="form-group" style="margin:2px 0;">
-                    <label style="display:flex; align-items:center; gap:4px; font-weight:normal; font-size:11px;">
-                        <input type="checkbox" id="new-hideroom" style="width:auto;" onchange="renderRoomGrid()"> 部屋番号が不明（番号を表示しない）
-                    </label>
+                    <div style="display:flex; gap:14px; flex-wrap:wrap;">
+                        <label style="display:flex; align-items:center; gap:4px; font-weight:normal; font-size:11px;">
+                            <input type="checkbox" id="new-hideroom" style="width:auto;" onchange="toggleRoomNumMode('hide')"> 部屋番号が不明
+                        </label>
+                        <label style="display:flex; align-items:center; gap:4px; font-weight:normal; font-size:11px;">
+                            <input type="checkbox" id="new-abcroom" style="width:auto;" onchange="toggleRoomNumMode('abc')"> ABC表記
+                        </label>
+                    </div>
                 </div>
                 <label style="font-size:11px; font-weight:bold;">緑=部屋あり（初期は全選択）。無い部屋をタップで外す</label>
                 <div id="setup-grid-container" style="max-height:120px; overflow:auto; margin-bottom:8px;"></div>
@@ -1984,20 +1991,50 @@
         };
     }
 
-    // 「部屋番号が不明」チェックの状態
-    function isHideRoomNum() {
-        const cb = document.getElementById('new-hideroom');
-        return !!(cb && cb.checked);
-    }
-
     // gridActiveRooms の選択状態に従ってグリッドを描画
-    // 部屋番号非表示の集合住宅で、四隅の部屋に方角を表示する（番号が無いと位置の手がかりが無いため）。
-    // 上＝最上階／下＝最下階、左＝最小番号／右＝最大番号。各階1部屋(maxRoom=1)は左右の区別が無いのでブランク。
+    // 部屋番号非表示の集合住宅で、両端の部屋に左右を表示する（番号が無いと位置の手がかりが無いため。階は行頭のF表記で分かるので上下は出さない）。
+    // 左＝最小番号／右＝最大番号。各階1部屋(maxRoom=1)は左右の区別が無いのでブランク。
     function cornerLabel(f, r, floors, maxRoom) {
         if (maxRoom <= 1) return ''; // 各階1部屋＝左右の手がかりが無いので方角ラベルを出さない
-        const v = (f === floors) ? '上' : (f === 1) ? '下' : '';
-        const h = (r === 1) ? '左' : (r === maxRoom) ? '右' : '';
-        return (v && h) ? (h + v) : '';
+        return (r === 1) ? '左' : (r === maxRoom) ? '右' : '';
+    }
+
+    // 部屋番号の表示モード（T列「部屋番号非表示」を多値化）。'' 通常 / '1' 不明=左右 / '2' ABC表記。
+    function roomNumMode(item) {
+        const v = String(item && item.部屋番号非表示 != null ? item.部屋番号非表示 : '');
+        return (v === '1' || v === '2') ? v : '';
+    }
+    // 部屋番号(101…) → ABC表記。short=true は升目用（「A」のみ）、false は操作欄/履歴用（2階以上は「A（2階）」）。
+    function roomAbc(roomNum, short) {
+        const f = Math.floor(roomNum / 100), r = roomNum % 100;
+        const letter = (r >= 1 && r <= 26) ? String.fromCharCode(64 + r) : String(r); // 1→A,2→B…（最大部屋数20なのでA–Tで収まる）
+        return (short || f < 2) ? letter : `${letter}（${f}階）`;
+    }
+    // グリッド升目の番号ラベル（モード別）。通常=「101」／不明=左右／ABC=「A」。
+    function roomCellLabel(roomNum, mode, f, r, floors, maxRoom) {
+        if (mode === '1') return cornerLabel(f, r, floors, maxRoom);
+        if (mode === '2') return roomAbc(roomNum, true);
+        return String(roomNum);
+    }
+    // 操作欄タイトル等のフル表記。通常=「101号室」／不明=「部屋」／ABC=「A（2階）」。
+    function roomFullLabel(roomNum, mode) {
+        if (mode === '1') return '部屋';
+        if (mode === '2') return roomAbc(roomNum, false);
+        return roomNum + '号室';
+    }
+    // 新規・編集フォームの「部屋番号が不明／ABC表記」チェックから現在のモードを得る（排他）。
+    function curRoomNumMode() {
+        const h = document.getElementById('new-hideroom'), a = document.getElementById('new-abcroom');
+        if (h && h.checked) return '1';
+        if (a && a.checked) return '2';
+        return '';
+    }
+    // チェックの排他制御（不明 と ABC は同時オン不可）→ 切替後にグリッド再描画。
+    function toggleRoomNumMode(which) {
+        const h = document.getElementById('new-hideroom'), a = document.getElementById('new-abcroom');
+        if (which === 'hide' && h && h.checked && a) a.checked = false;
+        if (which === 'abc' && a && a.checked && h) h.checked = false;
+        renderRoomGrid();
     }
 
     // 部屋マーク（個人宅/会社）の保存形式 ⇔ {部屋番号:'p'|'c'} 変換。
@@ -2030,14 +2067,14 @@
 
     function renderRoomGrid() {
         const { floors, maxRoom } = getGridDims();
-        const hideNum = isHideRoomNum();
+        const mode = curRoomNumMode();
         let html = '<div class="grid-scroll" style="overflow-x:auto;"><table class="grid-table" style="width:auto;"><tbody>';
         for (let f = floors; f >= 1; f--) {
             html += `<tr><td class="grid-floor">${f}F</td>`;
             for (let r = 1; r <= maxRoom; r++) {
                 const roomNum = f * 100 + r;
                 const active = gridActiveRooms.includes(roomNum);
-                let label = hideNum ? cornerLabel(f, r, floors, maxRoom) : String(roomNum);
+                let label = roomCellLabel(roomNum, mode, f, r, floors, maxRoom);
                 if (active && gridRoomMark[roomNum]) label = roomMarkLabel(gridRoomMark[roomNum]); // 個人宅=🏠／会社=🏢
                 html += `<td id="setup-rm-${roomNum}" style="min-width:40px; background:${active ? '#5FA97D' : '#fff'}; color:${active ? '#fff' : '#333'}; cursor:pointer;">${label}</td>`;
             }
@@ -2169,7 +2206,9 @@
             data.manager = document.getElementById('new-manager').value;
             data.attribute = document.getElementById('new-attribute').value;
             data.lock = document.getElementById('new-lock').value;
-            data.hideRoomNum = isHideRoomNum();
+            const rnMode = curRoomNumMode();
+            data.roomNumDisplay = rnMode;        // ''通常 / '1'不明 / '2'ABC
+            data.hideRoomNum = (rnMode === '1'); // 旧GAS互換（不明のみ）
             data.personalRooms = encodeRoomMarks(gridRoomMark, gridActiveRooms);
         }
 
@@ -2942,7 +2981,7 @@
         const floors = parseInt(item.階数 || 1), maxRoom = parseInt(item.最大部屋番号 || 1);
         const valid = String(item.有効部屋リスト || '').split(',').map(Number);
         let map = {}; try { map = JSON.parse(item.部屋ステータス || '{}') || {}; } catch (e) { map = {}; }
-        const hideNum = String(item.部屋番号非表示) === '1';
+        const mode = roomNumMode(item);
         const marks = parseRoomMarks(item.個人宅); // 個人宅/会社マーク（U列）→ {部屋番号:'p'|'c'}
         let grid = '<table class="print-grid"><tbody>';
         for (let f = floors; f >= 1; f--) {
@@ -2955,7 +2994,7 @@
                     continue;
                 }
                 const ch = roomVisual(map[rn]).char, mark = (ch === '拒' || ch === '外') ? ch : '';
-                const numLabel = hideNum ? cornerLabel(f, r, floors, maxRoom) : String(rn);
+                const numLabel = roomCellLabel(rn, mode, f, r, floors, maxRoom);
                 grid += `<td class="pc"><div class="pn">${escHtml(String(numLabel))}</div>${mark ? `<div class="ps">${escHtml(mark)}</div>` : ''}</td>`;
             }
             grid += '</tr>';
@@ -3730,7 +3769,7 @@
         // 部屋ごとの現在ステータス（T列のJSON）を取得し、色分けに使う
         let roomStatusMap = {};
         try { roomStatusMap = JSON.parse(first.部屋ステータス || '{}') || {}; } catch(e) { roomStatusMap = {}; }
-        const hideNum = String(first.部屋番号非表示) === '1';
+        const mode = roomNumMode(first);
         // 個人宅/会社（U列）→ {部屋番号:'p'|'c'} に展開し、セルにアイコンを付ける
         const roomMarkMap = parseRoomMarks(first.個人宅);
         const memoText = cleanMemo(first);
@@ -3747,7 +3786,7 @@
                     // （番号はセルをタップすると下の操作欄に「XXX号室」として表示される）
                     const st = roomStatusMap[roomNum];
                     const v = roomVisual(st);
-                    let label = (st === '訪問拒否' || st === '外国語') ? '☆' : (hideNum ? cornerLabel(f, r, floors, maxRoom) : String(roomNum));
+                    let label = (st === '訪問拒否' || st === '外国語') ? '☆' : roomCellLabel(roomNum, mode, f, r, floors, maxRoom);
                     if (roomMarkMap[roomNum]) label = roomMarkLabel(roomMarkMap[roomNum]); // 個人宅=🏠／会社=🏢
                     gridHtml += `<td class="cell-active" data-room="${roomNum}" style="min-width:40px; background:${v.bg}; color:${v.color};">${label}</td>`;
                 } else {
@@ -3830,9 +3869,14 @@
                 </div>
             </div>
             <div class="form-group" style="margin:2px 0;">
-                <label style="display:flex; align-items:center; gap:4px; font-weight:normal; font-size:11px;">
-                    <input type="checkbox" id="new-hideroom" style="width:auto;" onchange="renderRoomGrid()" ${String(item.部屋番号非表示) === '1' ? 'checked' : ''}> 部屋番号が不明（番号を表示しない）
-                </label>
+                <div style="display:flex; gap:14px; flex-wrap:wrap;">
+                    <label style="display:flex; align-items:center; gap:4px; font-weight:normal; font-size:11px;">
+                        <input type="checkbox" id="new-hideroom" style="width:auto;" onchange="toggleRoomNumMode('hide')" ${roomNumMode(item) === '1' ? 'checked' : ''}> 部屋番号が不明
+                    </label>
+                    <label style="display:flex; align-items:center; gap:4px; font-weight:normal; font-size:11px;">
+                        <input type="checkbox" id="new-abcroom" style="width:auto;" onchange="toggleRoomNumMode('abc')" ${roomNumMode(item) === '2' ? 'checked' : ''}> ABC表記
+                    </label>
+                </div>
             </div>
             <label style="font-size:11px; font-weight:bold;">緑=有効。不要な部屋をタップで外す</label>
             <div id="setup-grid-container" style="max-height:120px; overflow:auto; margin-bottom:8px;"></div>
@@ -3859,6 +3903,7 @@
         const { floors, maxRoom } = getGridDims();
         // 現在のグリッド範囲内の選択のみを有効として保存
         const valid = gridActiveRooms.filter(rn => Math.floor(rn / 100) <= floors && (rn % 100) <= maxRoom).sort((a, b) => a - b);
+        const rnMode = curRoomNumMode(); // 部屋番号の表示モード（''通常 / '1'不明 / '2'ABC）
 
         const data = {
             rowNumber: rowNumber,
@@ -3871,7 +3916,8 @@
             attribute: document.getElementById('new-attribute').value,
             lock: document.getElementById('new-lock').value,
             memo: document.getElementById('new-memo').value,
-            hideRoomNum: isHideRoomNum(),
+            roomNumDisplay: rnMode,            // ''通常 / '1'不明 / '2'ABC
+            hideRoomNum: (rnMode === '1'),     // 旧GAS互換（不明のみ）
             personalRooms: encodeRoomMarks(gridRoomMark, valid)
         };
 
@@ -3972,8 +4018,8 @@
         // この部屋の現在値（属性 or 訪問結果）。選択ボタンのハイライトに使う。
         const curRoomVal = roomStatusOf(item, roomNum);
 
-        const hideNum = item && String(item.部屋番号非表示) === '1';
-        const title = isMgrKey(roomNum) ? '👤 管理人' : (hideNum ? '🚪 部屋' : `🚪 ${roomNum}号室`);
+        const mode = item ? roomNumMode(item) : '';
+        const title = isMgrKey(roomNum) ? '👤 管理人' : ('🚪 ' + roomFullLabel(roomNum, mode));
 
         // レイアウトは戸建ての詳細と統一（見出し＋選択ボタン）。属性を上、訪問結果を下に。
         const html = `
