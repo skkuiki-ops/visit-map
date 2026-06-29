@@ -2241,18 +2241,23 @@
 
         const btn = document.getElementById('reg-btn');
         btn.disabled = true; btn.innerText = '登録中...';
-        showSaving(); // 全画面ブロックはやめ保存中バッジに（操作はブロックしない）。ボタン無効化で二重登録は防ぐ。
+        // 拒否/外国語の戸建て新規だけは、報告フォームが開くまで全画面ブロック（showBusy）＝登録〜フォーム表示の間に別操作をさせない。
+        // それ以外（会えた/不在/投函/空き家 等）は従来どおり保存中バッジ（操作はブロックせず、登録完了で吹き出しが消えて次へ進める）。
+        const blockForReport = (type === '戸建て' && !!newReportType);
+        if (blockForReport) showBusy('報告フォームを準備中…'); else showSaving();
 
         apiCall('addNew', { data: data }).then((latestData) => {
             if (activeNewMarker) activeNewMarker.remove();
             activeNewMarker = null;
-            showDone('登録しました');
             renderMarkers(latestData);
             // 戸建てを拒否/外国語で選んで新規登録した場合は、通常で登録した直後に報告フォームを開く（☆/外は出さず、送信成功でサーバが属性を付ける）。同座標は登録不可なので座標一致で新規行を特定。
-            if (type === '戸建て' && newReportType) {
+            if (blockForReport) {
                 const nl = parseFloat(lat), ng = parseFloat(lng);
                 const ni = latestData.find(d => d.種別 === '戸建て' && Math.abs(parseFloat(d.緯度) - nl) < 1e-7 && Math.abs(parseFloat(d.経度) - ng) < 1e-7);
                 if (ni) openReportForm({ reportType: newReportType, kind: '戸建て', rowNumber: ni.rowNumber, item: ni });
+                else showToast('登録しましたが報告フォームを開けませんでした', true); // 念のため（通常は座標一致で見つかる）
+            } else {
+                showDone('登録しました'); // 通常の新規＝登録完了バッジを出して吹き出しは閉じる
             }
         }).catch((err) => {
             btn.disabled = false; btn.innerText = '登録';
@@ -2260,7 +2265,7 @@
             const root = activeNewMarker && activeNewMarker.getPopup() ? activeNewMarker.getPopup().getElement() : null;
             if (root) root.querySelectorAll('.choice-btn').forEach(b => { b.disabled = false; b.style.pointerEvents = ''; });
             handleServerError(err);
-        }).finally(hideSaving);
+        }).finally(() => { if (blockForReport) hideBusy(); else hideSaving(); });
     }
 
     /* ── データキャッシュ（起動の先行表示用） ──
