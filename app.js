@@ -2256,7 +2256,7 @@
             const rowReady = addP.then((latestData) => {
                 const ni = latestData.find(d => d.種別 === '戸建て' && Math.abs(parseFloat(d.緯度) - nl) < 1e-7 && Math.abs(parseFloat(d.経度) - ng) < 1e-7);
                 return ni ? ni.rowNumber : null;
-            }).catch((err) => { handleServerError(err); return null; }); // 登録失敗＝通知。送信時は rowReady=null で弾く
+            }).catch((err) => { handleServerError(err); return { failed: true }; }); // 登録失敗＝通知＋失敗フラグ。送信時にフォームを閉じて案内（無限リトライ防止）
             const addrForReport = newPinAddress || (deriveAddress(ng, nl) || '');
             openReportForm({ reportType: newReportType, kind: '戸建て', newPin: { lat: nl, lng: ng, addr: addrForReport }, rowReady: rowReady });
         } else {
@@ -2466,7 +2466,7 @@
                 try { localStorage.setItem('vm_areaDef', JSON.stringify(me.areaDef)); } catch (e) {}
             }
             // 言語マスタを受け取り、報告フォームの選択肢・連携要否の表示分岐用に保持する
-            if (me && Array.isArray(me.langMaster)) {
+            if (me && Array.isArray(me.langMaster) && me.langMaster.length) { // 空配列(シート未作成/読取失敗)で前回キャッシュを潰さない
                 LANG_MASTER = me.langMaster;
                 try { localStorage.setItem('vm_langMaster', JSON.stringify(me.langMaster)); } catch (e) {}
             }
@@ -4429,6 +4429,9 @@
         if (m) return { town: m[1], banchi: m[2].trim() };
         return { town: s, banchi: '' };
     }
+    // 共通リンク生成（report・infoCopy で同式を使うため小ヘルパーに集約）。Googleマップ＝座標、アプリ＝?pin=行番号。
+    function gmapLink_(lat, lng) { return (!isNaN(lat) && !isNaN(lng)) ? ('https://www.google.com/maps/search/?api=1&query=' + lat + ',' + lng) : ''; }
+    function pinAppLink_(rowNumber) { return rowNumber ? (location.origin + location.pathname + '?pin=' + rowNumber) : ''; }
     function openReportForm(ctx) {
         const isShuga = ctx.kind === '集合住宅';
         const isNewPin = !!ctx.newPin; // 戸建て新規＝item がまだ無く、登録(addNew)が裏で進行中（rowNumber は後で注入）
@@ -4443,14 +4446,15 @@
             reportType: ctx.reportType, kind: ctx.kind,
             rowNumber: ctx.rowNumber || null, buildingRow: ctx.buildingRow, roomNum: ctx.roomNum,
             buildingName: (isShuga && item) ? (item['建物名 / 世帯名'] || '') : '',
-            app: rowForLink ? (location.origin + location.pathname + '?pin=' + rowForLink) : '',
-            map: (!isNaN(lat) && !isNaN(lng)) ? ('https://www.google.com/maps/search/?api=1&query=' + lat + ',' + lng) : '',
+            app: pinAppLink_(rowForLink),
+            map: gmapLink_(lat, lng),
             rowReady: ctx.rowReady || null,
             curResult: isNewPin ? '' : (isShuga ? roomStatusOf(item, ctx.roomNum) : (item.最新ステータス || '')) // 不在の回数計算の元（現在の訪問結果）
         };
-        // 新規（戸建て）＝登録完了で rowNumber／アプリリンクを後から注入する
-        if (reportCtx.rowReady) {
-            reportCtx.rowReady.then((rn) => { if (rn && reportCtx) { reportCtx.rowNumber = rn; reportCtx.app = location.origin + location.pathname + '?pin=' + rn; } });
+        // 新規（戸建て）＝登録完了で rowNumber／アプリリンクを後から注入する。注入はローカル ctxRef に束縛し、別フォームを開いた後の混入を防ぐ。
+        const ctxRef = reportCtx;
+        if (ctxRef.rowReady) {
+            ctxRef.rowReady.then((rn) => { if (rn && !rn.failed && reportCtx === ctxRef) { ctxRef.rowNumber = rn; ctxRef.app = pinAppLink_(rn); } });
         }
         const t = new Date();
         const todayStr = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
@@ -4480,7 +4484,7 @@
             : `<input type="hidden" id="rep-interest" value="">`;
         document.getElementById('report-form-body').innerHTML = metaHtml
             + `<div class="rep-2col"><div class="rep-row"><label>訪問日</label><input type="date" id="rep-visitdate" value="${todayStr}"></div>`
-            + `<div class="rep-row rep-hl"><label>訪問結果<span class="req">＊</span></label><select id="rep-result"><option value="">選択してください</option><option>未訪問</option><option>会えた</option><option>不在</option><option>投函</option></select></div></div>`
+            + `<div class="rep-row"><label>訪問結果<span class="req">＊</span></label><select id="rep-result"><option value="">選択してください</option><option>未訪問</option><option>会えた</option><option>不在</option><option>投函</option></select></div></div>`
             + `<div class="rep-2col"><div class="rep-row"><label>住所（町名）</label><input type="text" id="rep-town" value="${escHtml(parts.town)}"></div>`
             + `<div class="rep-row"><label>住所（番地）</label><input type="text" id="rep-banchi" value="${escHtml(parts.banchi)}"></div></div>`
             + `<div class="rep-2col"><div class="rep-row rep-hl"><label>お名前</label><input type="text" id="rep-name" placeholder="任意"></div>`
@@ -4537,17 +4541,24 @@
         const ensureRow = c.rowReady ? c.rowReady.then(rn => rn || c.rowNumber) : Promise.resolve(c.rowNumber);
         let resolvedRow = null;
         ensureRow.then(rn => {
+            // 新規登録(addNew)が同座標等で失敗していたら報告も送れない。待っても直らないのでフォームを閉じて案内する（再送ループにしない）。
+            if (rn && rn.failed) {
+                closeReportForm();
+                showToast('この場所には登録できませんでした（既にピンがある可能性）。少し位置をずらしてやり直してください', true);
+                return null;
+            }
             resolvedRow = rn;
             const params = Object.assign({}, fields);
             if (c.kind === '集合住宅') {
                 params.buildingRow = c.buildingRow; params.roomNum = c.roomNum; params.buildingName = c.buildingName; params.appLink = c.app;
             } else {
-                if (!rn) throw new Error('登録がまだ完了していません。少し待ってからもう一度お試しください。');
+                if (!rn) throw new Error('登録の確定待ちです。数秒おいてもう一度お試しください。');
                 params.rowNumber = rn;
-                params.appLink = location.origin + location.pathname + '?pin=' + rn;
+                params.appLink = pinAppLink_(rn);
             }
             return apiCall('report', params);
         }).then(latest => {
+            if (!latest) return; // 登録失敗でフォームを閉じた場合は何もしない
             closeReportForm();
             showToast('報告を送信しました', false);
             // サーバ側で本体の属性も更新済み → 最新データでインプレース反映
