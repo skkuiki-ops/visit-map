@@ -419,6 +419,9 @@
               下部ボタン・住所ラベル・各種モーダル/オーバーレイは引き続き吹き出しより前面。
               青ポチはラッパーに z-index が付き CSS だけでは負けることがあるので JS でも前面化する（raiseUserDot）。 */
         .mapboxgl-ctrl-top-right { z-index: 9990; } /* コンパス・現在地・更新（吹き出しが開いている間は吹き出しが前面になる） */
+        /* 右上コントロール（コンパス/現在地/更新）を年配者・屋外向けに少し大きく（既定29px→38px、アイコンも拡大） */
+        .mapboxgl-ctrl-top-right .mapboxgl-ctrl-group button { width: 38px; height: 38px; }
+        .mapboxgl-ctrl-top-right .mapboxgl-ctrl-group button .mapboxgl-ctrl-icon { background-size: 24px; }
         .mapboxgl-popup { z-index: 9995 !important; } /* 右上コントロールより前面（✕の干渉解消）。下部ボタン/ラベル/モーダルよりは背面 */
         /* 吹き出しの縁を年長者にも分かりやすく（枠線＋少し強めの影。やり過ぎない範囲で境界を明確化） */
         .mapboxgl-popup-content { border: 1.5px solid #b3bfc8; border-radius: 8px; box-shadow: 0 3px 14px rgba(0,0,0,0.20); }

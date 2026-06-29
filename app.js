@@ -268,7 +268,7 @@
             btn.type = 'button';
             btn.title = '最新の状態に更新';
             btn.setAttribute('aria-label', '最新の状態に更新');
-            btn.style.fontSize = '17px';
+            btn.style.fontSize = '21px';
             btn.textContent = '🔄';
             btn.addEventListener('click', reloadApp);
             div.appendChild(btn);
@@ -762,10 +762,10 @@
 
     // 広域表示（ズームがこの値未満）のときは戸建てを隠す
     const KODATE_HIDE_BELOW_ZOOM = 16; // 17→16。もう少しだけ広域でも戸建てを表示（z16は約85%サイズ）
-    // 小さめ集合住宅（12戸以下＝アパート型）は zoom 16.5未満で隠す（＝16.5以上で表示）。
-    const SHUGA_SMALL_HIDE_BELOW_ZOOM = 16.5;
-    // 大きめ集合住宅（13戸以上＝マンション型）は zoom 15.5未満で隠す（＝15.5以上で表示。小より広域から見える）。
-    const SHUGA_LARGE_HIDE_BELOW_ZOOM = 15.5;
+    // 小さめ集合住宅（12戸以下＝アパート型）は zoom 15未満で隠す（＝15以上で表示）。
+    const SHUGA_SMALL_HIDE_BELOW_ZOOM = 15;
+    // 大きめ集合住宅（13戸以上＝マンション型）は zoom 14.5未満で隠す（＝14.5以上で表示。小より広域から見える）。
+    const SHUGA_LARGE_HIDE_BELOW_ZOOM = 14.5;
     function applyZoomVisibility() {
         const zoom = map.getZoom();
         const showKodate = zoom >= KODATE_HIDE_BELOW_ZOOM;
@@ -1666,7 +1666,7 @@
     function recoverMap() {
         try {
             map.resize(); map.triggerRepaint();
-            ensureGeolocateOn(); // 他アプリから戻った時など、許可済みなら現在地追従を再ON（OFFになっていた場合）
+            // 他アプリから戻っても勝手に画面を現在地へ動かさない（自動再ONはしない）。現在地へ移動したいときは右上の現在地ボタンをタップする。
             if (glLost) setTimeout(() => {
                 if (glLost && document.visibilityState === 'visible') reloadApp(); // キャッシュバスト付き再読込に統一（reloadApp は location.reload へフォールバック）
             }, 1200); // 復元イベントを少し待ち、戻らなければ再読込
@@ -3394,7 +3394,7 @@
                 .setPopup(popup)
                 .addTo(map);
             marker._isKodate = isKodate;                         // 戸建ては広域(z<16)で隠す
-            marker._isShuga = isShuga;                           // 集合住宅は規模ごとに広域で隠す（小=z<15.5 / 大=z<14.0）。施設は常時表示
+            marker._isShuga = isShuga;                           // 集合住宅は規模ごとに広域で隠す（小=z<15 / 大=z<14.5）。施設は常時表示
             marker._shugaSmall = isSmallShuga;                  // 集合住宅のうち小規模(≤12戸=アパート型)か
             marker._item = firstItem;                            // アイコンフィルタ判定用（種別・属性・オートロック・管理人 等を参照）
             marker._rowNumber = firstItem.rowNumber;            // 部屋更新時にポップアップを特定する用
