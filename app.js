@@ -2456,9 +2456,61 @@
               <div class="vmh-s"><span class="vmh-num">3</span><div><div class="vmh-act"><span class="vmh-mbtn" style="background:#5E9DB8;border-color:#5E9DB8;color:#fff;">登録</span> を押して完了</div></div></div>
             </div>
         </div></details>`;
-        // 応用操作 / 区域の貸出方法（Coming soon）
-        html += `<details class="vmh-sec"><summary class="vmh-h">💡 応用操作</summary><div class="vmh-in"><div class="vmh-soon">Coming soon ✨<small>長押し移動・履歴・情報コピー・部屋マーク など</small></div></div></details>`;
-        html += `<details class="vmh-sec"><summary class="vmh-h">🗂 区域の貸出方法</summary><div class="vmh-in"><div class="vmh-soon">Coming soon ✨<small>貸出/返却・自分の区域・進捗モニタリング</small></div></div></details>`;
+        // 応用操作（長押し移動・履歴削除・情報コピー・部屋マーク）。各機能の実挙動に合わせた図解。
+        html += `<details class="vmh-sec"><summary class="vmh-h">💡 応用操作</summary><div class="vmh-in">
+            <div class="vmh-note">少し慣れてきた人向けの便利ワザです。<b>無理に使わなくても大丈夫</b>。</div>
+            <div class="vmh-sub">📍 ピンを動かす（場所の修正）</div>
+            <div class="vmh-steps" style="margin-bottom:12px;">
+              <div class="vmh-s"><span class="vmh-num">1</span><div><div class="vmh-act">ピンを <b>長押し</b> すると金色に光ります</div><div class="vmh-dt">そのまま指で正しい場所へ動かす</div></div></div>
+              <div class="vmh-s"><span class="vmh-num">2</span><div><div class="vmh-act">指を離す → <span class="vmh-mbtn" style="background:#5E9DB8;border-color:#5E9DB8;color:#fff;">移動する</span> を押して確定</div><div class="vmh-dt">他のピンと同じ場所へは移動できません</div></div></div>
+            </div>
+            <div class="vmh-sub">🕘 訪問の記録（履歴）を見る・消す</div>
+            <div class="vmh-steps" style="margin-bottom:12px;">
+              <div class="vmh-s"><span class="vmh-num">1</span><div><div class="vmh-act">吹き出しの <span class="vmh-mbtn" style="background:#eef2f4;border-color:#dfe4e8;color:#555;">詳細を表示</span> で記録が出ます</div><div class="vmh-dt">いつ・誰が・どの結果を入れたか</div></div></div>
+              <div class="vmh-s"><span class="vmh-num">2</span><div><div class="vmh-act">記録を <b>長押し</b> すると <span class="vmh-mbtn" style="background:#A8554E;border-color:#A8554E;color:#fff;">削除</span> が出ます</div><div class="vmh-dt">間違えて登録した1件だけを消せます</div></div></div>
+            </div>
+            <div class="vmh-sub">📋 住所や記録をコピー</div>
+            <div class="vmh-steps" style="margin-bottom:12px;">
+              <div class="vmh-s"><span class="vmh-num">1</span><div><div class="vmh-act">吹き出しの題名（<b>戸建て</b>／建物名）を <b>長押し</b></div><div class="vmh-dt">集合住宅は部屋のマスを長押しでもOK</div></div></div>
+              <div class="vmh-s"><span class="vmh-num">2</span><div><div class="vmh-act">住所・属性・履歴がまとまって出る → <span class="vmh-mbtn" style="background:#5E9DB8;border-color:#5E9DB8;color:#fff;">コピー</span></div><div class="vmh-dt">LINE やメモ帳に貼り付けられます</div></div></div>
+            </div>
+            <div class="vmh-sub">🏠 部屋に「個人宅／会社」の目印</div>
+            <div class="vmh-note" style="margin-bottom:8px;">集合住宅の<b>登録・編集中</b>に、部屋のマスを <b>長押し</b> するたびに目印が変わります</div>
+            <div class="vmh-steps">
+              <div class="vmh-s"><span class="vmh-num">1</span><div><div class="vmh-act">無し → <span class="vmh-mbtn" style="background:#CBE2CC;border-color:#a8cbaa;color:#2E5E33;">🏠 個人宅</span> → <span class="vmh-mbtn" style="background:#CBE3F0;border-color:#9fc4da;color:#0d3c55;">🏢 会社</span> → 無し の順で切替</div><div class="vmh-dt">付けた目印は地図のマスにも表示されます</div></div></div>
+            </div>
+        </div></details>`;
+        // 区域の貸出方法。一般ユーザー向け（自分の区域・全体利用）は全員、貸出係向け（貸出・返却・進捗）は isLend で出し分け。
+        const isLend = (typeof ME !== 'undefined' && ME && ME.level >= 1);
+        html += `<details class="vmh-sec"><summary class="vmh-h">🗂 区域の貸出方法</summary><div class="vmh-in">
+            <div class="vmh-note">「区域」は <b>○○丁目○番</b> のまとまり。担当を決めて貸し借りします。左下メニューの各項目から操作します。</div>
+            <div class="vmh-sub">📋 自分の区域（自分が借りている区域）</div>
+            <div class="vmh-steps" style="margin-bottom:12px;">
+              <div class="vmh-s"><span class="vmh-num">1</span><div><div class="vmh-act">左下メニュー → <span class="vmh-mbtn" style="background:#eef2f4;border-color:#dfe4e8;color:#555;">📋 自分の区域</span></div><div class="vmh-dt">今あなた（と所属グループ）に貸し出されている区域が一覧で出ます</div></div></div>
+              <div class="vmh-s"><span class="vmh-num">2</span><div><div class="vmh-act">各区域の <span class="vmh-mbtn" style="background:#5E9DB8;border-color:#5E9DB8;color:#fff;">地図を表示</span> で場所を確認</div><div class="vmh-dt">返却期日が近い／過ぎていると色（黄・赤）で分かります</div></div></div>
+              <div class="vmh-s"><span class="vmh-num">3</span><div><div class="vmh-act">終わったら <span class="vmh-mbtn" style="background:#A8554E;border-color:#A8554E;color:#fff;">区域を返却</span></div><div class="vmh-dt">自分が借りた区域は自分で返せます</div></div></div>
+            </div>
+            <div class="vmh-sub">👪 全体利用の区域（みんなで使う区域）</div>
+            <div class="vmh-steps"${isLend ? ' style="margin-bottom:12px;"' : ''}>
+              <div class="vmh-s"><span class="vmh-num">1</span><div><div class="vmh-act">左下メニュー → <span class="vmh-mbtn" style="background:#eef2f4;border-color:#dfe4e8;color:#555;">👪 全体利用の区域</span></div><div class="vmh-dt">特定の人ではなく、全員で共同利用する区域です</div></div></div>
+              <div class="vmh-s"><span class="vmh-num">2</span><div><div class="vmh-act">地区の地図 か <span class="vmh-mbtn" style="background:#eef2f4;border-color:#dfe4e8;color:#555;">☰ 一覧</span> で見られます</div><div class="vmh-dt">地区をタップすると、その地区の区域が出ます</div></div></div>
+            </div>`;
+        if (isLend) {
+            html += `
+            <div class="vmh-sub">🗂 区域を貸し出す・返す　<span style="font-weight:normal;font-size:11px;color:#888;">※貸出係のみ</span></div>
+            <div class="vmh-steps" style="margin-bottom:12px;">
+              <div class="vmh-s"><span class="vmh-num">1</span><div><div class="vmh-act">左下メニュー → <span class="vmh-mbtn" style="background:#2E5090;border-color:#2E5090;color:#fff;">🗂 区域の貸出・返却</span></div></div></div>
+              <div class="vmh-s"><span class="vmh-num">2</span><div><div class="vmh-act"><b>借りる人</b> を選ぶ（グループ → ユーザー）</div><div class="vmh-dt">「全体利用（全員で共同利用）」も選べます</div></div></div>
+              <div class="vmh-s"><span class="vmh-num">3</span><div><div class="vmh-act"><b>区域</b> を選ぶ（地区 → 丁目 → 範囲）</div><div class="vmh-dt">番地ごとに件数・状態・地図プレビューが出ます</div></div></div>
+              <div class="vmh-s"><span class="vmh-num">4</span><div><div class="vmh-act">返却期日を入れて <span class="vmh-mbtn" style="background:#5E9DB8;border-color:#5E9DB8;color:#fff;">貸出</span></div><div class="vmh-dt">他人・グループ・全体利用の区域の返却もこの画面から</div></div></div>
+            </div>
+            <div class="vmh-sub">📈 進捗モニタリング　<span style="font-weight:normal;font-size:11px;color:#888;">※貸出係のみ</span></div>
+            <div class="vmh-steps">
+              <div class="vmh-s"><span class="vmh-num">1</span><div><div class="vmh-act">左下メニュー → <span class="vmh-mbtn" style="background:#2E5090;border-color:#2E5090;color:#fff;">📈 進捗モニタリング</span></div><div class="vmh-dt">地区→丁目ごとに訪問の進み具合をバーで表示</div></div></div>
+              <div class="vmh-s"><span class="vmh-num">2</span><div><div class="vmh-act">合算／戸建て／部屋／ピン で集計を切替</div><div class="vmh-dt">「進捗が低い順」「件数が多い順」で並べ替えできます</div></div></div>
+            </div>`;
+        }
+        html += `</div></details>`;
         if (isSys) {
             html += `<details class="vmh-sec"><summary class="vmh-h">⚙️ メンテナンス　<span style="font-weight:normal;font-size:11px;color:#888;">※システム管理者のみ</span></summary><div class="vmh-in"><div class="vmh-soon">Coming soon ✨<small>期間を指定した履歴・ステータスの一括リセット</small></div></div></details>`;
         }
