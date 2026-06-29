@@ -12,7 +12,7 @@
     const MY_TOKEN = 'pk.eyJ1IjoidG9ydW8xMTA0IiwiYSI6ImNtcTdlOGp2MzBhY3QycXBocno2OHQ5dmoifQ.bfkHvR5OmkacGJsDorHL5Q';
     mapboxgl.accessToken = MY_TOKEN;
     // ↓ デプロイした GAS Webアプリの URL（.../exec）に置き換える
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwPY8B3k3HxEEbp1JDbX8uS9mfOz9LkOcg4jn2J6YmDXIFsoUfbcJd-Gbj-rmuapa0P/exec";
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyeuqfAMONTZCoAtEZIhiuSQpvSjr6LUsHt2ijqg7nsCborSghg4-Asj7Sj4XOTYQGg/exec";
     // ↓ Google Cloud で発行した OAuth クライアントID（code_api.gs と同一値）
     const GOOGLE_CLIENT_ID = "273556684740-01e17ja1as1pchs4cvlfqvh67vbt51l3.apps.googleusercontent.com";
     // ↓ 地図スタイル（Mapbox Studio のスタイルURL。標準に戻す場合は 'mapbox://styles/mapbox/streets-v12'）
@@ -813,6 +813,14 @@
         }
         if (!m._areaLabel) return true; // 番地が判定できないピンは隠さない（取りこぼし防止）
         return visibleAreaSet.has(m._areaLabel);
+    }
+    // 新規ピンの座標が現在のユーザーの担当区域内か（戸建て登録の可否。pinAreaAllowed と同じ思想＝lender以下のみ制限・判定不可は許可）。
+    // 集合住宅・施設は登録制限の対象外（呼び出し側で戸建てのときだけ判定する）。
+    function newKodateAreaAllowed(lng, lat) {
+        if (!areaRestrictActive()) return true; // manager以上／制限未適用は常に許可
+        const label = addrWithoutGo(deriveAddress(lng, lat) || '');
+        if (!label) return true; // 番地が判定できないときは許可（表示制限と同じフェイルオープン＝取りこぼし防止）
+        return visibleAreaSet.has(label);
     }
 
     function applyZoomVisibility() {
@@ -1856,6 +1864,11 @@
 
     // 新規登録フォーム生成
     function handleMapClickOrTap(lngLat, forcedType) {
+        // 担当区域外への戸建て登録は不可（lender以下のみ。集合住宅・施設は全員可＝既存の表示制限と同じ区域判定）。
+        if (forcedType === '戸建て' && !newKodateAreaAllowed(parseFloat(lngLat.lng), parseFloat(lngLat.lat))) {
+            showToast('担当区域外には戸建てを登録できません', true);
+            return;
+        }
         if (activeNewMarker) activeNewMarker.remove();
         gridActiveRooms = [];
         gridRoomMark = {};
@@ -3089,7 +3102,7 @@
     }
 
     // ── 管理: 区域の貸出・返却 ──
-    let lendState = { users: [], areas: [], sel: { group: '', email: '', district: '', chome: '', range: '' } };
+    let lendState = { users: [], areas: [], sel: { group: '', email: '', district: '', chome: '', range: '' }, period: { field: 'lend', from: '', to: '' } };
     function showLendScreen() {
         openAppModal('🗂 区域の貸出・返却');
         showBusy('読み込み中…');
@@ -3164,13 +3177,19 @@
                 const statusHtml = lent2
                     ? `<span style="color:#C75F56;">貸出中（${a.lendCount || 1}回目）: ${escHtml(who)}（${escHtml(a.lendDate || '-')} → <span class="${dueClass(a.dueDate)}">${escHtml(a.dueDate || '-')}</span>）</span>`
                     : `<span style="color:#555;">最終返却日: ${escHtml(a.lastReturn || 'なし')}　これまで ${a.lendCount || 0} 回</span>`;
-                const off = lent2 || !canLend;
                 const dateInput = lent2 ? '' : `<span style="margin-left:8px; color:#555;">貸出期限</span><input type="date" id="lend-due-${a.id}" value="${lendDefaultDue()}" style="font-size:12px; padding:2px 4px; width:106px; margin-left:4px; vertical-align:middle;">`; // 未貸出のみ。状態行の「これまでX回」の右に「貸出期限＋日付」を小さく表示
+                // 貸出中の番地は「返却(赤)＋キャンセル(琥珀)」を縦並び（幅は貸出ボタンと揃える）、未貸出は「貸出」（借りる人未選択ならグレーアウト）
+                const actBtn = lent2
+                    ? `<div style="display:flex; flex-direction:column; gap:4px; flex:0 0 auto;">`
+                        + `<button class="lend-act-btn" style="background:#C75F56; border-color:#C75F56; color:#fff;" onclick="doReturnArea(${a.id}, '${escHtml(a.area)}')">返却</button>`
+                        + `<button class="lend-act-btn" style="background:#C58A3D; border-color:#C58A3D; color:#fff;" onclick="cancelLendArea(${a.id}, '${escHtml(a.area)}')">キャンセル</button>`
+                      + `</div>`
+                    : `<button class="lend-act-btn" style="${canLend ? 'background:#5E9DB8; border-color:#5E9DB8; color:#fff;' : 'background:#b9c2c8; border-color:#b9c2c8; color:#f0f0f0; cursor:not-allowed;'}" onclick="doLendArea(${a.id})" ${canLend ? '' : 'disabled'}>貸出</button>`;
                 return `<div class="lend-item">`
                     + `<div style="display:flex; gap:6px; align-items:center;">`
                     + `<div style="flex:1; min-width:0;"><b style="font-size:15px;">${escHtml(num)}</b><span style="color:#777; font-size:12px;">（${a.count === '' || a.count == null ? '-' : a.count}件）</span></div>`
-                    + `<button class="choice-btn" style="flex:0 0 auto; width:104px; padding:6px 0; white-space:nowrap; background:#eef3f6;" onclick="previewLendArea(${a.id})">地図プレビュー</button>`
-                    + `<button class="choice-btn" style="flex:0 0 auto; width:104px; padding:6px 0; white-space:nowrap; ${off ? 'background:#b9c2c8; border-color:#b9c2c8; color:#f0f0f0; cursor:not-allowed;' : 'background:#5E9DB8; border-color:#5E9DB8; color:#fff;'}" onclick="doLendArea(${a.id})" ${off ? 'disabled' : ''}>貸出</button>`
+                    + `<button class="lend-act-btn" style="background:#eef3f6;" onclick="previewLendArea(${a.id})">地図プレビュー</button>`
+                    + actBtn
                     + `</div>`
                     + `<div style="font-size:12px; margin-top:4px;">${statusHtml}${dateInput}</div>`
                     + `</div>`;
@@ -3180,14 +3199,29 @@
         } else {
             html += '<div style="color:#888; padding:8px;">地区・丁目・範囲を選ぶと、番地ごとの貸出欄が表示されます。</div>';
         }
-        const lent = lendState.areas.filter(a => a.user || a.group);
+        const allLent = lendState.areas.filter(a => a.user || a.group);
+        const lent = allLent.filter(lentAreaMatches); // 上部の絞り込み（借りる人・地区/丁目/範囲）＋期間で自動フィルタ
+        const pf = lendState.period || (lendState.period = { field: 'lend', from: '', to: '' });
         html += `<div style="background:#d4dae0; border:1px solid #b3bcc4; border-radius:6px; padding:8px; margin-top:8px;">`;
-        html += `<div style="font-weight:bold; padding-bottom:6px; border-bottom:1px solid #aeb8c0; margin-bottom:4px;">貸出中の区域（${lent.length}）</div>`;
+        html += `<div style="font-weight:bold; padding-bottom:6px; border-bottom:1px solid #aeb8c0; margin-bottom:6px;">貸出中の区域（${lent.length}${lent.length !== allLent.length ? ' / ' + allLent.length : ''}）</div>`;
+        if (allLent.length) {
+            // 期間フィルタ（貸出日／返却期日を切替・いつ〜いつ）。上部の借りる人・地区の絞り込みと合わせて下の一覧に効く
+            html += `<div style="display:flex; gap:4px; align-items:center; flex-wrap:wrap; margin-bottom:6px;">`
+                + `<select onchange="lendPeriodSel('field', this.value)" style="font-size:12px; padding:3px 4px;"><option value="lend" ${pf.field !== 'due' ? 'selected' : ''}>貸出日</option><option value="due" ${pf.field === 'due' ? 'selected' : ''}>返却期日</option></select>`
+                + `<input type="date" value="${escHtml(pf.from || '')}" onchange="lendPeriodSel('from', this.value)" style="font-size:12px; padding:2px 4px; width:128px;">`
+                + `<span style="font-size:12px; color:#555;">〜</span>`
+                + `<input type="date" value="${escHtml(pf.to || '')}" onchange="lendPeriodSel('to', this.value)" style="font-size:12px; padding:2px 4px; width:128px;">`
+                + ((pf.from || pf.to) ? `<button class="lend-act-btn sm" style="background:#eef3f6;" onclick="lendPeriodClear()">期間クリア</button>` : '')
+                + `</div>`;
+        }
         html += lent.length ? lent.map(a =>
             `<div class="lend-row"><div class="grow"><b>${escHtml(a.area)}</b>　<span style="font-size:13px; color:#333;">${escHtml(a.group ? (a.group === SHARED_GROUP_NAME ? '👪 全体利用' : a.group + '（グループ）') : (a.name || uname(a.user)))}</span><br>`
             + `<span style="font-size:12px; color:#666;">${escHtml(a.lendDate || '-')} → <span class="${dueClass(a.dueDate)}">${escHtml(a.dueDate || '-')}</span></span></div>`
-            + `<button class="clear-btn" onclick="doReturnArea(${a.id}, '${escHtml(a.area)}')">返却</button></div>`
-        ).join('') : '<div style="color:#888; padding:6px;">ありません</div>';
+            + `<div style="display:flex; gap:4px; flex:0 0 auto;">`
+            + `<button class="lend-act-btn sm" style="background:#C75F56; border-color:#C75F56; color:#fff;" onclick="doReturnArea(${a.id}, '${escHtml(a.area)}')">返却</button>`
+            + `<button class="lend-act-btn sm" style="background:#C58A3D; border-color:#C58A3D; color:#fff;" onclick="cancelLendArea(${a.id}, '${escHtml(a.area)}')">キャンセル</button>`
+            + `</div></div>`
+        ).join('') : `<div style="color:#888; padding:6px;">${allLent.length ? '条件に合う貸出はありません' : 'ありません'}</div>`;
         html += `</div>`;
         body.innerHTML = html;
     }
@@ -3237,6 +3271,73 @@
                 .then(d => { lendState.users = d.users; lendState.areas = d.areas; renderLendScreen(); showToast('返却しました', false); })
                 .catch(handleServerError).finally(hideBusy);
         });
+    }
+    // 貸出のキャンセル（=貸出ミスの取消。返却と違い「なかったこと」にする＝貸出回数を1つ戻す）。番地一覧・貸出中一覧の両方から呼ぶ。
+    function cancelLendArea(id, label) {
+        appConfirm(`「${label}」の貸出を取り消します。\n（間違えて貸し出したときの取り消しです。返却とは違い、貸出回数には残りません）`, { okLabel: '取り消す', danger: true }).then(ok => {
+            if (!ok) return;
+            showBusy('取り消し中…');
+            apiCall('cancelLendArea', { areaId: id })
+                .then(d => { lendState.users = d.users; lendState.areas = d.areas; renderLendScreen(); showToast('貸出を取り消しました', false); })
+                .catch(handleServerError).finally(hideBusy);
+        });
+    }
+    // 「貸出中の区域」一覧を、上部の絞り込み（借りる人・地区/丁目/範囲）と期間で自動フィルタする判定。未選択の条件は素通り（=全件表示）。
+    function lentAreaMatches(a) {
+        const s = lendState.sel;
+        // ① 区域（地区→丁目→範囲）。番地一覧と同じ絞り込み。
+        if (s.district) {
+            if (AREA_DATA[s.district] === null) { // 丁目なし地区
+                if (a.area !== s.district) return false;
+            } else {
+                if (districtOfArea(a.area) !== s.district) return false;
+                if (s.chome && String(a.area).indexOf(s.district + s.chome + '丁目') !== 0) return false;
+                if (s.chome && s.range) {
+                    const rstart = parseInt(s.range) || 1;
+                    const mm = String(a.area).match(/(\d+)番$/);
+                    const n = mm ? parseInt(mm[1]) : 0;
+                    if (!(n >= rstart && n <= rstart + 19)) return false;
+                }
+            }
+        }
+        // ② 借りる人（グループ／ユーザー）
+        if (s.group === SHARED_GROUP_NAME) {
+            if (a.group !== SHARED_GROUP_NAME) return false;
+        } else if (s.email === '__GROUP__' && s.group) {
+            if (a.group !== s.group) return false;
+        } else if (s.email) {
+            if (String(a.user || '') !== s.email) return false; // 個人への貸出
+        } else if (s.group) {
+            const u = lendState.users.find(x => x.email === a.user);
+            const inGroup = (a.group === s.group) || (u && String(u.group || '').trim() === s.group);
+            if (!inGroup) return false;
+        }
+        // ③ 期間（貸出日／返却期日）。fmtDate_ は "yyyy/MM/dd" 形式なので "-" 区切りに正規化して文字列比較。
+        const pf = lendState.period;
+        if (pf && (pf.from || pf.to)) {
+            const d = String((pf.field === 'due' ? a.dueDate : a.lendDate) || '').trim().replace(/\//g, '-');
+            if (!d) return false; // 対象日が無いものは期間指定に合致しない
+            if (pf.from && d < pf.from) return false;
+            if (pf.to && d > pf.to) return false;
+        }
+        return true;
+    }
+    // 期間フィルタは画面下部にあるため、再描画でスクロールが先頭へ戻らないよう位置を保つ
+    function rerenderLendKeepScroll() {
+        const body = document.getElementById('app-modal-body');
+        const st = body ? body.scrollTop : 0;
+        renderLendScreen();
+        const b2 = document.getElementById('app-modal-body');
+        if (b2) b2.scrollTop = st;
+    }
+    function lendPeriodSel(k, v) {
+        if (!lendState.period) lendState.period = { field: 'lend', from: '', to: '' };
+        lendState.period[k] = v;
+        rerenderLendKeepScroll();
+    }
+    function lendPeriodClear() {
+        if (lendState.period) { lendState.period.from = ''; lendState.period.to = ''; }
+        rerenderLendKeepScroll();
     }
 
     // ── 管理: ユーザー管理（保存すると UserList とスプレッドシートの共有を更新） ──

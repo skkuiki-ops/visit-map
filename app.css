@@ -129,9 +129,11 @@
         .inline-group { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
         .inline-group label { min-width: 6.5em; font-size: 11px; font-weight: bold; white-space: nowrap; flex-shrink: 0; margin: 0; }
         .inline-group select { flex: 1; max-width: 200px; box-sizing: border-box; padding: 4px; font-size: 12px; }
+        .inline-group .shuga-pick { flex: 1; max-width: 200px; margin: 0; flex-basis: auto; } /* オートロック/構成/管理人のボタン選択を label の右に収める */
 
         /* ── 属性・訪問結果の選択ボタン（ネイティブselectの代替。色は凡例と同系） ── */
         .choice-grid { display: grid; gap: 5px; margin: 2px 0 8px; flex-basis: 100%; } /* flex行内で展開された時は折り返して全幅を使う */
+        .choice-grid.c2 { grid-template-columns: repeat(2, 1fr); }
         .choice-grid.c4 { grid-template-columns: repeat(4, 1fr); }
         .choice-grid.c5 { grid-template-columns: repeat(5, 1fr); }
         .choice-grid.c6 { grid-template-columns: repeat(6, 1fr); }
@@ -339,6 +341,9 @@
         .lend-row { display: flex; align-items: center; gap: 8px; padding: 8px 4px; border-bottom: 1px dashed #e3e3e3; }
         .lend-row .grow { flex: 1; min-width: 0; }
         .lend-item { border: 1px solid #cfe3ec; border-radius: 6px; padding: 8px; margin-bottom: 6px; background: #f7fbfc; }
+        /* 貸出・返却・キャンセル・地図プレビュー用のコンパクトボタン。文字「中/大」でも肥大化せず枠内に収める（choice-btn/clear-btn と違い text-md/text-lg 拡大の対象外） */
+        .lend-act-btn { flex: 0 0 auto; min-width: 92px; padding: 7px 6px; border-radius: 6px; border: 1.5px solid #c8cfd6; background: #fff; color: #333; font-size: 13px; font-weight: bold; text-align: center; white-space: nowrap; cursor: pointer; -webkit-touch-callout: none; user-select: none; touch-action: manipulation; }
+        .lend-act-btn.sm { min-width: 0; padding: 5px 10px; font-size: 12px; }
         /* ユーザー管理は1行=1ユーザー。区切りをはっきりさせる（濃い実線） */
         .user-row { display: flex; flex-direction: column; gap: 6px; border: 1px solid #c4ccd3; border-radius: 8px; padding: 10px; margin-bottom: 8px; background: #eef4f8; }
         .user-row.ua-owner { background: #e6e9ec; }
@@ -421,7 +426,7 @@
         .mapboxgl-ctrl-top-right { z-index: 9990; } /* コンパス・現在地・更新（吹き出しが開いている間は吹き出しが前面になる） */
         /* 右上コントロール（コンパス/現在地/更新）を年配者・屋外向けに少し大きく（既定29px→38px、アイコンも拡大） */
         .mapboxgl-ctrl-top-right .mapboxgl-ctrl-group button { width: 38px; height: 38px; }
-        .mapboxgl-ctrl-top-right .mapboxgl-ctrl-group button .mapboxgl-ctrl-icon { background-size: 24px; }
+        .mapboxgl-ctrl-top-right .mapboxgl-ctrl-group button .mapboxgl-ctrl-icon { background-size: 32px; } /* コンパス矢印・現在地アイコンを枠内で大きく（更新は絵文字 textContent なので無影響） */
         .mapboxgl-popup { z-index: 9995 !important; } /* 右上コントロールより前面（✕の干渉解消）。下部ボタン/ラベル/モーダルよりは背面 */
         /* 吹き出しの縁を年長者にも分かりやすく（枠線＋少し強めの影。やり過ぎない範囲で境界を明確化） */
         .mapboxgl-popup-content { border: 1.5px solid #b3bfc8; border-radius: 8px; box-shadow: 0 3px 14px rgba(0,0,0,0.20); }
