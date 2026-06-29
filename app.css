@@ -353,6 +353,8 @@
         .rep-row .req { color: #c0392b; margin-left: 2px; }
         .rep-row input[type="text"], .rep-row input[type="date"], .rep-row select, .rep-row textarea { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 15px; font-family: inherit; background: #fff; }
         .rep-row textarea { resize: vertical; min-height: 56px; }
+        .rep-lang-note { margin-top: 4px; font-size: 13px; font-weight: bold; color: #6a4fa0; }
+        .lang-note { font-size: 12px; font-weight: bold; color: #6a4fa0; margin: 2px 0 4px; }
         .rep-2col { display: flex; gap: 8px; }
         .rep-2col > .rep-row { flex: 1; min-width: 0; }
         .rep-actions { display: flex; gap: 8px; margin-top: 6px; }

@@ -12,7 +12,7 @@
     const MY_TOKEN = 'pk.eyJ1IjoidG9ydW8xMTA0IiwiYSI6ImNtcTdlOGp2MzBhY3QycXBocno2OHQ5dmoifQ.bfkHvR5OmkacGJsDorHL5Q';
     mapboxgl.accessToken = MY_TOKEN;
     // ↓ デプロイした GAS Webアプリの URL（.../exec）に置き換える
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbz2ILxDb8YTGXUhrphRKDd8_Mx8R9-5LeuW2Qce7nNFcwtr5iG27_G8WNlOofgSpw9j/exec";
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwC2A3QykBmQsmZHsGAIBInbZxIPETAwmh6tWL_LCBrpNmsNbHE8jA2McWIW4JKufdE/exec";
     // ↓ Google Cloud で発行した OAuth クライアントID（code_api.gs と同一値）
     const GOOGLE_CLIENT_ID = "273556684740-01e17ja1as1pchs4cvlfqvh67vbt51l3.apps.googleusercontent.com";
     // ↓ 地図スタイル（Mapbox Studio のスタイルURL。標準に戻す場合は 'mapbox://styles/mapbox/streets-v12'）
@@ -991,6 +991,9 @@
     };
     // 前回サインイン時に受け取った番地データ（マスタ由来）があれば、内蔵値より優先して復元する
     try { const _ad = JSON.parse(localStorage.getItem('vm_areaDef') || 'null'); if (_ad) AREA_DATA = _ad; } catch (e) {}
+    // 言語マスタ（報告フォームの選択肢＋連携要否の表示分岐）。getMe で配布され localStorage(vm_langMaster) に保持。
+    let LANG_MASTER = [];
+    try { const _lm = JSON.parse(localStorage.getItem('vm_langMaster') || 'null'); if (Array.isArray(_lm)) LANG_MASTER = _lm; } catch (e) {}
     // 地区選択のSVGマップ（Geminiで江戸川区の地区図をトレース。座標は見た目重視で地理座標ではない）。
     // 各 path のクリックで selectArea('district', 地区名) を呼ぶ＝既存の丁目/番地ロジックをそのまま利用。
     const AREA_MAP_SVG = `<div class="area-map"><svg viewBox="0 0 905 1060" role="group" aria-label="地区マップ">
@@ -1606,10 +1609,18 @@
     function kodateVisual(item) {
         const attr = item.属性;
         if (attr === '訪問拒否') return { char: '拒', color: '#B0554D', star: true };
-        if (attr === '外国語')   return { char: '外', color: '#8E79AB', star: true };
+        if (attr === '外国語') {
+            // 連携しない外国語は控えめ表示＝丸形・背景紫・白文字（文字内容は通常＝数字/会など）。連携する外国語・言語未設定は従来（「外」★）。
+            if (isNonLinkLang_(item.言語)) { const base = kodateResultVisual_(item); return { char: base.char, color: '#ffffff', bg: '#8E79AB' }; }
+            return { char: '外', color: '#8E79AB', star: true };
+        }
         if (attr === '空き家')   return { char: '空', color: '#8C8C8C' };
         if (attr === '他')       return { char: '他', color: '#7f8c8d' };
         if (attr === '会社')     return { char: '🏢', color: '#2E5090' }; // 会社＝丸形・🏢。属性優先＝訪問結果でアイコンを変えない
+        return kodateResultVisual_(item);
+    }
+    // 属性（拒否/外国語等）が無いときの戸建ての見た目＝最新ステータス（訪問結果）から char/color を決める。
+    function kodateResultVisual_(item) {
         const s = item.最新ステータス;
         const ab = String(s).match(/不在\((\d+)回目\)/); // 不在は回数を抽出（上限なし）
         if (ab) {
@@ -1634,6 +1645,10 @@
             markerEl.classList.add('marker-star'); // ☆形：塗り＝属性色／白文字
             markerEl.style.background = kv.color;
             markerEl.style.color = '#fff';
+        } else if (kv.bg) {
+            // 連携しない外国語：丸形・背景色つき・白文字（文字内容は通常＝数字/会など）
+            markerEl.style.background = kv.bg;
+            markerEl.style.color = kv.color;
         } else {
             markerEl.style.color = kv.color;
         }
@@ -2225,6 +2240,12 @@
             activeNewMarker = null;
             showDone('登録しました');
             renderMarkers(latestData);
+            // 戸建てを拒否/外国語で新規登録したら、続けて報告フォームを開く（個人情報を管理シートへ記録）。同座標は登録不可なので座標一致で新規行を特定。
+            if (type === '戸建て' && (data.attribute === '訪問拒否' || data.attribute === '外国語')) {
+                const nl = parseFloat(lat), ng = parseFloat(lng);
+                const ni = latestData.find(d => d.種別 === '戸建て' && Math.abs(parseFloat(d.緯度) - nl) < 1e-7 && Math.abs(parseFloat(d.経度) - ng) < 1e-7);
+                if (ni) openReportForm({ reportType: data.attribute, kind: '戸建て', rowNumber: ni.rowNumber, item: ni });
+            }
         }).catch((err) => {
             btn.disabled = false; btn.innerText = '登録';
             // 失敗時は選択ボタンの無効化も解除して再操作できるようにする（pickNewAndSubmit で無効化したぶん）
@@ -2432,6 +2453,11 @@
             if (me && me.areaDef) {
                 AREA_DATA = me.areaDef;
                 try { localStorage.setItem('vm_areaDef', JSON.stringify(me.areaDef)); } catch (e) {}
+            }
+            // 言語マスタを受け取り、報告フォームの選択肢・連携要否の表示分岐用に保持する
+            if (me && Array.isArray(me.langMaster)) {
+                LANG_MASTER = me.langMaster;
+                try { localStorage.setItem('vm_langMaster', JSON.stringify(me.langMaster)); } catch (e) {}
             }
         }).catch(() => { /* 取得失敗でも本体は動かす（メニューが一般表示・番地は内蔵値のまま） */ });
     }
@@ -3690,6 +3716,7 @@
         return `
             <div class="building-title">${escHtml(item['建物名 / 世帯名'] || '戸建て')}</div>
             ${addrRowHtml(item, attrLineHtml(attr, `saveAttribute(${item.rowNumber}, '%v')`, false))}
+            ${attr === '外国語' && item.言語 ? `<div class="lang-note">言語：${escHtml(langLinkLabel_(item.言語))}</div>` : ''}
             <div style="font-weight:bold; font-size:14px; margin:2px 0 4px;">訪問結果</div>
             ${resultChoiceHtml(item.最新ステータス, `saveStatus(${item.rowNumber}, '%v')`)}
             <div style="font-weight:bold; font-size:14px; margin-top:6px;">履歴欄</div>
@@ -3796,6 +3823,9 @@
         // 部屋ごとの現在ステータス（T列のJSON）を取得し、色分けに使う
         let roomStatusMap = {};
         try { roomStatusMap = JSON.parse(first.部屋ステータス || '{}') || {}; } catch(e) { roomStatusMap = {}; }
+        // 部屋ごとの言語（V列JSON）。連携しない外国語は☆にせず数字表記のままにする判定に使う。
+        let roomLangMap = {};
+        try { roomLangMap = JSON.parse(first.言語 || '{}') || {}; } catch(e) { roomLangMap = {}; }
         const mode = roomNumMode(first);
         // 個人宅/会社（U列）→ {部屋番号:'p'|'c'} に展開し、セルにアイコンを付ける
         const roomMarkMap = parseRoomMarks(first.個人宅);
@@ -3813,7 +3843,9 @@
                     // （番号はセルをタップすると下の操作欄に「XXX号室」として表示される）
                     const st = roomStatusMap[roomNum];
                     const v = roomVisual(st);
-                    let label = (st === '訪問拒否' || st === '外国語') ? '☆' : roomCellLabel(roomNum, mode, f, r, floors, maxRoom);
+                    // 拒否・連携する外国語は☆。連携しない外国語は☆にせず数字表記のまま（色は紫のまま）。
+                    const showStar = (st === '訪問拒否') || (st === '外国語' && !isNonLinkLang_(roomLangMap[roomNum]));
+                    let label = showStar ? '☆' : roomCellLabel(roomNum, mode, f, r, floors, maxRoom);
                     if (roomMarkMap[roomNum]) label = roomMarkLabel(roomMarkMap[roomNum]); // 個人宅=🏠／会社=🏢
                     gridHtml += `<td class="cell-active" data-room="${roomNum}" style="min-width:40px; background:${v.bg}; color:${v.color};">${label}</td>`;
                 } else {
@@ -4044,6 +4076,9 @@
 
         // この部屋の現在値（属性 or 訪問結果）。選択ボタンのハイライトに使う。
         const curRoomVal = roomStatusOf(item, roomNum);
+        // この部屋の言語（V列JSON）。外国語のとき注記表示に使う。
+        let roomLang = '';
+        try { const _lm = JSON.parse((item && item.言語) || '{}') || {}; roomLang = _lm[roomNum] || ''; } catch(e) {}
 
         const mode = item ? roomNumMode(item) : '';
         const title = isMgrKey(roomNum) ? '👤 管理人' : ('🚪 ' + roomFullLabel(roomNum, mode));
@@ -4054,6 +4089,7 @@
                 <span style="font-weight:bold; font-size:12px;">${title}</span>
                 ${attrLineHtml(curRoomVal, `saveRoomState(${buildingRow}, ${roomKeyJs(roomNum)}, '%v')`, true)}
             </div>
+            ${curRoomVal === '外国語' && roomLang ? `<div class="lang-note">言語：${escHtml(langLinkLabel_(roomLang))}</div>` : ''}
             <div style="font-weight:bold; font-size:12px; margin:2px 0 4px;">訪問結果</div>
             ${resultChoiceHtml(curRoomVal, `saveRoomStatus(${buildingRow}, ${roomKeyJs(roomNum)}, '%v')`)}
             <div style="font-weight:bold; font-size:14px; margin-top:4px;">部屋の履歴:</div>
@@ -4384,6 +4420,7 @@
     function openReportForm(ctx) {
         const item = ctx.item;
         if (!item) { showToast('対象が見つかりませんでした', true); return; }
+        reportSubmitting = false; // フォームを開くたびに送信中フラグをクリア（前回送信の残留で押せなくなるのを防ぐ）
         const isShuga = ctx.kind === '集合住宅';
         const lat = parseFloat(item.緯度), lng = parseFloat(item.経度);
         const parts = splitAddressForReport_(effectiveAddress_(item));
@@ -4402,32 +4439,69 @@
         const metaHtml = isShuga
             ? `<div class="rep-meta">建物：${escHtml(reportCtx.buildingName || '（名称なし）')}　／　部屋：<b>${escHtml(roomTag(ctx.roomNum))}</b><br>氏名などの個人情報はアプリには保存されず、担当の管理シートにのみ記録されます。</div>`
             : `<div class="rep-meta">氏名などの個人情報はアプリには保存されず、担当の管理シートにのみ記録されます。</div>`;
-        const langRow = `<div class="rep-row"><label>言語${isForeign ? '<span class="req">＊</span>' : '（任意）'}</label><input type="text" id="rep-language" placeholder="例：ベトナム語、中国語"></div>`;
+        // 言語：拒否=日本語デフォルト＋マスタ言語 ／ 外国語=「言語を選択」＋マスタ言語（未選択を防ぐ）
+        const langList = LANG_MASTER.map(m => m.lang);
+        let langOptsHtml;
+        if (isForeign) {
+            langOptsHtml = `<option value="">言語を選択</option>` + langList.map(l => `<option value="${escHtml(l)}">${escHtml(l)}</option>`).join('');
+        } else {
+            const list = (langList.indexOf('日本語') >= 0) ? langList : ['日本語'].concat(langList);
+            langOptsHtml = list.map(l => `<option value="${escHtml(l)}"${l === '日本語' ? ' selected' : ''}>${escHtml(l)}</option>`).join('');
+        }
+        const langRow = `<div class="rep-row"><label>言語${isForeign ? '<span class="req">＊</span>' : ''}</label>`
+            + `<select id="rep-language" onchange="updateLangNote()">${langOptsHtml}</select>`
+            + `<div id="rep-lang-note" class="rep-lang-note"></div></div>`;
         const interestRow = isForeign
             ? `<div class="rep-row"><label>関心の有無</label><select id="rep-interest"><option value="">—</option><option>あり</option><option>なし</option><option>不明</option></select></div>`
             : `<input type="hidden" id="rep-interest" value="">`;
         document.getElementById('report-form-body').innerHTML = metaHtml
             + `<div class="rep-2col"><div class="rep-row"><label>訪問日</label><input type="date" id="rep-visitdate" value="${todayStr}"></div>`
-            + `<div class="rep-row"><label>住所（町名）</label><input type="text" id="rep-town" value="${escHtml(parts.town)}"></div></div>`
-            + `<div class="rep-2col"><div class="rep-row"><label>住所（番地）</label><input type="text" id="rep-banchi" value="${escHtml(parts.banchi)}"></div>`
             + `<div class="rep-row"><label>お名前</label><input type="text" id="rep-name" placeholder="任意"></div></div>`
+            + `<div class="rep-2col"><div class="rep-row"><label>住所（町名）</label><input type="text" id="rep-town" value="${escHtml(parts.town)}"></div>`
+            + `<div class="rep-row"><label>住所（番地）</label><input type="text" id="rep-banchi" value="${escHtml(parts.banchi)}"></div></div>`
             + `<div class="rep-2col"><div class="rep-row"><label>性別</label><select id="rep-gender"><option value="">—</option><option>男性</option><option>女性</option><option>その他</option></select></div>`
             + `<div class="rep-row"><label>年代</label><select id="rep-age"><option value="">—</option><option>10代</option><option>20代</option><option>30代</option><option>40代</option><option>50代</option><option>60代</option><option>70代</option><option>80代以上</option></select></div></div>`
             + langRow + interestRow
             + `<div class="rep-row"><label>訪問の内容</label><textarea id="rep-content" placeholder="状況や対応の記録（任意）"></textarea></div>`
             + `<div class="rep-actions"><button class="rep-cancel" onclick="closeReportForm()">キャンセル</button><button class="rep-submit" onclick="submitReportForm()">送信して登録</button></div>`;
+        updateLangNote(); // 言語注記（〇〇語（…））の初期表示
         document.getElementById('report-form-modal').style.display = 'flex';
     }
     function closeReportForm() {
         document.getElementById('report-form-modal').style.display = 'none';
         reportCtx = null;
     }
+    // 言語が「連携しない」か（マスタ link=false）。マスタに無い言語（日本語等）も連携しない扱い。地図表示の出し分けに使う。
+    function isNonLinkLang_(lang) {
+        if (!lang) return false;
+        const m = LANG_MASTER.find(x => x.lang === lang);
+        return m ? !m.link : true;
+    }
+    // 言語の連携要否ラベル「〇〇語（対象言語の会衆へ連携／連携の取り決め無し）」。マスタに無い言語（日本語等）は連携しない扱い。
+    function langLinkLabel_(lang) {
+        if (!lang) return '';
+        const m = LANG_MASTER.find(x => x.lang === lang);
+        return lang + '（' + (m && m.link ? '対象言語の会衆へ連携' : '連携の取り決め無し') + '）';
+    }
+    function updateLangNote() {
+        const sel = document.getElementById('rep-language');
+        const note = document.getElementById('rep-lang-note');
+        if (sel && note) note.textContent = sel.value ? langLinkLabel_(sel.value) : '';
+    }
+    let reportSubmitting = false; // 送信中フラグ（二重送信の保険。reportCtx クリアと二重で防ぐ）
     function submitReportForm() {
         const c = reportCtx;
-        if (!c) return;
+        if (!c || reportSubmitting) return; // 二重送信ガード：送信確定で reportCtx を即クリア＋フラグ。連打やタッチ二重発火の2回目はここで弾く
         const val = id => { const el = document.getElementById(id); return el ? String(el.value || '').trim() : ''; };
         const language = val('rep-language');
-        if (c.reportType === '外国語' && !language) { showToast('言語を入力してください', true); return; } // 外国語は言語必須
+        if (c.reportType === '外国語' && !language) { showToast('言語を入力してください', true); return; } // 失敗時は reportCtx を保持＝再入力できる
+        // 送信確定。二重登録を防ぐため即クリア＋送信/キャンセルボタンを無効化する（新規登録ボタン等と同じ作法）。
+        reportSubmitting = true;
+        reportCtx = null;
+        const submitBtn = document.querySelector('#report-form-body .rep-submit');
+        const cancelBtn = document.querySelector('#report-form-body .rep-cancel');
+        if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '送信中…'; }
+        if (cancelBtn) cancelBtn.disabled = true;
         const params = {
             reportType: c.reportType, kind: c.kind,
             visitDate: val('rep-visitdate'), town: val('rep-town'), banchi: val('rep-banchi'),
@@ -4447,8 +4521,14 @@
                 if (kind === '集合住宅') reconcileShugaRoom(br, rn, latest);
                 else reconcileKodate(row, latest);
             })
-            .catch(handleServerError)
-            .finally(hideBusy);
+            .catch(err => {
+                // 送信失敗：再送できるよう reportCtx と両ボタンを元に戻す（フォームは閉じない）
+                reportCtx = c;
+                if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '送信して登録'; }
+                if (cancelBtn) cancelBtn.disabled = false;
+                handleServerError(err);
+            })
+            .finally(() => { reportSubmitting = false; hideBusy(); });
     }
 
     // ピン（地点）の削除。実行前に必ず確認する
