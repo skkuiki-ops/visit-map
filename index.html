@@ -139,6 +139,11 @@
 
 <!-- 貸出プレビュー中の「戻る」ボタン（地図確認から貸出画面へ復帰） -->
 <button id="lend-preview-back" style="display:none;" onclick="backToLendScreen()">↩ 貸出画面に戻る</button>
+<!-- 区域一覧（個人/グループ/全体利用）の「地図を表示」で来たときの「区域一覧に戻る」バー。本文タップ＝一覧へ戻る／✕＝バーだけ閉じる -->
+<div id="area-list-back" style="display:none;">
+    <button id="area-list-back-main" onclick="returnToAreaList()">← 区域一覧に戻る</button>
+    <button id="area-list-back-x" onclick="dismissAreaListBar()" aria-label="バーを閉じる">✕</button>
+</div>
 <button id="area-nav-btn" onclick="openAreaNav()" style="display:none;">🔍住所</button>
 
 <!-- 移動後に表示する地域名ラベル（常時表示・タップで枠/表示を消去） -->

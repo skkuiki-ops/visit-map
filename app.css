@@ -364,6 +364,11 @@
         .due-over { color: #C75F56; font-weight: bold; } /* 返却期日超過 */
         .due-soon { color: #B0763C; font-weight: bold; } /* 期日まで2週間以内（落ち着いたアンバー） */
         #lend-preview-back { position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%); z-index: 9999; background: #34495e; color: #fff; border: none; border-radius: 20px; padding: 11px 20px; font-size: 15px; font-weight: bold; box-shadow: 0 2px 8px rgba(0,0,0,0.35); cursor: pointer; }
+        /* 区域一覧に戻るバー（lend-preview-back と同じ下部中央・トースト/busyと重ならない位置）。本文＝戻る／✕＝バーだけ閉じる */
+        #area-list-back { position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%); z-index: 9999; display: flex; align-items: stretch; background: #34495e; border-radius: 22px; box-shadow: 0 2px 8px rgba(0,0,0,0.35); overflow: hidden; }
+        #area-list-back button { background: transparent; color: #fff; border: none; font-weight: bold; cursor: pointer; font-size: 16px; }
+        #area-list-back-main { padding: 11px 18px; }
+        #area-list-back-x { padding: 11px 15px; font-size: 15px; border-left: 1px solid rgba(255,255,255,0.28); }
 
         /* ── 確認ダイアログ（ネイティブ confirm/alert の代替・独自UI） ── */
         #app-confirm-overlay { position: absolute; inset: 0; z-index: 10005; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; padding: 20px; }

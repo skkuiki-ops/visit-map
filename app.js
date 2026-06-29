@@ -1844,9 +1844,11 @@
     });
     map.on('touchend', () => { clearTimeout(window.longPressTimer); });
 
-    // PC: Escape キーで入力フォーム／ポップアップをキャンセル
+    // PC: Escape キーで入力フォーム／ポップアップをキャンセル。他に閉じる物が無く「区域一覧に戻る」バー表示中なら一覧へ戻る。
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') closeOpenForms();
+        if (e.key !== 'Escape') return;
+        if (closeOpenForms()) return;
+        if (areaListBackTo) returnToAreaList();
     });
 
     // 吹き出し・住所モーダル上でのピンチ（2本指）による画面ズームを抑止する。
@@ -3012,6 +3014,29 @@
                 .catch(handleServerError).finally(hideBusy);
         });
     }
+    // ── 区域一覧（個人/グループ/全体利用）から「地図を表示」で地図へ来たときに出す「区域一覧に戻る」バー ──
+    // 共通の showAssignedArea/arriveAt は直接フックせず、区域一覧の「地図を表示」ボタン経由でのみ出す
+    // （住所検索・ピン操作・貸出プレビューでは出さない）。消えるのは明示操作のみ：バーtap→一覧を再オープン、✕→バーだけ閉じる。
+    let areaListBackTo = null; // 戻り先の一覧 'my'(個人/グループ) | 'shared'(全体利用)。null=バー非表示
+    function enterAreaFromList(area, origin) {
+        closeAppModal();                 // 一覧モーダルを閉じてから地図へ
+        showAssignedArea(area);          // 区域へ flyTo（住所検索と同じ表示）
+        areaListBackTo = origin;
+        const bar = document.getElementById('area-list-back');
+        if (bar) bar.style.display = ''; // CSS既定の flex に戻す（=表示）
+    }
+    function returnToAreaList() {         // バーtap / Esc → 元の一覧を再オープン
+        const origin = areaListBackTo;
+        hideAreaListBar();
+        if (origin === 'shared') showSharedAreas();
+        else if (origin === 'my') showMyAreas();
+    }
+    function dismissAreaListBar() { hideAreaListBar(); } // ✕ → バーだけ閉じる（地図に留まる）
+    function hideAreaListBar() {
+        areaListBackTo = null;
+        const bar = document.getElementById('area-list-back');
+        if (bar) bar.style.display = 'none';
+    }
     function showMyAreas() {
         openAppModal('📋 個人・グループの区域');
         showBusy('読み込み中…');
@@ -3024,7 +3049,7 @@
                     + `<div class="grow"><b style="font-size:16px;">${escHtml(a.area)}</b>${a.count !== '' && a.count != null ? `<span style="color:#888; font-size:12px;">（${a.count}件）</span>` : ''}<br>`
                     + `<span style="color:#666; font-size:12px;">貸出: ${escHtml(a.lendDate || '-')} ／ 返却期日: <span class="${dueClass(a.dueDate)}">${escHtml(a.dueDate || '-')}</span></span></div>`
                     + `<div style="display:flex; flex-direction:column; gap:4px; flex-shrink:0;">`
-                    + `<button class="choice-btn" style="background:#eef3f6; padding:5px 8px; font-size:12px;" onclick="closeAppModal(); showAssignedArea('${escHtml(a.area)}')">地図を表示</button>`
+                    + `<button class="choice-btn" style="background:#eef3f6; padding:5px 8px; font-size:12px;" onclick="enterAreaFromList('${escHtml(a.area)}','my')">地図を表示</button>`
                     + (canReturn ? `<button class="clear-btn" style="padding:5px 8px; font-size:12px;" onclick="returnAreaConfirm(${a.id}, '${escHtml(a.area)}', showMyAreas)">区域を返却</button>` : '')
                     + `</div></div>`;
             };
@@ -3082,7 +3107,7 @@
                     + `<div class="grow"><b style="font-size:16px;">${escHtml(a.area)}</b>${a.count !== '' && a.count != null ? `<span style="color:#888; font-size:12px;">（${a.count}件）</span>` : ''}<br>`
                     + `<span style="color:#666; font-size:12px;">貸出: ${escHtml(a.lendDate || '-')} ／ 返却期日: <span class="${dueClass(a.dueDate)}">${escHtml(a.dueDate || '-')}</span></span></div>`
                     + `<div style="display:flex; flex-direction:column; gap:4px; flex-shrink:0;">`
-                    + `<button class="choice-btn" style="background:#eef3f6; padding:5px 8px; font-size:12px;" onclick="closeAppModal(); showAssignedArea('${escHtml(a.area)}')">地図を表示</button>`
+                    + `<button class="choice-btn" style="background:#eef3f6; padding:5px 8px; font-size:12px;" onclick="enterAreaFromList('${escHtml(a.area)}','shared')">地図を表示</button>`
                     + (canReturn ? `<button class="clear-btn" style="padding:5px 8px; font-size:12px;" onclick="returnAreaConfirm(${a.id}, '${escHtml(a.area)}', showSharedAreas)">区域を返却</button>` : '')
                     + `</div></div>`;
             }).join('');
@@ -3577,7 +3602,7 @@
                 fillDerivedAddress(popup.getElement()); // 住所（街区内包方式）を算出して表示
                 if (!isShuga) attachHistoryLongPress(popup.getElement(), firstItem.rowNumber, false); // 戸建て履歴の長押し編集
                 if (isShuga) bindRoomCopyCells(popup.getElement(), firstItem.rowNumber); // 部屋: タップ=操作欄 / 長押し=情報コピー
-                else bindTitleCopy(popup.getElement(), firstItem.rowNumber);              // 戸建て: 「戸建て」長押し=情報コピー
+                bindTitleCopy(popup.getElement(), firstItem.rowNumber); // 戸建て/集合住宅とも 建物名（タイトル）長押し=情報コピー（集合は建物全体）
                 if (isKodate && items.length > 1) bindKodateGroupPager(popup, marker, items); // 同座標の複数世帯ページャ（◀▶で切替。戸建てのみ）
                 fitPopupInView(marker, 0); // 部屋操作欄は最初から高さを確保するので追加余白は不要
             });
@@ -4245,6 +4270,7 @@
             const root = popup.getElement();
             fillDerivedAddress(root);
             bindRoomCopyCells(root, buildingRow); // グリッドを作り直したので部屋長押し（情報コピー）を付け直す
+            bindTitleCopy(root, buildingRow); // 建物名（タイトル）長押し（情報コピー）も付け直す
             const newCell = root ? root.querySelector(`[data-room="${roomNum}"]`) : null;
             showRoomAction(buildingRow, roomNum, newCell); // 操作欄を開き直し履歴も更新
             setTimeout(() => fitPopupInView(marker, 0), 30); // 編集後、ピンを画面中央の少し下へ戻す
@@ -4366,6 +4392,7 @@
             popup.setHTML('<div class="popup-content">' + createShugaViewHtml([item]) + '</div>');
             fillDerivedAddress(popup.getElement());
             bindRoomCopyCells(popup.getElement(), buildingRow); // 部屋長押し（情報コピー）を付け直す
+            bindTitleCopy(popup.getElement(), buildingRow); // 建物名（タイトル）長押し（情報コピー）も付け直す
             setTimeout(() => fitPopupInView(marker, 0), 30); // 編集後、ピンを画面中央の少し下へ戻す
         } else {
             renderMarkers(latest);
@@ -4430,16 +4457,17 @@
         if (!infoCopyCtx) return;
         const f = infoCopyCtx;
         const isOn = k => { const cb = document.querySelector('#info-copy-body input[data-ck="' + k + '"]'); return cb && cb.checked; };
-        const lines = [];
-        if (isOn('addr') && f.addr) lines.push(f.addr); // 住所は値のみ（ラベル文字は付けない）
+        const blocks = [];
+        if (isOn('addr') && f.addr) blocks.push(f.addr); // 住所は値のみ（ラベル文字は付けない）
         if (isOn('hist') && f.histList && f.histList.length) {
             const m = document.querySelector('#info-copy-body input[name="hist-mode"]:checked');
-            lines.push((m && m.value === 'all') ? f.histList.join('\n') : f.histList[0]); // 履歴も値のみ（最新 or 全部）
+            blocks.push((m && m.value === 'all') ? f.histList.join('\r\n') : f.histList[0]); // 履歴も値のみ（最新 or 全部・複数行）
         }
-        if (isOn('app') && f.app) lines.push('■アプリのリンク\n' + f.app);   // リンクは見出し＋改行＋URL
-        if (isOn('map') && f.map) lines.push('■Googleマップのリンク\n' + f.map);
-        if (!lines.length) { showToast('項目が選ばれていません', true); return; }
-        copyTextToClipboard_(lines.join('\n'))
+        if (isOn('app') && f.app) blocks.push('■アプリのリンク\r\n' + f.app);   // リンクは見出し＋改行＋URL
+        if (isOn('map') && f.map) blocks.push('■Googleマップのリンク\r\n' + f.map);
+        if (!blocks.length) { showToast('項目が選ばれていません', true); return; }
+        // 各情報の間は空行で区切る。メモアプリで1行化しないよう改行は CRLF（\r\n）にする
+        copyTextToClipboard_(blocks.join('\r\n\r\n'))
             .then(() => { closeInfoCopy(); showToast('コピーしました', false); })
             .catch(() => { showToast('コピーに失敗しました', true); });
     }
