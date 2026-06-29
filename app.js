@@ -12,7 +12,7 @@
     const MY_TOKEN = 'pk.eyJ1IjoidG9ydW8xMTA0IiwiYSI6ImNtcTdlOGp2MzBhY3QycXBocno2OHQ5dmoifQ.bfkHvR5OmkacGJsDorHL5Q';
     mapboxgl.accessToken = MY_TOKEN;
     // ↓ デプロイした GAS Webアプリの URL（.../exec）に置き換える
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwC2A3QykBmQsmZHsGAIBInbZxIPETAwmh6tWL_LCBrpNmsNbHE8jA2McWIW4JKufdE/exec";
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbykjQxs8OiYnFC5GeuIu3YDonu9QwHVEUWQ-xj0FIOhVv58H_7m7OKraO0nnPiG2Zo/exec";
     // ↓ Google Cloud で発行した OAuth クライアントID（code_api.gs と同一値）
     const GOOGLE_CLIENT_ID = "273556684740-01e17ja1as1pchs4cvlfqvh67vbt51l3.apps.googleusercontent.com";
     // ↓ 地図スタイル（Mapbox Studio のスタイルURL。標準に戻す場合は 'mapbox://styles/mapbox/streets-v12'）
@@ -2213,10 +2213,18 @@
 
         let data = { type: type, name: name, lat: parseFloat(lat), lng: parseFloat(lng), memo: document.getElementById('new-memo').value, attribute: '不明', address: newPinAddress };
 
+        let newReportType = null; // 戸建て新規で拒否/外国語を選んだ場合の報告種別（送信成功で属性を付ける）
         if (type === '戸建て') {
             const st = document.getElementById('new-status').value;
             data.status = (st === '不在') ? '不在(1回目)' : st; // 選択ボタンの「不在」は初回として保存
-            data.attribute = document.getElementById('new-attribute-k').value; // 通常/訪問拒否/外国語/空き家
+            const attrSel = document.getElementById('new-attribute-k').value; // 通常/訪問拒否/外国語/空き家
+            if (attrSel === '訪問拒否' || attrSel === '外国語') {
+                // 拒否/外国語は登録時には付けず通常で出し（☆/外を先に出さない）、報告フォーム送信の成功時にサーバが属性を付ける
+                newReportType = attrSel;
+                data.attribute = '通常';
+            } else {
+                data.attribute = attrSel;
+            }
         } else {
             data.floors = document.getElementById('new-floors').value;
             data.maxRoomNum = document.getElementById('new-maxroom').value;
@@ -2240,11 +2248,11 @@
             activeNewMarker = null;
             showDone('登録しました');
             renderMarkers(latestData);
-            // 戸建てを拒否/外国語で新規登録したら、続けて報告フォームを開く（個人情報を管理シートへ記録）。同座標は登録不可なので座標一致で新規行を特定。
-            if (type === '戸建て' && (data.attribute === '訪問拒否' || data.attribute === '外国語')) {
+            // 戸建てを拒否/外国語で選んで新規登録した場合は、通常で登録した直後に報告フォームを開く（☆/外は出さず、送信成功でサーバが属性を付ける）。同座標は登録不可なので座標一致で新規行を特定。
+            if (type === '戸建て' && newReportType) {
                 const nl = parseFloat(lat), ng = parseFloat(lng);
                 const ni = latestData.find(d => d.種別 === '戸建て' && Math.abs(parseFloat(d.緯度) - nl) < 1e-7 && Math.abs(parseFloat(d.経度) - ng) < 1e-7);
-                if (ni) openReportForm({ reportType: data.attribute, kind: '戸建て', rowNumber: ni.rowNumber, item: ni });
+                if (ni) openReportForm({ reportType: newReportType, kind: '戸建て', rowNumber: ni.rowNumber, item: ni });
             }
         }).catch((err) => {
             btn.disabled = false; btn.innerText = '登録';
@@ -2262,7 +2270,7 @@
         ・履歴・メモ・更新者メールは保存しない（先行表示＝ピン描画には不要。裏の最新取得で揃う）
         ・有効期間は6時間。期限切れ・形式不正は「使わない」だけでなく端末からも物理削除する */
     const DATA_CACHE_MAX_MS = 6 * 60 * 60 * 1000;
-    const CACHE_OMIT_FIELDS = ['履歴データ', '特記事項', '最終更新者']; // 漏えい時に痛い機微フィールド
+    const CACHE_OMIT_FIELDS = ['履歴データ', '特記事項', '最終更新者', '言語']; // 漏えい時に痛い機微フィールド（言語＝何語話者か＝報告フォームの個人情報。端末キャッシュに残さない）
     function saveDataCache(data) {
         try {
             const slim = data.map(item => {
@@ -2951,7 +2959,8 @@
         let ovD = `<svg class="ov" viewBox="0 0 ${DW} ${DH}">`;
         ovD += `<polygon points="${ring.map(p => dProj.x(p[0]).toFixed(1) + ',' + dProj.y(p[1]).toFixed(1)).join(' ')}" fill="none" stroke="#000" stroke-width="2.5"/>`;
         kodate.forEach(d => {
-            const kc = kodateVisual(d).char;
+            // 印刷は連携要否に関わらず属性で記号を出す（拒否=拒/外国語=外）。地図の控えめ表示とは別方針＝印刷物は一目で分かる情報量を優先（集合の印刷 printRoomGrid も roomVisual ベースで常に記号を出すのと統一）。
+            const kc = (d.属性 === '訪問拒否') ? '拒' : (d.属性 === '外国語') ? '外' : kodateVisual(d).char;
             const cx = dProj.x(+d.経度), cy = dProj.y(+d.緯度);
             if (kc === '拒' || kc === '外') { // 訪問拒否/外国語の戸建てだけ ★＋記号で表示
                 ovD += `<polygon points="${starPts_(cx, cy, 15, 6)}" fill="#fff" stroke="#000" stroke-width="1.5"/>`
@@ -4439,32 +4448,35 @@
         const metaHtml = isShuga
             ? `<div class="rep-meta">建物：${escHtml(reportCtx.buildingName || '（名称なし）')}　／　部屋：<b>${escHtml(roomTag(ctx.roomNum))}</b><br>氏名などの個人情報はアプリには保存されず、担当の管理シートにのみ記録されます。</div>`
             : `<div class="rep-meta">氏名などの個人情報はアプリには保存されず、担当の管理シートにのみ記録されます。</div>`;
-        // 言語：拒否=日本語デフォルト＋マスタ言語 ／ 外国語=「言語を選択」＋マスタ言語（未選択を防ぐ）
+        // 言語：外国語=選択肢の文字に連携要否を併記（value は言語名のみ）／拒否=言語名のみ・select はグレー（使う頻度が低い）・日本語デフォルト・注記なし
         const langList = LANG_MASTER.map(m => m.lang);
-        let langOptsHtml;
+        let langOptsHtml, langSelAttr = '';
         if (isForeign) {
-            langOptsHtml = `<option value="">言語を選択</option>` + langList.map(l => `<option value="${escHtml(l)}">${escHtml(l)}</option>`).join('');
+            langOptsHtml = `<option value="">言語を選択</option>` + langList.map(l => {
+                const m = LANG_MASTER.find(x => x.lang === l);
+                const note = (m && m.link) ? '（対象言語の会衆へ連携）' : '（連携の取り決め無し）';
+                return `<option value="${escHtml(l)}">${escHtml(l + note)}</option>`;
+            }).join('');
         } else {
             const list = (langList.indexOf('日本語') >= 0) ? langList : ['日本語'].concat(langList);
             langOptsHtml = list.map(l => `<option value="${escHtml(l)}"${l === '日本語' ? ' selected' : ''}>${escHtml(l)}</option>`).join('');
+            langSelAttr = ' style="background:#eee; color:#666;"'; // 拒否では言語を使うことが少ないのでグレーで控えめに
         }
         const langRow = `<div class="rep-row"><label>言語${isForeign ? '<span class="req">＊</span>' : ''}</label>`
-            + `<select id="rep-language" onchange="updateLangNote()">${langOptsHtml}</select>`
-            + `<div id="rep-lang-note" class="rep-lang-note"></div></div>`;
+            + `<select id="rep-language"${langSelAttr}>${langOptsHtml}</select></div>`;
         const interestRow = isForeign
-            ? `<div class="rep-row"><label>関心の有無</label><select id="rep-interest"><option value="">—</option><option>あり</option><option>なし</option><option>不明</option></select></div>`
+            ? `<div class="rep-row rep-hl"><label>関心の有無</label><select id="rep-interest"><option value="">—</option><option>あり</option><option>なし</option><option>不明</option></select></div>`
             : `<input type="hidden" id="rep-interest" value="">`;
         document.getElementById('report-form-body').innerHTML = metaHtml
             + `<div class="rep-2col"><div class="rep-row"><label>訪問日</label><input type="date" id="rep-visitdate" value="${todayStr}"></div>`
-            + `<div class="rep-row"><label>お名前</label><input type="text" id="rep-name" placeholder="任意"></div></div>`
+            + `<div class="rep-row rep-hl"><label>お名前</label><input type="text" id="rep-name" placeholder="任意"></div></div>`
             + `<div class="rep-2col"><div class="rep-row"><label>住所（町名）</label><input type="text" id="rep-town" value="${escHtml(parts.town)}"></div>`
             + `<div class="rep-row"><label>住所（番地）</label><input type="text" id="rep-banchi" value="${escHtml(parts.banchi)}"></div></div>`
-            + `<div class="rep-2col"><div class="rep-row"><label>性別</label><select id="rep-gender"><option value="">—</option><option>男性</option><option>女性</option><option>その他</option></select></div>`
-            + `<div class="rep-row"><label>年代</label><select id="rep-age"><option value="">—</option><option>10代</option><option>20代</option><option>30代</option><option>40代</option><option>50代</option><option>60代</option><option>70代</option><option>80代以上</option></select></div></div>`
+            + `<div class="rep-2col"><div class="rep-row rep-hl"><label>性別</label><select id="rep-gender"><option value="">—</option><option>男性</option><option>女性</option><option>その他</option></select></div>`
+            + `<div class="rep-row rep-hl"><label>年代</label><select id="rep-age"><option value="">—</option><option>10代</option><option>20代</option><option>30代</option><option>40代</option><option>50代</option><option>60代</option><option>70代</option><option>80代以上</option></select></div></div>`
             + langRow + interestRow
-            + `<div class="rep-row"><label>訪問の内容</label><textarea id="rep-content" placeholder="状況や対応の記録（任意）"></textarea></div>`
+            + `<div class="rep-row rep-hl"><label>訪問の内容</label><textarea id="rep-content" placeholder="状況や対応の記録（任意）"></textarea></div>`
             + `<div class="rep-actions"><button class="rep-cancel" onclick="closeReportForm()">キャンセル</button><button class="rep-submit" onclick="submitReportForm()">送信して登録</button></div>`;
-        updateLangNote(); // 言語注記（〇〇語（…））の初期表示
         document.getElementById('report-form-modal').style.display = 'flex';
     }
     function closeReportForm() {
@@ -4482,11 +4494,6 @@
         if (!lang) return '';
         const m = LANG_MASTER.find(x => x.lang === lang);
         return lang + '（' + (m && m.link ? '対象言語の会衆へ連携' : '連携の取り決め無し') + '）';
-    }
-    function updateLangNote() {
-        const sel = document.getElementById('rep-language');
-        const note = document.getElementById('rep-lang-note');
-        if (sel && note) note.textContent = sel.value ? langLinkLabel_(sel.value) : '';
     }
     let reportSubmitting = false; // 送信中フラグ（二重送信の保険。reportCtx クリアと二重で防ぐ）
     function submitReportForm() {

@@ -149,7 +149,7 @@
         /* ── 処理中インジケーター（サーバー通信中に表示） ── */
         /* 更新中の操作ブロック用オーバーレイ（クリックを吸収して操作不可にする） */
         /* busy はモーダル類（住所10002・管理10003・確認10005）より上＝どの画面の操作でも見える最前面に置く */
-        #busy-overlay { position: absolute; inset: 0; z-index: 10006; background: rgba(0,0,0,0.06); display: none; cursor: progress; }
+        #busy-overlay { position: absolute; inset: 0; z-index: 10009; background: rgba(0,0,0,0.06); display: none; cursor: progress; } /* 報告フォーム(#report-form-modal=10008)より前面＝送信中はオーバーレイがモーダルも覆って操作をブロックする */
         /* 住所の「号」選択モーダル */
         #go-pick-overlay { position: absolute; inset: 0; z-index: 10007; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; }
         #go-pick-card { background: #fff; border-radius: 10px; padding: 16px; width: 88%; max-width: 360px; max-height: 80vh; overflow: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
@@ -169,7 +169,7 @@
         /* 進捗モニタリングの達成度バー */
         .prog-bar { height: 9px; border-radius: 5px; background: #d2d8dd; overflow: hidden; margin-top: 3px; }
         .prog-bar > span { display: block; height: 100%; border-radius: 5px; }
-        #busy-indicator { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 10007; background: rgba(44,62,80,0.92); color: #fff; padding: 10px 18px; border-radius: 20px; font-size: 14px; display: none; align-items: center; gap: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.35); }
+        #busy-indicator { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 10010; background: rgba(44,62,80,0.92); color: #fff; padding: 10px 18px; border-radius: 20px; font-size: 14px; display: none; align-items: center; gap: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.35); }
         #busy-indicator .spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.35); border-top-color: #fff; border-radius: 50%; animation: busy-spin 0.7s linear infinite; }
         /* 楽観的更新の「保存中」バッジ：操作はブロックしない（pointer-events:none）。画面下に控えめに出す。 */
         #saving-indicator { position: absolute; bottom: 26px; left: 50%; transform: translateX(-50%); z-index: 10005; background: rgba(44,62,80,0.82); color: #fff; padding: 6px 13px; border-radius: 16px; font-size: 13px; display: none; align-items: center; gap: 7px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); pointer-events: none; }
@@ -354,6 +354,7 @@
         .rep-row input[type="text"], .rep-row input[type="date"], .rep-row select, .rep-row textarea { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 15px; font-family: inherit; background: #fff; }
         .rep-row textarea { resize: vertical; min-height: 56px; }
         .rep-lang-note { margin-top: 4px; font-size: 13px; font-weight: bold; color: #6a4fa0; }
+        .rep-row.rep-hl input[type="text"], .rep-row.rep-hl select, .rep-row.rep-hl textarea { background: #FFF9DD; } /* 手入力の個人情報欄（名前/性別/年代/関心/内容）は薄黄色＝新規登録フォームの主要入力欄と統一 */
         .lang-note { font-size: 12px; font-weight: bold; color: #6a4fa0; margin: 2px 0 4px; }
         .rep-2col { display: flex; gap: 8px; }
         .rep-2col > .rep-row { flex: 1; min-width: 0; }
