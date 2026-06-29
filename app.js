@@ -12,7 +12,7 @@
     const MY_TOKEN = 'pk.eyJ1IjoidG9ydW8xMTA0IiwiYSI6ImNtcTdlOGp2MzBhY3QycXBocno2OHQ5dmoifQ.bfkHvR5OmkacGJsDorHL5Q';
     mapboxgl.accessToken = MY_TOKEN;
     // ↓ デプロイした GAS Webアプリの URL（.../exec）に置き換える
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbw5O7ed8fBTPBLtqVAXBom_zSBs6-9pFOt6gZOL8zEsBzrQW2pNLtu5CFzvIsoCAFsT/exec";
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbz2ILxDb8YTGXUhrphRKDd8_Mx8R9-5LeuW2Qce7nNFcwtr5iG27_G8WNlOofgSpw9j/exec";
     // ↓ Google Cloud で発行した OAuth クライアントID（code_api.gs と同一値）
     const GOOGLE_CLIENT_ID = "273556684740-01e17ja1as1pchs4cvlfqvh67vbt51l3.apps.googleusercontent.com";
     // ↓ 地図スタイル（Mapbox Studio のスタイルURL。標準に戻す場合は 'mapbox://styles/mapbox/streets-v12'）
@@ -1740,6 +1740,8 @@
     // 入力フォームや詳細ポップアップが開いていれば閉じる。閉じたものがあれば true を返す。
     function closeOpenForms() {
         let closed = false;
+        const reportModal = document.getElementById('report-form-modal');
+        if (reportModal && reportModal.style.display === 'flex') { closeReportForm(); return true; } // 最前面の報告フォームを先に閉じる
         const infoCopy = document.getElementById('info-copy-modal');
         if (infoCopy && infoCopy.style.display === 'flex') { closeInfoCopy(); return true; } // 最前面の情報コピーを先に閉じる
         const appModal = document.getElementById('app-modal');
@@ -4328,6 +4330,11 @@
         const idx = currentData.findIndex(d => d.rowNumber === rowNumber);
         if (idx < 0) return;
         if (currentData[idx].属性 === attribute) return; // 同値スキップ
+        // 訪問拒否・外国語は個人情報を伴うため、直接更新せず報告フォームを開く（送信成功時にサーバ側で属性も更新）
+        if (attribute === '訪問拒否' || attribute === '外国語') {
+            openReportForm({ reportType: attribute, kind: '戸建て', rowNumber: rowNumber, item: currentData[idx] });
+            return;
+        }
 
         enqueueOptimistic(rowNumber, {
             snapshot: () => { const it = currentData.find(d => d.rowNumber === rowNumber); return { 属性: it.属性, 履歴データ: it.履歴データ }; },
@@ -4349,7 +4356,99 @@
     // 部屋の属性（訪問可/訪問拒否/外国語/空き家）の更新。操作ログも履歴に残す（addHistory=true）。
     function saveRoomState(buildingRow, roomNum, state) {
         if(!state) return;
+        // 訪問拒否・外国語は個人情報を伴うため、直接更新せず報告フォームを開く（送信成功時にサーバ側で部屋属性も更新）
+        if (state === '訪問拒否' || state === '外国語') {
+            const item = currentData.find(d => d.rowNumber === buildingRow);
+            if (item && roomStatusOf(item, roomNum) === state) return; // 既に同じ属性ならフォームを開かない
+            openReportForm({ reportType: state, kind: '集合住宅', buildingRow: buildingRow, roomNum: roomNum, item: item });
+            return;
+        }
         applyRoomChange(buildingRow, roomNum, state, true);
+    }
+
+    /* ── 報告フォーム（拒否・外国語）──────────────────────────────
+       戸建て/集合住宅で属性を「訪問拒否」「外国語」にする時に開く。氏名・年齢などの
+       個人情報は本体(TargetList)に残さず、GASの report アクション経由で別の管理シートへ送る。
+       送信成功でサーバ側が本体の属性も更新するので、最新データでインプレース反映する。
+       住所はピンの住所から町名/番地に粗く分割した初期値（手修正可）。リンクは infoCopy と同じ式で自動生成。 */
+    let reportCtx = null;
+    // 「○○N丁目M番…」→ 町名=「○○N丁目」/番地=「M番…」。丁目が無ければ全体を町名に（手修正前提で粗くてよい）。
+    function splitAddressForReport_(addr) {
+        const s = String(addr || '').trim();
+        let m = s.match(/^(.+?\d+丁目)(.*)$/);
+        if (m) return { town: m[1], banchi: m[2].trim() };
+        m = s.match(/^(.+?町)(\d.*)$/); // 丁目なし地区（○○町M番…）
+        if (m) return { town: m[1], banchi: m[2].trim() };
+        return { town: s, banchi: '' };
+    }
+    function openReportForm(ctx) {
+        const item = ctx.item;
+        if (!item) { showToast('対象が見つかりませんでした', true); return; }
+        const isShuga = ctx.kind === '集合住宅';
+        const lat = parseFloat(item.緯度), lng = parseFloat(item.経度);
+        const parts = splitAddressForReport_(effectiveAddress_(item));
+        const rowForLink = isShuga ? ctx.buildingRow : ctx.rowNumber;
+        reportCtx = {
+            reportType: ctx.reportType, kind: ctx.kind,
+            rowNumber: ctx.rowNumber, buildingRow: ctx.buildingRow, roomNum: ctx.roomNum,
+            buildingName: isShuga ? (item['建物名 / 世帯名'] || '') : '',
+            app: location.origin + location.pathname + '?pin=' + rowForLink,
+            map: (!isNaN(lat) && !isNaN(lng)) ? ('https://www.google.com/maps/search/?api=1&query=' + lat + ',' + lng) : ''
+        };
+        const t = new Date();
+        const todayStr = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
+        const isForeign = ctx.reportType === '外国語';
+        document.getElementById('report-form-title').textContent = (isForeign ? '🌐 外国語' : '🚫 訪問拒否') + ' の報告';
+        const metaHtml = isShuga
+            ? `<div class="rep-meta">建物：${escHtml(reportCtx.buildingName || '（名称なし）')}　／　部屋：<b>${escHtml(roomTag(ctx.roomNum))}</b><br>氏名などの個人情報はアプリには保存されず、担当の管理シートにのみ記録されます。</div>`
+            : `<div class="rep-meta">氏名などの個人情報はアプリには保存されず、担当の管理シートにのみ記録されます。</div>`;
+        const langRow = `<div class="rep-row"><label>言語${isForeign ? '<span class="req">＊</span>' : '（任意）'}</label><input type="text" id="rep-language" placeholder="例：ベトナム語、中国語"></div>`;
+        const interestRow = isForeign
+            ? `<div class="rep-row"><label>関心の有無</label><select id="rep-interest"><option value="">—</option><option>あり</option><option>なし</option><option>不明</option></select></div>`
+            : `<input type="hidden" id="rep-interest" value="">`;
+        document.getElementById('report-form-body').innerHTML = metaHtml
+            + `<div class="rep-2col"><div class="rep-row"><label>訪問日</label><input type="date" id="rep-visitdate" value="${todayStr}"></div>`
+            + `<div class="rep-row"><label>住所（町名）</label><input type="text" id="rep-town" value="${escHtml(parts.town)}"></div></div>`
+            + `<div class="rep-2col"><div class="rep-row"><label>住所（番地）</label><input type="text" id="rep-banchi" value="${escHtml(parts.banchi)}"></div>`
+            + `<div class="rep-row"><label>お名前</label><input type="text" id="rep-name" placeholder="任意"></div></div>`
+            + `<div class="rep-2col"><div class="rep-row"><label>性別</label><select id="rep-gender"><option value="">—</option><option>男性</option><option>女性</option><option>その他</option></select></div>`
+            + `<div class="rep-row"><label>年代</label><select id="rep-age"><option value="">—</option><option>10代</option><option>20代</option><option>30代</option><option>40代</option><option>50代</option><option>60代</option><option>70代</option><option>80代以上</option></select></div></div>`
+            + langRow + interestRow
+            + `<div class="rep-row"><label>訪問の内容</label><textarea id="rep-content" placeholder="状況や対応の記録（任意）"></textarea></div>`
+            + `<div class="rep-actions"><button class="rep-cancel" onclick="closeReportForm()">キャンセル</button><button class="rep-submit" onclick="submitReportForm()">送信して登録</button></div>`;
+        document.getElementById('report-form-modal').style.display = 'flex';
+    }
+    function closeReportForm() {
+        document.getElementById('report-form-modal').style.display = 'none';
+        reportCtx = null;
+    }
+    function submitReportForm() {
+        const c = reportCtx;
+        if (!c) return;
+        const val = id => { const el = document.getElementById(id); return el ? String(el.value || '').trim() : ''; };
+        const language = val('rep-language');
+        if (c.reportType === '外国語' && !language) { showToast('言語を入力してください', true); return; } // 外国語は言語必須
+        const params = {
+            reportType: c.reportType, kind: c.kind,
+            visitDate: val('rep-visitdate'), town: val('rep-town'), banchi: val('rep-banchi'),
+            name: val('rep-name'), gender: val('rep-gender'), age: val('rep-age'),
+            language: language, interest: val('rep-interest'), content: val('rep-content'),
+            appLink: c.app, mapLink: c.map
+        };
+        if (c.kind === '集合住宅') { params.buildingRow = c.buildingRow; params.roomNum = c.roomNum; params.buildingName = c.buildingName; }
+        else { params.rowNumber = c.rowNumber; }
+        showBusy('送信中…');
+        apiCall('report', params)
+            .then(latest => {
+                const kind = c.kind, br = c.buildingRow, rn = c.roomNum, row = c.rowNumber;
+                closeReportForm();
+                showToast('報告を送信しました', false);
+                // サーバ側で本体の属性も更新済み → 最新データでインプレース反映（吹き出しは開いたまま色/グリッドだけ更新）
+                if (kind === '集合住宅') reconcileShugaRoom(br, rn, latest);
+                else reconcileKodate(row, latest);
+            })
+            .catch(handleServerError)
+            .finally(hideBusy);
     }
 
     // ピン（地点）の削除。実行前に必ず確認する

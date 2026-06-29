@@ -134,6 +134,14 @@
     </div>
 </div>
 
+<!-- 報告フォーム（戸建て/集合住宅で属性を「訪問拒否」「外国語」にする時に開く。氏名等の個人情報は別の管理シートへ送る）。Esc/✕/背景で閉じる -->
+<div id="report-form-modal" onclick="if(event.target===this)closeReportForm()">
+    <div id="report-form-card">
+        <div id="report-form-head"><span id="report-form-title">報告フォーム</span><button onclick="closeReportForm()">✕</button></div>
+        <div id="report-form-body"></div>
+    </div>
+</div>
+
 <!-- 印刷用表示（admin・PC/タブレット。赤枠内のピンを白黒のSVG図で表示）。Esc/✕で閉じる -->
 <div id="print-view"><div id="print-view-body"></div></div>
 
