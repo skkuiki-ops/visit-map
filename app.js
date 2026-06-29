@@ -766,6 +766,37 @@
     const SHUGA_SMALL_HIDE_BELOW_ZOOM = 15;
     // 大きめ集合住宅（13戸以上＝マンション型）は zoom 14.5未満で隠す（＝14.5以上で表示。小より広域から見える）。
     const SHUGA_LARGE_HIDE_BELOW_ZOOM = 14.5;
+
+    // ── ピン表示制限（lender以下）: 戸建ては「担当区域内」だけ表示する ──
+    // これは表示の制限（getMapData は全件返す＝サーバ側のデータ遮断ではない）。集合住宅・施設・manager以上は常に全表示。
+    // 番地判定は deriveAddress 同様フロントで実施し、マーカーごとに1回だけ算出してキャッシュする（deriveAddress は重い）。
+    let visibleAreaSet = null; // Set<番地ラベル>。null=未適用（manager以上／取得前／取得失敗＝制限しない＝可用性優先）
+    function areaRestrictActive() { return !!visibleAreaSet && (ME.level || 0) <= 1; }
+    function loadVisibleAreas() {
+        if ((ME.level || 0) >= 2) { visibleAreaSet = null; return; } // manager以上は全表示なので取得不要
+        Promise.all([apiCall('getMyAreas', {}), apiCall('getSharedAreas', {})]).then(([mine, shared]) => {
+            const set = new Set();
+            (mine || []).forEach(a => { const k = addrWithoutGo(a.area); if (k) set.add(k); });   // 個人＋所属グループの貸出区域
+            (shared || []).forEach(a => { const k = addrWithoutGo(a.area); if (k) set.add(k); });  // 全体利用の区域
+            visibleAreaSet = set;   // 取得成功（空でも適用＝担当区域が無ければ戸建ては非表示）
+            applyZoomVisibility();  // 既存マーカーへ即反映
+        }).catch(() => { visibleAreaSet = null; }); // 取得失敗時は制限しない（可用性優先）
+    }
+    // 戸建てピンが現在のユーザーに見えてよいか（区域制限）。集合住宅・施設・manager以上は常に true。
+    function pinAreaAllowed(m) {
+        if (!areaRestrictActive()) return true;
+        if (!m._isKodate) return true; // 集合住宅・施設は常時表示（制限対象は戸建てのみ）
+        if (m._areaLabel === undefined) {
+            if (!addrPoints || !addrPoints.length) return true; // 住所データ未読込 → まだ隠さない（loadAddrPoints 後に再評価）
+            const it = m._item || {};
+            const stored = (it.住所 && it.住所 !== '-' && String(it.住所).trim() !== '') ? addrWithoutGo(it.住所) : '';
+            const ll = m.getLngLat();
+            m._areaLabel = stored || addrWithoutGo(deriveAddress(ll.lng, ll.lat) || ''); // 1回だけ算出してキャッシュ
+        }
+        if (!m._areaLabel) return true; // 番地が判定できないピンは隠さない（取りこぼし防止）
+        return visibleAreaSet.has(m._areaLabel);
+    }
+
     function applyZoomVisibility() {
         const zoom = map.getZoom();
         const showKodate = zoom >= KODATE_HIDE_BELOW_ZOOM;
@@ -783,6 +814,7 @@
                 // 施設はズームでは常時表示
                 show = zoomShow;
             }
+            if (show && !pinAreaAllowed(m)) show = false; // 区域制限はフィルタ・ズームより優先（戸建てのみ・lender以下）
             m.getElement().style.display = show ? '' : 'none';
         });
         const sb = document.getElementById('scale-btn'); if (sb) sb.classList.toggle('filtering', filterOn); // 「印」ボタンにフィルタ有効の目印
@@ -1407,6 +1439,7 @@
                 addrPoints = Array.isArray(d) ? d : [];
                 // 読み込み前に開いていた吹き出しがあれば住所を反映する
                 document.querySelectorAll('.mapboxgl-popup').forEach(p => fillDerivedAddress(p));
+                try { applyZoomVisibility(); } catch (e) {} // 住所データが揃ったので区域制限（戸建ての番地判定）を再評価
             })
             .catch(() => { addrPoints = []; });
     }
@@ -2320,6 +2353,7 @@
             document.body.classList.toggle('role-lend', lv >= 1);
             document.body.classList.toggle('role-manage', lv >= 2);
             document.body.classList.toggle('role-sys', lv >= 3);
+            loadVisibleAreas(); // ピン表示制限（lender以下）の閲覧可能区域を取得して反映（manager以上は no-op）
             // 番地データ（マスタ＝GASのAREA_DEF）を受け取り、フォールバックを上書きして保持する
             if (me && me.areaDef) {
                 AREA_DATA = me.areaDef;
@@ -2503,8 +2537,12 @@
               <div class="vmh-s"><span class="vmh-num">2</span><div><div class="vmh-act"><b>借りる人</b> を選ぶ（グループ → ユーザー）</div><div class="vmh-dt">「全体利用（全員で共同利用）」も選べます</div></div></div>
               <div class="vmh-s"><span class="vmh-num">3</span><div><div class="vmh-act"><b>区域</b> を選ぶ（地区 → 丁目 → 範囲）</div><div class="vmh-dt">番地ごとに件数・状態・地図プレビューが出ます</div></div></div>
               <div class="vmh-s"><span class="vmh-num">4</span><div><div class="vmh-act">返却期日を入れて <span class="vmh-mbtn" style="background:#5E9DB8;border-color:#5E9DB8;color:#fff;">貸出</span></div><div class="vmh-dt">他人・グループ・全体利用の区域の返却もこの画面から</div></div></div>
-            </div>
-            <div class="vmh-sub">📈 進捗モニタリング　<span style="font-weight:normal;font-size:11px;color:#888;">※貸出係のみ</span></div>
+            </div>`;
+        }
+        // 進捗モニタリングは管理者(level>=2)のみ
+        if (typeof ME !== 'undefined' && ME && ME.level >= 2) {
+            html += `
+            <div class="vmh-sub">📈 進捗モニタリング　<span style="font-weight:normal;font-size:11px;color:#888;">※管理者のみ</span></div>
             <div class="vmh-steps">
               <div class="vmh-s"><span class="vmh-num">1</span><div><div class="vmh-act">左下メニュー → <span class="vmh-mbtn" style="background:#2E5090;border-color:#2E5090;color:#fff;">📈 進捗モニタリング</span></div><div class="vmh-dt">地区→丁目ごとに訪問の進み具合をバーで表示</div></div></div>
               <div class="vmh-s"><span class="vmh-num">2</span><div><div class="vmh-act">合算／戸建て／部屋／ピン で集計を切替</div><div class="vmh-dt">「進捗が低い順」「件数が多い順」で並べ替えできます</div></div></div>
