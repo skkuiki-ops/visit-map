@@ -2241,31 +2241,29 @@
 
         const btn = document.getElementById('reg-btn');
         btn.disabled = true; btn.innerText = '登録中...';
-        // 拒否/外国語の戸建て新規だけは、報告フォームが開くまで全画面ブロック（showBusy）＝登録〜フォーム表示の間に別操作をさせない。
-        // それ以外（会えた/不在/投函/空き家 等）は従来どおり保存中バッジ（操作はブロックせず、登録完了で吹き出しが消えて次へ進める）。
-        const blockForReport = (type === '戸建て' && !!newReportType);
-        if (blockForReport) showBusy('報告フォームを準備中…'); else showSaving();
+        const reportPending = (type === '戸建て' && !!newReportType); // 拒否/外国語の戸建て新規＝先にフォームを出し、登録は裏で進める
+        const nl = parseFloat(lat), ng = parseFloat(lng);
 
-        apiCall('addNew', { data: data }).then((latestData) => {
-            if (activeNewMarker) activeNewMarker.remove();
-            activeNewMarker = null;
-            renderMarkers(latestData);
-            // 戸建てを拒否/外国語で選んで新規登録した場合は、通常で登録した直後に報告フォームを開く（☆/外は出さず、送信成功でサーバが属性を付ける）。同座標は登録不可なので座標一致で新規行を特定。
-            if (blockForReport) {
-                const nl = parseFloat(lat), ng = parseFloat(lng);
+        // どちらの経路でも「押した瞬間に」次のUIへ進め、登録(addNew)はバックグラウンドで実行する（楽観的UI）。吹き出し（新規フォーム）は即閉じる。
+        if (activeNewMarker) activeNewMarker.remove();
+        activeNewMarker = null;
+
+        const addP = apiCall('addNew', { data: data })
+            .then((latestData) => { currentData = latestData; renderMarkers(latestData); return latestData; });
+
+        if (reportPending) {
+            // 押す→即フォーム表示。rowNumber は登録完了後に解決して reportCtx へ注入する（送信時に未確定なら待つ）。
+            const rowReady = addP.then((latestData) => {
                 const ni = latestData.find(d => d.種別 === '戸建て' && Math.abs(parseFloat(d.緯度) - nl) < 1e-7 && Math.abs(parseFloat(d.経度) - ng) < 1e-7);
-                if (ni) openReportForm({ reportType: newReportType, kind: '戸建て', rowNumber: ni.rowNumber, item: ni });
-                else showToast('登録しましたが報告フォームを開けませんでした', true); // 念のため（通常は座標一致で見つかる）
-            } else {
-                showDone('登録しました'); // 通常の新規＝登録完了バッジを出して吹き出しは閉じる
-            }
-        }).catch((err) => {
-            btn.disabled = false; btn.innerText = '登録';
-            // 失敗時は選択ボタンの無効化も解除して再操作できるようにする（pickNewAndSubmit で無効化したぶん）
-            const root = activeNewMarker && activeNewMarker.getPopup() ? activeNewMarker.getPopup().getElement() : null;
-            if (root) root.querySelectorAll('.choice-btn').forEach(b => { b.disabled = false; b.style.pointerEvents = ''; });
-            handleServerError(err);
-        }).finally(() => { if (blockForReport) hideBusy(); else hideSaving(); });
+                return ni ? ni.rowNumber : null;
+            }).catch((err) => { handleServerError(err); return null; }); // 登録失敗＝通知。送信時は rowReady=null で弾く
+            const addrForReport = newPinAddress || (deriveAddress(ng, nl) || '');
+            openReportForm({ reportType: newReportType, kind: '戸建て', newPin: { lat: nl, lng: ng, addr: addrForReport }, rowReady: rowReady });
+        } else {
+            // 通常の新規＝押したら吹き出しが消えて次へ。保存中バッジを出し、登録完了で控えめに「登録しました」。
+            showSaving();
+            addP.then(() => { showDone('登録しました'); }).catch(handleServerError).finally(hideSaving);
+        }
     }
 
     /* ── データキャッシュ（起動の先行表示用） ──
@@ -4432,20 +4430,27 @@
         return { town: s, banchi: '' };
     }
     function openReportForm(ctx) {
-        const item = ctx.item;
-        if (!item) { showToast('対象が見つかりませんでした', true); return; }
-        reportSubmitting = false; // フォームを開くたびに送信中フラグをクリア（前回送信の残留で押せなくなるのを防ぐ）
         const isShuga = ctx.kind === '集合住宅';
-        const lat = parseFloat(item.緯度), lng = parseFloat(item.経度);
-        const parts = splitAddressForReport_(effectiveAddress_(item));
+        const isNewPin = !!ctx.newPin; // 戸建て新規＝item がまだ無く、登録(addNew)が裏で進行中（rowNumber は後で注入）
+        const item = ctx.item;
+        if (!item && !isNewPin) { showToast('対象が見つかりませんでした', true); return; }
+        reportSubmitting = false; // フォームを開くたびに送信中フラグをクリア（前回送信の残留で押せなくなるのを防ぐ）
+        const lat = isNewPin ? ctx.newPin.lat : parseFloat(item.緯度);
+        const lng = isNewPin ? ctx.newPin.lng : parseFloat(item.経度);
+        const parts = splitAddressForReport_(isNewPin ? ctx.newPin.addr : effectiveAddress_(item));
         const rowForLink = isShuga ? ctx.buildingRow : ctx.rowNumber;
         reportCtx = {
             reportType: ctx.reportType, kind: ctx.kind,
-            rowNumber: ctx.rowNumber, buildingRow: ctx.buildingRow, roomNum: ctx.roomNum,
-            buildingName: isShuga ? (item['建物名 / 世帯名'] || '') : '',
-            app: location.origin + location.pathname + '?pin=' + rowForLink,
-            map: (!isNaN(lat) && !isNaN(lng)) ? ('https://www.google.com/maps/search/?api=1&query=' + lat + ',' + lng) : ''
+            rowNumber: ctx.rowNumber || null, buildingRow: ctx.buildingRow, roomNum: ctx.roomNum,
+            buildingName: (isShuga && item) ? (item['建物名 / 世帯名'] || '') : '',
+            app: rowForLink ? (location.origin + location.pathname + '?pin=' + rowForLink) : '',
+            map: (!isNaN(lat) && !isNaN(lng)) ? ('https://www.google.com/maps/search/?api=1&query=' + lat + ',' + lng) : '',
+            rowReady: ctx.rowReady || null
         };
+        // 新規（戸建て）＝登録完了で rowNumber／アプリリンクを後から注入する
+        if (reportCtx.rowReady) {
+            reportCtx.rowReady.then((rn) => { if (rn && reportCtx) { reportCtx.rowNumber = rn; reportCtx.app = location.origin + location.pathname + '?pin=' + rn; } });
+        }
         const t = new Date();
         const todayStr = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
         const isForeign = ctx.reportType === '外国語';
@@ -4514,33 +4519,41 @@
         const cancelBtn = document.querySelector('#report-form-body .rep-cancel');
         if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '送信中…'; }
         if (cancelBtn) cancelBtn.disabled = true;
-        const params = {
+        const fields = {
             reportType: c.reportType, kind: c.kind,
             visitDate: val('rep-visitdate'), town: val('rep-town'), banchi: val('rep-banchi'),
             name: val('rep-name'), gender: val('rep-gender'), age: val('rep-age'),
             language: language, interest: val('rep-interest'), content: val('rep-content'),
-            appLink: c.app, mapLink: c.map
+            mapLink: c.map
         };
-        if (c.kind === '集合住宅') { params.buildingRow = c.buildingRow; params.roomNum = c.roomNum; params.buildingName = c.buildingName; }
-        else { params.rowNumber = c.rowNumber; }
         showBusy('送信中…');
-        apiCall('report', params)
-            .then(latest => {
-                const kind = c.kind, br = c.buildingRow, rn = c.roomNum, row = c.rowNumber;
-                closeReportForm();
-                showToast('報告を送信しました', false);
-                // サーバ側で本体の属性も更新済み → 最新データでインプレース反映（吹き出しは開いたまま色/グリッドだけ更新）
-                if (kind === '集合住宅') reconcileShugaRoom(br, rn, latest);
-                else reconcileKodate(row, latest);
-            })
-            .catch(err => {
-                // 送信失敗：再送できるよう reportCtx と両ボタンを元に戻す（フォームは閉じない）
-                reportCtx = c;
-                if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '送信して登録'; }
-                if (cancelBtn) cancelBtn.disabled = false;
-                handleServerError(err);
-            })
-            .finally(() => { reportSubmitting = false; hideBusy(); });
+        // 新規（戸建て）は登録(addNew)が裏で進行中のことがある。rowNumber が未確定なら完了を待ってから送信する。
+        const ensureRow = c.rowReady ? c.rowReady.then(rn => rn || c.rowNumber) : Promise.resolve(c.rowNumber);
+        let resolvedRow = null;
+        ensureRow.then(rn => {
+            resolvedRow = rn;
+            const params = Object.assign({}, fields);
+            if (c.kind === '集合住宅') {
+                params.buildingRow = c.buildingRow; params.roomNum = c.roomNum; params.buildingName = c.buildingName; params.appLink = c.app;
+            } else {
+                if (!rn) throw new Error('登録がまだ完了していません。少し待ってからもう一度お試しください。');
+                params.rowNumber = rn;
+                params.appLink = location.origin + location.pathname + '?pin=' + rn;
+            }
+            return apiCall('report', params);
+        }).then(latest => {
+            closeReportForm();
+            showToast('報告を送信しました', false);
+            // サーバ側で本体の属性も更新済み → 最新データでインプレース反映
+            if (c.kind === '集合住宅') reconcileShugaRoom(c.buildingRow, c.roomNum, latest);
+            else reconcileKodate(resolvedRow, latest);
+        }).catch(err => {
+            // 送信失敗：再送できるよう reportCtx と両ボタンを元に戻す（フォームは閉じない）
+            reportCtx = c;
+            if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '送信して登録'; }
+            if (cancelBtn) cancelBtn.disabled = false;
+            handleServerError(err);
+        }).finally(() => { reportSubmitting = false; hideBusy(); });
     }
 
     // ピン（地点）の削除。実行前に必ず確認する
