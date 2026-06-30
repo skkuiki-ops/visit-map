@@ -3117,9 +3117,9 @@
        枠＋薄塗り＋枠内の丁目/番地ラベルを描く。ラベルをタップするとその区域を赤枠＋通常利用
        （既存 enterAreaFromList）へ切り替える。終了は下部バーの✕／Esc／サインアウト。 */
     const OVERVIEW_COLORS = {
-        personal: { line: '#1971c2', fill: '#4dabf7' }, // 青
-        group:    { line: '#2f9e44', fill: '#69db7c' }, // 緑
-        whole:    { line: '#e8590c', fill: '#ffa94d' }  // オレンジ
+        personal: { line: '#155d9e', fill: '#4dabf7' }, // 青
+        group:    { line: '#26823a', fill: '#69db7c' }, // 緑
+        whole:    { line: '#cc4c08', fill: '#ffa94d' }  // オレンジ
     };
     // 区域ラベル「○○N丁目M番」→ ポリゴン(blocks.geojson)＋代表点。address_points.json でオフライン照合（ジオコーディング不要）。
     function resolveAreaFeature(areaLabel) {

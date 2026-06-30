@@ -66,11 +66,11 @@
         .area-allbtn:active { transform:scale(0.99); }
         .area-allbtn .aa-ttl { font-size:18px; font-weight:bold; }
         .area-allbtn .aa-sub { font-size:12px; }
-        .area-allbtn.aa-personal { background:#e7f1fb; border-color:#1971c2; color:#0f4c8f; }
+        .area-allbtn.aa-personal { background:#e7f1fb; border-color:#155d9e; color:#0f4c8f; }
         .area-allbtn.aa-personal .aa-sub { color:#3f78b0; }
-        .area-allbtn.aa-group { background:#e7f6ea; border-color:#2f9e44; color:#1c6e31; }
+        .area-allbtn.aa-group { background:#e7f6ea; border-color:#26823a; color:#1c6e31; }
         .area-allbtn.aa-group .aa-sub { color:#3f9255; }
-        .area-allbtn.aa-whole { background:#fdeee2; border-color:#e8590c; color:#9a3a08; }
+        .area-allbtn.aa-whole { background:#fdeee2; border-color:#cc4c08; color:#9a3a08; }
         .area-allbtn.aa-whole .aa-sub { color:#b5642f; }
         .dist-acc { border:1px solid #d6dde2; border-radius:10px; margin-bottom:8px; overflow:hidden; background:#fff; }
         .dist-acc > summary { list-style:none; cursor:pointer; display:flex; align-items:center; gap:8px; padding:11px 14px; font-size:15px; font-weight:bold; color:#356B82; background:#f3f7f9; }
@@ -208,9 +208,12 @@
         .menu-item.need-lend, .menu-item.need-manage, .menu-item.need-sys { display: none; } /* 役割で出し分け */
         body.role-lend .menu-item.need-lend, body.role-manage .menu-item.need-manage, body.role-sys .menu-item.need-sys { display: block; background: #eef4f7; border-left: 3px solid #5E9DB8; } /* 権限項目は淡い青＋左の青帯で区別 */
         /* カテゴリ色分け：個人=青／グループ=緑／全体利用=オレンジ（地図の枠色と統一）／使い方=橙 */
-        .menu-item.cat-personal { background: #e7f1fb; border-left: 3px solid #1971c2; }
-        .menu-item.cat-group { background: #e7f6ea; border-left: 3px solid #2f9e44; }
-        .menu-item.cat-whole { background: #fdeee2; border-left: 3px solid #e8590c; }
+        .menu-item.cat-personal { background: #155d9e; color: #fff; }
+        .menu-item.cat-personal:active { background: #114e85; }
+        .menu-item.cat-group { background: #26823a; color: #fff; }
+        .menu-item.cat-group:active { background: #1f6c30; }
+        .menu-item.cat-whole { background: #cc4c08; color: #fff; }
+        .menu-item.cat-whole:active { background: #ab3f06; }
         .menu-item.cat-help { background: #fbf2e0; border-left: 3px solid #D9A441; }
         .menu-section { display: none; font-size: 11px; color: #7f8c93; font-weight: bold; padding: 9px 12px 3px; border-top: 1px solid #e1e6e9; margin-top: 4px; } /* 管理者メニューの見出し（adminのみ） */
         body.role-lend .menu-section { display: block; }
@@ -251,13 +254,13 @@
         #app-modal-head button { min-width: 48px; background: #f0f0f0; border: 1px solid #ccc; border-radius: 6px; padding: 4px 8px; font-size: 13px; cursor: pointer; }
         #app-modal-body { padding: 12px; overflow-y: auto; font-size: 14px; }
         /* 区域カードのテーマ配色（個人=青／グループ=緑／全体利用=オレンジ。ヘッダー＋本文の地色で区別） */
-        #app-modal-card.app-modal-theme-personal #app-modal-head { background: #1971c2; border-bottom-color: #15579a; }
+        #app-modal-card.app-modal-theme-personal #app-modal-head { background: #155d9e; border-bottom-color: #15579a; }
         #app-modal-card.app-modal-theme-personal #app-modal-title { color: #fff; }
         #app-modal-card.app-modal-theme-personal #app-modal-body { background: #f5f9fe; }
-        #app-modal-card.app-modal-theme-group #app-modal-head { background: #2f9e44; border-bottom-color: #277f38; }
+        #app-modal-card.app-modal-theme-group #app-modal-head { background: #26823a; border-bottom-color: #277f38; }
         #app-modal-card.app-modal-theme-group #app-modal-title { color: #fff; }
         #app-modal-card.app-modal-theme-group #app-modal-body { background: #f5fbf6; }
-        #app-modal-card.app-modal-theme-whole #app-modal-head { background: #e8590c; border-bottom-color: #c44d0b; }
+        #app-modal-card.app-modal-theme-whole #app-modal-head { background: #cc4c08; border-bottom-color: #c44d0b; }
         #app-modal-card.app-modal-theme-whole #app-modal-title { color: #fff; }
         #app-modal-card.app-modal-theme-whole #app-modal-body { background: #fff8f3; }
         #app-modal-card[class*="app-modal-theme-"] #app-modal-head button { background: rgba(255,255,255,0.92); border-color: rgba(255,255,255,0.55); color: #333; }
@@ -428,13 +431,13 @@
         /* ── 区域オーバービュー（「🗺 全て表示」）── */
         /* 一覧見出し右の起動ボタン。バケット色で区別（青=個人/緑=グループ/橙=全体利用） */
         .ov-allbtn { flex: 0 0 auto; padding: 5px 10px; border-radius: 6px; border: 1.5px solid #c8cfd6; background: #fff; color: #333; font-size: 12px; font-weight: bold; white-space: nowrap; cursor: pointer; -webkit-touch-callout: none; user-select: none; touch-action: manipulation; }
-        .ov-allbtn.ov-personal { border-color: #1971c2; color: #1971c2; background: #e7f1fb; }
-        .ov-allbtn.ov-group    { border-color: #2f9e44; color: #2f9e44; background: #e7f6ea; }
-        .ov-allbtn.ov-whole    { border-color: #e8590c; color: #e8590c; background: #fdeee2; }
+        .ov-allbtn.ov-personal { border-color: #155d9e; color: #155d9e; background: #e7f1fb; }
+        .ov-allbtn.ov-group    { border-color: #26823a; color: #26823a; background: #e7f6ea; }
+        .ov-allbtn.ov-whole    { border-color: #cc4c08; color: #cc4c08; background: #fdeee2; }
         body.large-ui .ov-allbtn { font-size: 13px; padding: 6px 11px; }
         /* 枠内に出す丁目/番地ラベル（HTMLマーカー）。タップでその区域を選択（赤枠＋通常利用へ）。色は枠色に合わせてJSで上書き */
         .area-ov-label-wrap { line-height: 0; }
-        .area-ov-label { background: rgba(255,255,255,0.92); border: 1.5px solid #1971c2; color: #1971c2; border-radius: 12px; padding: 2px 7px; font-size: 12px; font-weight: bold; line-height: 1.2; white-space: nowrap; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.25); transform-origin: center center; -webkit-touch-callout: none; user-select: none; touch-action: manipulation; }
+        .area-ov-label { background: rgba(255,255,255,0.92); border: 1.5px solid #155d9e; color: #155d9e; border-radius: 12px; padding: 2px 7px; font-size: 12px; font-weight: bold; line-height: 1.2; white-space: nowrap; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.25); transform-origin: center center; -webkit-touch-callout: none; user-select: none; touch-action: manipulation; }
         body.large-ui .area-ov-label { font-size: 13px; padding: 3px 8px; }
         /* 表示モード中の操作バー（中央下。区域一覧に戻るバーと同系の見た目） */
         #area-overview-bar { position: absolute; bottom: 64px; left: 50%; transform: translateX(-50%); z-index: 9999; display: flex; align-items: center; gap: 5px; background: #2c3e50; padding: 5px; border-radius: 23px; box-shadow: 0 4px 16px rgba(0,0,0,0.22); max-width: 94%; }
