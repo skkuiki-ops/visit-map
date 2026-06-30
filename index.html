@@ -152,6 +152,11 @@
     <button id="area-list-back-main" onclick="returnToAreaList()">← 区域一覧に戻る</button>
     <button id="area-list-back-x" onclick="dismissAreaListBar()" aria-label="バーを閉じる">✕</button>
 </div>
+<!-- 区域オーバービュー（個人/グループ/全体利用の「全て表示」）中の操作バー。枠内ラベルで区域を選ぶか、✕で表示を終了 -->
+<div id="area-overview-bar" style="display:none;">
+    <span id="area-overview-label">区域を表示中</span>
+    <button id="area-overview-exit" onclick="exitAreaOverview()" aria-label="表示を終了">✕ 終了</button>
+</div>
 <button id="area-nav-btn" onclick="openAreaNav()" style="display:none;">🔍住所</button>
 
 <!-- 移動後に表示する地域名ラベル（常時表示・タップで枠/表示を消去） -->

@@ -391,6 +391,31 @@
         #area-list-back-main { padding: 11px 18px; }
         #area-list-back-x { padding: 11px 15px; font-size: 15px; border-left: 1px solid rgba(255,255,255,0.28); }
 
+        /* ── 区域オーバービュー（「🗺 全て表示」）── */
+        /* 一覧見出し右の起動ボタン。バケット色で区別（青=個人/緑=グループ/橙=全体利用） */
+        .ov-allbtn { flex: 0 0 auto; padding: 5px 10px; border-radius: 6px; border: 1.5px solid #c8cfd6; background: #fff; color: #333; font-size: 12px; font-weight: bold; white-space: nowrap; cursor: pointer; -webkit-touch-callout: none; user-select: none; touch-action: manipulation; }
+        .ov-allbtn.ov-personal { border-color: #1971c2; color: #1971c2; background: #e7f1fb; }
+        .ov-allbtn.ov-group    { border-color: #2f9e44; color: #2f9e44; background: #e7f6ea; }
+        .ov-allbtn.ov-whole    { border-color: #e8590c; color: #e8590c; background: #fdeee2; }
+        body.large-ui .ov-allbtn { font-size: 13px; padding: 6px 11px; }
+        /* 枠内に出す丁目/番地ラベル（HTMLマーカー）。タップでその区域を選択（赤枠＋通常利用へ）。色は枠色に合わせてJSで上書き */
+        .area-ov-label { background: rgba(255,255,255,0.92); border: 1.5px solid #1971c2; color: #1971c2; border-radius: 12px; padding: 2px 7px; font-size: 12px; font-weight: bold; white-space: nowrap; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.25); -webkit-touch-callout: none; user-select: none; touch-action: manipulation; }
+        body.large-ui .area-ov-label { font-size: 13px; padding: 3px 8px; }
+        /* 表示モード中の操作バー（中央下。区域一覧に戻るバーと同系の見た目） */
+        #area-overview-bar { position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%); z-index: 9999; display: flex; align-items: stretch; background: #34495e; border-radius: 22px; box-shadow: 0 2px 8px rgba(0,0,0,0.35); overflow: hidden; max-width: 92%; }
+        #area-overview-label { color: #fff; font-weight: bold; font-size: 14px; padding: 11px 16px; display: flex; align-items: center; }
+        #area-overview-exit { background: transparent; color: #fff; border: none; border-left: 1px solid rgba(255,255,255,0.28); font-weight: bold; cursor: pointer; font-size: 15px; padding: 11px 16px; white-space: nowrap; }
+        /* 表示モード中はポップアップを「閲覧のみ」に：編集/削除/詳細ボタンを隠し、インライン編集を無効化（書き込みは apiCall でも遮断） */
+        body.overview-mode .popup-content .detail-only,
+        body.overview-mode .popup-content .detail-toggle,
+        body.overview-mode .popup-content #room-action-area { display: none !important; }
+        body.overview-mode .popup-content .choice-grid,
+        body.overview-mode .popup-content .choice-btn,
+        body.overview-mode .popup-content .cell-active,
+        body.overview-mode .popup-content .hist-row,
+        body.overview-mode .popup-content .derived-addr,
+        body.overview-mode .popup-content .memo-section textarea { pointer-events: none; }
+
         /* ── 確認ダイアログ（ネイティブ confirm/alert の代替・独自UI） ── */
         #app-confirm-overlay { position: absolute; inset: 0; z-index: 10005; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; padding: 20px; }
         #app-confirm-card { background: #fff; border-radius: 12px; width: min(340px, 92vw); box-shadow: 0 6px 24px rgba(0,0,0,0.35); padding: 18px 16px 14px; }

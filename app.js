@@ -174,6 +174,7 @@
         document.body.classList.remove('role-lend', 'role-manage', 'role-sys');
         ME = { email: '', name: '', group: '', level: 0 };
         closeAreaNav();
+        exitAreaOverview(); // 区域オーバービュー表示中なら解除（枠・ラベル・モードを片付ける）
         clearBanchiBox();
         didAutoGeolocate = false; // 次回サインイン時にまた現在地へ寄せる
         document.getElementById('area-label').style.display = 'none';
@@ -188,9 +189,23 @@
         document.getElementById('login-overlay').classList.remove('hidden');
     }
 
+    // ── 区域オーバービュー（個人=青/グループ=緑/全体利用=オレンジ で利用可能区域を一括枠表示） ──
+    //   表示中は地図の新規登録・移動・編集を抑止し（このフラグ＋CSS）、閲覧と区域選択のみ可能にする。
+    let overviewMode = false;            // 表示モード中か（新規登録/移動/書き込みを抑止するフラグ）
+    let overviewBucket = null;           // 'personal' | 'group' | 'whole'
+    let overviewLabelMarkers = [];       // 枠内の丁目/番地ラベル（HTMLマーカー）
+    let overviewAreas = { personal: [], group: [], whole: [] }; // 各バケットの区域一覧（メニュー描画時に格納）
+    // 表示モード中に許可する読み取り専用 action。これ以外（＝書き込み）は apiCall でブロックする。
+    const OVERVIEW_READ_ACTIONS = ['getMyAreas', 'getSharedAreas', 'getData', 'getLendData', 'getMe', 'getUsers'];
+
     // GAS API 呼び出し（fetch）。CORSプリフライト回避のため Content-Type は text/plain。
     // 認証は検証可能な Firebase IDトークン(JWT)を送る。getIdToken() は有効なトークンを返し、期限切れなら無音で自動更新する。
     async function apiCall(action, params) {
+        // 表示モード中は書き込み系 action を遮断（閲覧のみ。CSS でも編集 UI を無効化済みの二重防御）。
+        if (overviewMode && OVERVIEW_READ_ACTIONS.indexOf(action) === -1) {
+            showToast('表示モード中は編集できません', true);
+            return Promise.reject(Object.assign(new Error('表示モード中は編集できません'), { code: 'overview_readonly' }));
+        }
         const user = fbAuth.currentUser;
         const idToken = user ? await user.getIdToken() : '';
         return fetch(GAS_API_URL, {
@@ -1705,6 +1720,7 @@
             });
         };
         const enter = () => {
+            if (overviewMode) return; // 表示モード中はピン移動不可
             if (activeTouchPoints >= 2) return; // 複数指（ピンチ等）が同時に検知されている間は移動モードに入らない
             moving = true; dragged = false;
             el.classList.add('marker-moving');
@@ -1865,6 +1881,7 @@
     document.addEventListener('keydown', (e) => {
         if (e.key !== 'Escape') return;
         if (closeOpenForms()) return;
+        if (overviewMode) { exitAreaOverview(); return; } // 表示モード中は Esc で終了
         if (areaListBackTo) returnToAreaList();
     });
 
@@ -1885,6 +1902,7 @@
 
     // 新規登録フォーム生成
     function handleMapClickOrTap(lngLat, forcedType) {
+        if (overviewMode) return; // 表示モード中は新規登録不可（閲覧・区域選択のみ）
         // 担当区域外への戸建て登録は不可（lender以下のみ。集合住宅・施設は全員可＝既存の表示制限と同じ区域判定）。
         if (forcedType === '戸建て' && !newKodateAreaAllowed(parseFloat(lngLat.lng), parseFloat(lngLat.lat))) {
             showToast('担当区域外には戸建てを登録できません', true);
@@ -2374,6 +2392,7 @@
 
     // サーバー側エラーを画面に出して原因を分かるようにする
     function handleServerError(err) {
+        if (err && err.code === 'overview_readonly') return; // 表示モードの編集ブロック（apiCallガードが通知済み・サーバ記録不要）
         console.error('サーバーエラー:', err);
         const msg = (err && err.message) ? err.message : String(err);
         sendErrorToServer('CommError', msg, 'handleServerError'); // 誰の端末で起きたかを ErrorLog に集約する
@@ -3077,6 +3096,144 @@
         const bar = document.getElementById('area-list-back');
         if (bar) bar.style.display = 'none';
     }
+
+    /* ── 区域オーバービュー：利用可能区域を一括で枠表示（個人=青/グループ=緑/全体利用=オレンジ） ──
+       見出し右の「🗺 全て表示」から起動。表示中は登録・移動・編集を抑止（apiCallガード＋CSS）し、
+       枠＋薄塗り＋枠内の丁目/番地ラベルを描く。ラベルをタップするとその区域を赤枠＋通常利用
+       （既存 enterAreaFromList）へ切り替える。終了は下部バーの✕／Esc／サインアウト。 */
+    const OVERVIEW_COLORS = {
+        personal: { line: '#1971c2', fill: '#4dabf7' }, // 青
+        group:    { line: '#2f9e44', fill: '#69db7c' }, // 緑
+        whole:    { line: '#e8590c', fill: '#ffa94d' }  // オレンジ
+    };
+    const OVERVIEW_LABELS = { personal: '個人', group: 'グループ', whole: '全体利用' };
+    // 区域ラベル「○○N丁目M番」→ ポリゴン(blocks.geojson)＋代表点。address_points.json でオフライン照合（ジオコーディング不要）。
+    function resolveAreaFeature(areaLabel) {
+        if (!addrPoints || !addrPoints.length) return null;
+        const key = addrWithoutGo(areaLabel);
+        let pt = null;
+        for (let i = 0; i < addrPoints.length; i++) {
+            if (addrWithoutGo(addrPoints[i].a) === key) { pt = addrPoints[i]; break; }
+        }
+        if (!pt) return null;
+        const feature = findBlock(pt.x, pt.y) || boxFeature([pt.x, pt.y]);
+        return { feature: feature, lng: pt.x, lat: pt.y };
+    }
+    // ポリゴン頂点を全部なめて bbox 計算用に渡す（Polygon 前提。boxFeature も Polygon）
+    function eachFeatureCoord(geom, cb) {
+        if (!geom || !geom.coordinates) return;
+        const walk = c => { if (typeof c[0] === 'number') cb(c[0], c[1]); else c.forEach(walk); };
+        walk(geom.coordinates);
+    }
+    function overviewBucketAreas(bucket) {
+        if (bucket === 'whole') return sharedState.areas || []; // 全体利用は showSharedAreas が格納済み
+        return overviewAreas[bucket] || [];
+    }
+    // 表示モードに入る：当該バケットの区域を一括で枠＋薄塗り＋ラベル描画し、全体が収まるようフィット。
+    function enterAreaOverview(bucket) {
+        if (!OVERVIEW_COLORS[bucket]) return;
+        if (!addrPoints) { showToast('住所データを読み込み中です。少し待ってから開いてください。', true); return; }
+        const areas = overviewBucketAreas(bucket);
+        if (!areas.length) { showToast('表示できる区域がありません', true); return; }
+        closeAppModal();              // 一覧モーダルを閉じてから地図へ
+        hideAreaListBar();            // 「区域一覧に戻る」バーが出ていれば消す
+        clearBanchiBox();             // 既存の赤枠を消す
+        document.getElementById('area-label').style.display = 'none'; // 上部の住所ラベルも消す
+        clearOverviewLabels();        // 念のため前回ラベルを除去
+
+        const col = OVERVIEW_COLORS[bucket];
+        const feats = [];
+        const labelPts = [];
+        let skipped = 0;
+        areas.forEach(a => {
+            const r = resolveAreaFeature(a.area);
+            if (!r || !r.feature || !r.feature.geometry) { skipped++; return; }
+            feats.push({ type: 'Feature', geometry: r.feature.geometry,
+                properties: { line: col.line, fill: col.fill, label: a.area } });
+            labelPts.push({ lng: r.lng, lat: r.lat, label: a.area });
+        });
+        if (!feats.length) { showToast('地図に表示できる区域がありませんでした', true); return; }
+
+        overviewMode = true;
+        overviewBucket = bucket;
+        document.body.classList.add('overview-mode'); // CSS：ポップアップの編集UIを無効化（閲覧のみ）
+        drawOverviewFeatures({ type: 'FeatureCollection', features: feats });
+
+        // 丁目/番地ラベル（HTMLマーカー）。タップでその区域を赤枠＋通常利用へ。
+        labelPts.forEach(p => {
+            const el = document.createElement('div');
+            el.className = 'area-ov-label';
+            el.style.borderColor = col.line;
+            el.style.color = col.line;
+            el.textContent = p.label;
+            el.title = p.label + '（タップでこの区域を選択）';
+            el.addEventListener('click', () => pickOverviewArea(p.label));
+            const m = new mapboxgl.Marker({ element: el, anchor: 'center' }).setLngLat([p.lng, p.lat]).addTo(map);
+            overviewLabelMarkers.push(m);
+        });
+
+        fitOverview(feats);
+        showOverviewBar(bucket, skipped);
+    }
+    function drawOverviewFeatures(fc) {
+        const draw = () => {
+            if (map.getSource('areas-overview')) {
+                map.getSource('areas-overview').setData(fc);
+            } else {
+                map.addSource('areas-overview', { type: 'geojson', data: fc });
+                map.addLayer({ id: 'areas-overview-fill', type: 'fill', source: 'areas-overview',
+                    paint: { 'fill-color': ['get', 'fill'], 'fill-opacity': 0.18 } }); // 同系色の薄塗り
+                map.addLayer({ id: 'areas-overview-line', type: 'line', source: 'areas-overview',
+                    paint: { 'line-color': ['get', 'line'], 'line-width': 3 } });      // 枠線
+            }
+        };
+        // 遅延描画(idle)中に exit された場合は枠を復活させない（overviewMode を再チェック）
+        if (map.isStyleLoaded()) draw(); else map.once('idle', () => { if (overviewMode) draw(); });
+    }
+    function fitOverview(feats) {
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        feats.forEach(f => eachFeatureCoord(f.geometry, (x, y) => {
+            if (x < minX) minX = x; if (x > maxX) maxX = x;
+            if (y < minY) minY = y; if (y > maxY) maxY = y;
+        }));
+        if (!isFinite(minX)) return;
+        map.fitBounds([[minX, minY], [maxX, maxY]], { padding: 56, maxZoom: 17, duration: 900 });
+    }
+    function clearOverviewLabels() {
+        overviewLabelMarkers.forEach(m => m.remove());
+        overviewLabelMarkers = [];
+    }
+    // 枠内ラベルタップ：その区域を赤枠＋通常利用へ（既存 enterAreaFromList を流用＝「区域一覧に戻る」バーも出る）。
+    function pickOverviewArea(label) {
+        const origin = (overviewBucket === 'whole') ? 'shared' : 'my';
+        exitAreaOverview();                       // 表示モード解除（枠・ラベル除去、編集ロック解除）
+        suppressMapTapUntil = Date.now() + 1200;  // 抜けた直後の貫通タップ抑止
+        enterAreaFromList(label, origin);         // 既存：赤枠＋上部ラベル＋?area=＋「区域一覧に戻る」バー
+    }
+    // 表示モード終了：枠・薄塗り・ラベルを消して通常地図へ戻す（赤枠 banchi-box には触らない）。
+    function exitAreaOverview() {
+        const hasSource = !!(map && map.getSource && map.getSource('areas-overview'));
+        if (!overviewMode && !overviewLabelMarkers.length && !hasSource) return;
+        overviewMode = false;
+        overviewBucket = null;
+        document.body.classList.remove('overview-mode');
+        clearOverviewLabels();
+        if (hasSource) map.getSource('areas-overview').setData({ type: 'FeatureCollection', features: [] });
+        hideOverviewBar();
+    }
+    function showOverviewBar(bucket, skipped) {
+        const bar = document.getElementById('area-overview-bar');
+        if (!bar) return;
+        const lbl = document.getElementById('area-overview-label');
+        if (lbl) lbl.textContent = (OVERVIEW_LABELS[bucket] || '') + 'の区域を表示中'
+            + (skipped ? '（' + skipped + '件は地図に表示できませんでした）' : '');
+        bar.style.display = '';
+    }
+    function hideOverviewBar() {
+        const bar = document.getElementById('area-overview-bar');
+        if (bar) bar.style.display = 'none';
+    }
+
     function showMyAreas() {
         openAppModal('📋 個人・グループの区域');
         showBusy('読み込み中…');
@@ -3095,11 +3252,19 @@
             };
             const mine = list.filter(a => a.lentTo !== 'group'); // 自分個人への貸出
             const grp = list.filter(a => a.lentTo === 'group');  // 自分の所属グループへの貸出
-            let html = `<div style="font-weight:bold; color:#356B82; padding-bottom:6px; border-bottom:1px solid #b9d6e2; margin-bottom:6px;">👤 個人の区域</div>`;
+            overviewAreas.personal = mine; // 「🗺 全て表示」（一括枠表示）用に保持
+            overviewAreas.group = grp;
+            let html = `<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding-bottom:6px; border-bottom:1px solid #b9d6e2; margin-bottom:6px;">`
+                + `<span style="font-weight:bold; color:#356B82;">👤 個人の区域</span>`
+                + (mine.length ? `<button class="ov-allbtn ov-personal" onclick="enterAreaOverview('personal')" title="個人の区域を全て地図上に枠表示">🗺 全て表示</button>` : '')
+                + `</div>`;
             html += mine.length ? mine.map(rowHtml).join('') : '<div style="color:#888; padding:8px;">あなた個人への割り当てはありません。</div>';
             if (grp.length) {
                 html += `<div style="background:#e6f0f5; border:1px solid #9cc3d4; border-left:5px solid #5E9DB8; border-radius:6px; padding:8px; margin-top:16px;">`;
-                html += `<div style="font-weight:bold; padding-bottom:6px; color:#356B82; border-bottom:1px solid #b9d6e2; margin-bottom:4px;">👥 グループの区域（${escHtml(grp[0].group)}）</div>`;
+                html += `<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding-bottom:6px; border-bottom:1px solid #b9d6e2; margin-bottom:4px;">`
+                    + `<span style="font-weight:bold; color:#356B82;">👥 グループの区域（${escHtml(grp[0].group)}）</span>`
+                    + `<button class="ov-allbtn ov-group" onclick="enterAreaOverview('group')" title="グループの区域を全て地図上に枠表示">🗺 全て表示</button>`
+                    + `</div>`;
                 html += grp.map(rowHtml).join('');
                 html += `</div>`;
             }
@@ -3159,9 +3324,12 @@
         const extra = Object.keys(byDist).filter(d => AREA_GRID_ORDER.indexOf(d) < 0);
         const cell = d => { const n = (byDist[d] || []).length;
             return `<button class="area-opt shared-cell${n ? '' : ' is-empty'}" ${n ? `onclick="sharedState.district='${d}'; renderSharedAreas();"` : 'disabled'}><span class="sc-name">${escHtml(d)}</span><span class="sc-num">${n}</span></button>`; };
-        let html = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">`
+        let html = `<div style="display:flex; justify-content:space-between; align-items:center; gap:6px; margin-bottom:8px;">`
             + `<span style="font-size:13px; color:#666;">貸出中 計 ${areas.length} 区域</span>`
-            + `<button class="choice-btn" style="background:#eef3f6; padding:4px 12px; min-width:0;" onclick="toggleSharedView()">${sharedState.view === 'map' ? '☰ 一覧' : '🗺 地図'}</button>`
+            + `<div style="display:flex; gap:6px; flex-shrink:0;">`
+            +   `<button class="ov-allbtn ov-whole" onclick="enterAreaOverview('whole')" title="全体利用の区域を全て地図上に枠表示">🗺 全て表示</button>`
+            +   `<button class="choice-btn" style="background:#eef3f6; padding:4px 12px; min-width:0;" onclick="toggleSharedView()">${sharedState.view === 'map' ? '☰ 一覧' : '🗺 地図'}</button>`
+            + `</div>`
             + `</div>`;
         if (sharedState.view === 'map') {
             html += `<div id="shared-map-host">${AREA_MAP_SVG}</div>`;
