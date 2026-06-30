@@ -1081,7 +1081,7 @@
                     pos = [base[0] + (idx - (keys.length - 1) / 2) * 48, base[1] + 44];
                 }
                 s += '<g class="chome-badge" onclick="pickChomeOnMap(\'' + d + '\',' + c + ')">'
-                   + '<circle cx="' + pos[0] + '" cy="' + pos[1] + '" r="24"/>'
+                   + '<circle cx="' + pos[0] + '" cy="' + pos[1] + '" r="30"/>'
                    + '<text x="' + pos[0] + '" y="' + pos[1] + '">' + c + '</text></g>';
             });
         });
@@ -2709,6 +2709,18 @@
         if ((t - now) / 86400000 <= 14) return 'due-soon';
         return '';
     }
+    // 返却期日までの残り日数ラベル（「（残りX日）」／当日「（本日まで）」／過ぎたら「（X日超過）」。無効・空は空文字）
+    function daysLeftLabel(d) {
+        if (!d) return '';
+        const t = new Date(String(d).replace(/-/g, '/'));
+        if (isNaN(t)) return '';
+        t.setHours(0, 0, 0, 0);
+        const now = new Date(); now.setHours(0, 0, 0, 0);
+        const diff = Math.round((t - now) / 86400000);
+        if (diff > 0) return ` <span style="font-size:11px; color:#888;">（残り${diff}日）</span>`;
+        if (diff === 0) return ` <span style="font-size:11px; color:#c0392b; font-weight:bold;">（本日まで）</span>`;
+        return ` <span style="font-size:11px; color:#c0392b; font-weight:bold;">（${-diff}日超過）</span>`;
+    }
     // 区域ラベルを地図に表示（「○○N丁目M番」は赤枠つき、丁目なし地区は移動のみ）
     function showAssignedArea(area) {
         const m = String(area).match(/^(.+?)(\d+)丁目(\d+)番$/);
@@ -3284,7 +3296,7 @@
         const reload = (origin === 'group') ? 'showGroupAreas' : 'showPersonalAreas';
         return `<div class="lend-row">`
             + `<div class="grow"><b style="font-size:16px;">${escHtml(a.area)}</b>${a.count !== '' && a.count != null ? `<span style="color:#888; font-size:12px;">（${a.count}件）</span>` : ''}<br>`
-            + `<span style="color:#666; font-size:12px;">貸出: ${escHtml(a.lendDate || '-')} ／ 返却期日: <span class="${dueClass(a.dueDate)}">${escHtml(a.dueDate || '-')}</span></span></div>`
+            + `<span style="color:#666; font-size:12px;">貸出開始: ${escHtml(a.lendDate || '-')}<br>返却期日: <span class="${dueClass(a.dueDate)}">${escHtml(a.dueDate || '-')}</span>${daysLeftLabel(a.dueDate)}</span></div>`
             + `<div style="display:flex; flex-direction:column; gap:4px; flex-shrink:0;">`
             + `<button class="choice-btn" style="background:#eef3f6; padding:5px 8px; font-size:12px;" onclick="enterAreaFromList('${escHtml(a.area)}','${origin}')">地図を表示</button>`
             + (canReturn ? `<button class="clear-btn" style="padding:5px 8px; font-size:12px;" onclick="returnAreaConfirm(${a.id}, '${escHtml(a.area)}', ${reload})">区域を返却</button>` : '')
@@ -3298,12 +3310,9 @@
             const mine = (list || []).filter(a => a.lentTo !== 'group'); // 自分個人への貸出
             overviewAreas.personal = mine; // 「🗺 全て表示」（一括枠表示）用に保持
             const body = document.getElementById('app-modal-body');
-            let html = `<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding-bottom:6px; border-bottom:1px solid #9dc3e6; margin-bottom:6px;">`
-                + `<span style="font-weight:bold; color:#1558a0;">👤 個人の区域</span>`
-                + (mine.length ? `<button class="ov-allbtn ov-personal" onclick="enterAreaOverview('personal')" title="個人の区域を全て地図上に枠表示">🗺 全て表示</button>` : '')
-                + `</div>`;
-            html += mine.length ? mine.map(a => lendAreaRowHtml(a, 'personal')).join('')
-                : '<div style="color:#888; padding:8px;">あなた個人への割り当てはありません。</div>';
+            if (!mine.length) { body.innerHTML = '<div style="color:#888; padding:8px;">あなた個人への割り当てはありません。</div>'; return; }
+            let html = `<button class="area-allbtn aa-personal" onclick="enterAreaOverview('personal')" title="個人の区域を全て地図上に枠表示"><span class="aa-ttl">🗺 全て表示</span><span class="aa-sub">地図に一括 ／ ${mine.length} 区域</span></button>`;
+            html += mine.map(a => lendAreaRowHtml(a, 'personal')).join('');
             body.innerHTML = html;
         }).catch(handleServerError).finally(hideBusy);
     }
@@ -3316,10 +3325,8 @@
             overviewAreas.group = grp; // 「🗺 全て表示」（一括枠表示）用に保持
             const body = document.getElementById('app-modal-body');
             if (!grp.length) { body.innerHTML = '<div style="color:#888; padding:8px;">現在、グループへの割り当てはありません。</div>'; return; }
-            let html = `<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding-bottom:6px; border-bottom:1px solid #a6d8b3; margin-bottom:6px;">`
-                + `<span style="font-weight:bold; color:#1f7a35;">👥 グループの区域（${escHtml(grp[0].group)}）</span>`
-                + `<button class="ov-allbtn ov-group" onclick="enterAreaOverview('group')" title="グループの区域を全て地図上に枠表示">🗺 全て表示</button>`
-                + `</div>`;
+            document.getElementById('app-modal-title').textContent = '👥 グループの区域（' + grp[0].group + '）'; // 見出しに対象グループ名を表示
+            let html = `<button class="area-allbtn aa-group" onclick="enterAreaOverview('group')" title="グループの区域を全て地図上に枠表示"><span class="aa-ttl">🗺 全て表示</span><span class="aa-sub">地図に一括 ／ ${grp.length} 区域</span></button>`;
             html += grp.map(a => lendAreaRowHtml(a, 'group')).join('');
             body.innerHTML = html;
         }).catch(handleServerError).finally(hideBusy);
@@ -3354,13 +3361,13 @@
         const canReturn = (ME.level >= 1); // 全体利用は貸出係以上のみ返却可
         const rowHtml = a => `<div class="lend-row">`
             + `<div class="grow"><b style="font-size:16px;">${escHtml(a.area)}</b>${a.count !== '' && a.count != null ? `<span style="color:#888; font-size:12px;">（${a.count}件）</span>` : ''}<br>`
-            + `<span style="color:#666; font-size:12px;">貸出: ${escHtml(a.lendDate || '-')} ／ 返却期日: <span class="${dueClass(a.dueDate)}">${escHtml(a.dueDate || '-')}</span></span></div>`
+            + `<span style="color:#666; font-size:12px;">貸出開始: ${escHtml(a.lendDate || '-')}<br>返却期日: <span class="${dueClass(a.dueDate)}">${escHtml(a.dueDate || '-')}</span>${daysLeftLabel(a.dueDate)}</span></div>`
             + `<div style="display:flex; flex-direction:column; gap:4px; flex-shrink:0;">`
             + `<button class="choice-btn" style="background:#eef3f6; padding:5px 8px; font-size:12px;" onclick="enterAreaFromList('${escHtml(a.area)}','shared')">地図を表示</button>`
             + (canReturn ? `<button class="clear-btn" style="padding:5px 8px; font-size:12px;" onclick="returnAreaConfirm(${a.id}, '${escHtml(a.area)}', showSharedAreas)">区域を返却</button>` : '')
             + `</div></div>`;
         // ① アコーディオン群の一番上に「🗺 全て表示」（地図に一括枠表示）
-        let html = `<button class="shared-allbtn" onclick="enterAreaOverview('whole')" title="全体利用の区域を全て地図上に枠表示"><span class="sa-ttl">🗺 全て表示</span><span class="sa-sub">地図に一括 ／ 貸出中 計 ${areas.length} 区域</span></button>`;
+        let html = `<button class="area-allbtn aa-whole" onclick="enterAreaOverview('whole')" title="全体利用の区域を全て地図上に枠表示"><span class="aa-ttl">🗺 全て表示</span><span class="aa-sub">地図に一括 ／ 貸出中 計 ${areas.length} 区域</span></button>`;
         // ② 地区ごとのアコーディオン（見出し＝地区名＋区域数。開くと一覧）
         html += dists.map(d => {
             const rows = byDist[d] || [];

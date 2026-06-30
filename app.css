@@ -53,7 +53,7 @@
         .area-map .chome-badge circle { fill: rgba(195,195,195,0.6); stroke: #8a8a8a; stroke-width: 3; }
         .area-map .chome-badge:hover circle { fill: rgba(165,165,165,0.78); }
         .area-map .chome-badge:active circle { fill: rgba(135,135,135,0.88); }
-        .area-map .chome-badge text { fill: #555555; font-size: 30px; font-weight: bold; text-anchor: middle; dominant-baseline: central; pointer-events: none; user-select: none; }
+        .area-map .chome-badge text { fill: #444; font-size: 35px; font-weight: bold; text-anchor: middle; dominant-baseline: central; pointer-events: none; user-select: none; }
         /* 全体利用の区域：地区グリッド（地区名＋貸出中数） */
         .shared-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
         .shared-grid .shared-cell { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; padding: 10px 4px; }
@@ -61,10 +61,17 @@
         .shared-cell .sc-num { font-size: 20px; font-weight: bold; }
         .shared-cell.is-empty { background: #c7cdd1; color: #eef0f1; cursor: default; }
         /* 全体利用：トップの「🗺 全て表示」＋地区アコーディオン */
-        .shared-allbtn { display:flex; flex-direction:column; align-items:flex-start; gap:1px; width:100%; box-sizing:border-box; background:#fdeee2; border:1.5px solid #e8590c; color:#9a3a08; border-radius:10px; padding:9px 14px; cursor:pointer; margin-bottom:10px; text-align:left; -webkit-touch-callout:none; user-select:none; touch-action:manipulation; }
-        .shared-allbtn:active { transform:scale(0.995); }
-        .shared-allbtn .sa-ttl { font-size:15px; font-weight:bold; }
-        .shared-allbtn .sa-sub { font-size:12px; color:#b5642f; }
+        /* 「🗺 全て表示」プロミネントボタン（個人=青/グループ=緑/全体=オレンジ。大きめ・全幅） */
+        .area-allbtn { display:flex; flex-direction:column; align-items:flex-start; gap:2px; width:100%; box-sizing:border-box; border:1.5px solid; border-radius:11px; padding:12px 16px; cursor:pointer; margin-bottom:12px; text-align:left; -webkit-touch-callout:none; user-select:none; touch-action:manipulation; }
+        .area-allbtn:active { transform:scale(0.99); }
+        .area-allbtn .aa-ttl { font-size:18px; font-weight:bold; }
+        .area-allbtn .aa-sub { font-size:12px; }
+        .area-allbtn.aa-personal { background:#e7f1fb; border-color:#1971c2; color:#0f4c8f; }
+        .area-allbtn.aa-personal .aa-sub { color:#3f78b0; }
+        .area-allbtn.aa-group { background:#e7f6ea; border-color:#2f9e44; color:#1c6e31; }
+        .area-allbtn.aa-group .aa-sub { color:#3f9255; }
+        .area-allbtn.aa-whole { background:#fdeee2; border-color:#e8590c; color:#9a3a08; }
+        .area-allbtn.aa-whole .aa-sub { color:#b5642f; }
         .dist-acc { border:1px solid #d6dde2; border-radius:10px; margin-bottom:8px; overflow:hidden; background:#fff; }
         .dist-acc > summary { list-style:none; cursor:pointer; display:flex; align-items:center; gap:8px; padding:11px 14px; font-size:15px; font-weight:bold; color:#356B82; background:#f3f7f9; }
         .dist-acc > summary::-webkit-details-marker { display:none; }
@@ -244,15 +251,16 @@
         #app-modal-head button { min-width: 48px; background: #f0f0f0; border: 1px solid #ccc; border-radius: 6px; padding: 4px 8px; font-size: 13px; cursor: pointer; }
         #app-modal-body { padding: 12px; overflow-y: auto; font-size: 14px; }
         /* 区域カードのテーマ配色（個人=青／グループ=緑／全体利用=オレンジ。ヘッダー＋本文の地色で区別） */
-        #app-modal-card.app-modal-theme-personal #app-modal-head { background: #e7f1fb; border-bottom-color: #9dc3e6; }
-        #app-modal-card.app-modal-theme-personal #app-modal-title { color: #1558a0; }
+        #app-modal-card.app-modal-theme-personal #app-modal-head { background: #1971c2; border-bottom-color: #15579a; }
+        #app-modal-card.app-modal-theme-personal #app-modal-title { color: #fff; }
         #app-modal-card.app-modal-theme-personal #app-modal-body { background: #f5f9fe; }
-        #app-modal-card.app-modal-theme-group #app-modal-head { background: #e7f6ea; border-bottom-color: #a6d8b3; }
-        #app-modal-card.app-modal-theme-group #app-modal-title { color: #1f7a35; }
+        #app-modal-card.app-modal-theme-group #app-modal-head { background: #2f9e44; border-bottom-color: #277f38; }
+        #app-modal-card.app-modal-theme-group #app-modal-title { color: #fff; }
         #app-modal-card.app-modal-theme-group #app-modal-body { background: #f5fbf6; }
-        #app-modal-card.app-modal-theme-whole #app-modal-head { background: #fdeee2; border-bottom-color: #f0c19a; }
-        #app-modal-card.app-modal-theme-whole #app-modal-title { color: #c2530a; }
+        #app-modal-card.app-modal-theme-whole #app-modal-head { background: #e8590c; border-bottom-color: #c44d0b; }
+        #app-modal-card.app-modal-theme-whole #app-modal-title { color: #fff; }
         #app-modal-card.app-modal-theme-whole #app-modal-body { background: #fff8f3; }
+        #app-modal-card[class*="app-modal-theme-"] #app-modal-head button { background: rgba(255,255,255,0.92); border-color: rgba(255,255,255,0.55); color: #333; }
         #app-modal-body select, #app-modal-body input { box-sizing: border-box; padding: 8px; font-size: 15px; border: 1px solid #bbb; border-radius: 6px; }
         /* アイコンのフィルタ（印ボタン長押し）。チェックした種類だけ地図に表示する */
         #icon-filter-modal { position: absolute; inset: 0; z-index: 10004; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; padding: 16px; touch-action: pan-x pan-y; }
