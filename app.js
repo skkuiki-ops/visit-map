@@ -889,9 +889,10 @@
         // 高ズーム(最大付近)ほど大きく。引きは急に小さくならないよう段階的に：
         // 19+=130%, 18=115%, 17=100%, 16=85%, 15=70%, 14=55%, 13=45%, 12=35%,
         // さらに引くと段階的に小さく：11=28%, 10=23%, 9=19%, 8以下=15%（最小）
-        const scale = zoom >= 19 ? 1.30 : zoom >= 18 ? 1.15 : zoom >= 17 ? 1.0 : zoom >= 16 ? 0.85
+        let scale = zoom >= 19 ? 1.30 : zoom >= 18 ? 1.15 : zoom >= 17 ? 1.0 : zoom >= 16 ? 0.85
             : zoom >= 15 ? 0.70 : zoom >= 14 ? 0.55 : zoom >= 13 ? 0.45 : zoom >= 12 ? 0.35
             : zoom >= 11 ? 0.28 : zoom >= 10 ? 0.23 : zoom >= 9 ? 0.19 : 0.15;
+        if (zoom < 13) scale *= 0.5; // ズーム13より広角では全アイコンをさらに半分に（俯瞰時の主張を抑える）
         // アイコンサイズ（右下ボタンの icon-large）で基準サイズを切替。文字サイズとは独立。
         const iconLarge = document.body.classList.contains('icon-large');
         currentMarkers.forEach(m => {
@@ -3111,7 +3112,6 @@
         group:    { line: '#2f9e44', fill: '#69db7c' }, // 緑
         whole:    { line: '#e8590c', fill: '#ffa94d' }  // オレンジ
     };
-    const OVERVIEW_LABELS = { personal: '個人', group: 'グループ', whole: '全体利用' };
     // 区域ラベル「○○N丁目M番」→ ポリゴン(blocks.geojson)＋代表点。address_points.json でオフライン照合（ジオコーディング不要）。
     function resolveAreaFeature(areaLabel) {
         if (!addrPoints || !addrPoints.length) return null;
@@ -3185,7 +3185,8 @@
         updateOverviewLabelScale();
 
         fitOverview(feats);
-        showOverviewBar(bucket, skipped);
+        showOverviewBar();
+        if (skipped) showToast(skipped + '件は地図に表示できませんでした', true);
     }
     // ラベルのズーム連動スケール（z16以上=等倍／16未満は広角ほど小さく・下限0.5倍）
     function overviewLabelScale() {
@@ -3194,10 +3195,14 @@
         return Math.max(0.5, 1 - (16 - z) * 0.13);
     }
     function updateOverviewLabelScale() {
+        const z = map.getZoom();
+        const hide = z < 15;            // ズーム15より広角になったら文字（ラベル）を消す
         const s = overviewLabelScale();
         overviewLabelMarkers.forEach(m => {
             const inner = m.getElement && m.getElement() && m.getElement().firstElementChild;
-            if (inner) inner.style.transform = 'scale(' + s + ')';
+            if (!inner) return;
+            inner.style.display = hide ? 'none' : '';
+            if (!hide) inner.style.transform = 'scale(' + s + ')';
         });
     }
     function drawOverviewFeatures(fc) {
@@ -3248,13 +3253,17 @@
         if (hasSource) map.getSource('areas-overview').setData({ type: 'FeatureCollection', features: [] });
         hideOverviewBar();
     }
-    function showOverviewBar(bucket, skipped) {
+    function showOverviewBar() {
         const bar = document.getElementById('area-overview-bar');
-        if (!bar) return;
-        const lbl = document.getElementById('area-overview-label');
-        if (lbl) lbl.textContent = (OVERVIEW_LABELS[bucket] || '') + 'の区域を表示中'
-            + (skipped ? '（' + skipped + '件は地図に表示できませんでした）' : '');
-        bar.style.display = '';
+        if (bar) bar.style.display = '';
+    }
+    // 表示モードの「← 戻る」：表示を解除し、起動元の区域カードを開き直す（個人/グループ/全体利用）。
+    function overviewBack() {
+        const b = overviewBucket;
+        exitAreaOverview();
+        if (b === 'personal') showPersonalAreas();
+        else if (b === 'group') showGroupAreas();
+        else if (b === 'whole') showSharedAreas();
     }
     function hideOverviewBar() {
         const bar = document.getElementById('area-overview-bar');
