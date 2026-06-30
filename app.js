@@ -482,9 +482,10 @@
     }
     // 種類ごとのアイコンサイズ倍率。
     //  公園・区の施設：z14以上は等倍、z14から広域になるほど大きく（目印として。z14=1.0 / z13=1.5 / z12=2.0 …＝1段ごと+0.5）。
+    //   → 全体に ×2/3 して目印アイコンを控えめに（z14=0.67 / z13=1.0 / z12=1.33 …）。
     //  その他：低ズームで小さめ(0.6)→ズームイン(z16以上)で等倍(1.0)に戻す（z13=0.6 / z16以上=1.0、間は線形）。
     function facilitySizeMult(type, zoom) {
-        if (type === '公園' || type === '区の施設') return zoom >= 14 ? 1.0 : 1.0 + (14 - zoom) * 0.5;
+        if (type === '公園' || type === '区の施設') return (zoom >= 14 ? 1.0 : 1.0 + (14 - zoom) * 0.5) * (2 / 3);
         if (zoom >= 16) return 1.0;
         if (zoom <= 13) return 0.6;
         return 0.6 + (zoom - 13) * (0.4 / 3);
@@ -2512,15 +2513,18 @@
         if (p.classList.contains('show') && !p.contains(e.target) && e.target !== b) { p.classList.remove('show'); suppressMapTapUntil = Date.now() + 600; }
     });
 
-    function openAppModal(title) {
+    function openAppModal(title, theme) {
         document.getElementById('app-modal-title').textContent = title;
         document.getElementById('app-modal-body').innerHTML = '<div style="color:#888; padding:8px;">読み込み中…</div>';
+        // カードのテーマ配色（personal=青/group=緑/whole=オレンジ）。無指定は既定（白）。
+        document.getElementById('app-modal-card').className = theme ? ('app-modal-theme-' + theme) : '';
         document.getElementById('app-modal').style.display = 'flex';
         var hfs = document.getElementById('help-fs-header'); if (hfs) hfs.remove(); // ヘルプの文字サイズボタンを他モーダルに残さない
     }
     function closeAppModal() {
         document.getElementById('app-modal').style.display = 'none';
         document.getElementById('lend-preview-back').style.display = 'none';
+        var card = document.getElementById('app-modal-card'); if (card) card.className = ''; // テーマを残さない
     }
     // アプリの使い方（左下メニュー）。図解版＝マーカー凡例＋戸建て新規/集合住宅編集の吹き出し図解。
     // 見た目は実アプリのCSS/配色に合わせる。メンテナンス節はシステム管理者(level>=3)のみ表示。文字サイズ(小/大)切替つき。
@@ -3076,7 +3080,7 @@
     // ── 区域一覧（個人/グループ/全体利用）から「地図を表示」で地図へ来たときに出す「区域一覧に戻る」バー ──
     // 共通の showAssignedArea/arriveAt は直接フックせず、区域一覧の「地図を表示」ボタン経由でのみ出す
     // （住所検索・ピン操作・貸出プレビューでは出さない）。消えるのは明示操作のみ：バーtap→一覧を再オープン、✕→バーだけ閉じる。
-    let areaListBackTo = null; // 戻り先の一覧 'my'(個人/グループ) | 'shared'(全体利用)。null=バー非表示
+    let areaListBackTo = null; // 戻り先の一覧 'personal'(個人) | 'group'(グループ) | 'shared'(全体利用)。null=バー非表示
     function enterAreaFromList(area, origin) {
         closeAppModal();                 // 一覧モーダルを閉じてから地図へ
         showAssignedArea(area);          // 区域へ flyTo（住所検索と同じ表示）
@@ -3088,7 +3092,8 @@
         const origin = areaListBackTo;
         hideAreaListBar();
         if (origin === 'shared') showSharedAreas();
-        else if (origin === 'my') showMyAreas();
+        else if (origin === 'group') showGroupAreas();
+        else if (origin === 'personal') showPersonalAreas();
     }
     function dismissAreaListBar() { hideAreaListBar(); } // ✕ → バーだけ閉じる（地図に留まる）
     function hideAreaListBar() {
@@ -3160,20 +3165,40 @@
         drawOverviewFeatures({ type: 'FeatureCollection', features: feats });
 
         // 丁目/番地ラベル（HTMLマーカー）。タップでその区域を赤枠＋通常利用へ。
+        // wrap（Mapboxが位置を制御）＋ inner（自前でズーム連動スケール）の2層構成。
         labelPts.forEach(p => {
-            const el = document.createElement('div');
-            el.className = 'area-ov-label';
-            el.style.borderColor = col.line;
-            el.style.color = col.line;
-            el.textContent = p.label;
-            el.title = p.label + '（タップでこの区域を選択）';
-            el.addEventListener('click', () => pickOverviewArea(p.label));
-            const m = new mapboxgl.Marker({ element: el, anchor: 'center' }).setLngLat([p.lng, p.lat]).addTo(map);
+            const wrap = document.createElement('div');
+            wrap.className = 'area-ov-label-wrap';
+            const inner = document.createElement('div');
+            inner.className = 'area-ov-label';
+            inner.style.borderColor = col.line;
+            inner.style.color = col.line;
+            inner.textContent = p.label;
+            inner.title = p.label + '（タップでこの区域を選択）';
+            inner.addEventListener('click', () => pickOverviewArea(p.label));
+            wrap.appendChild(inner);
+            const m = new mapboxgl.Marker({ element: wrap, anchor: 'center' }).setLngLat([p.lng, p.lat]).addTo(map);
             overviewLabelMarkers.push(m);
         });
+        map.off('zoom', updateOverviewLabelScale); // 別バケットへ再入したときの二重登録を防ぐ
+        map.on('zoom', updateOverviewLabelScale);  // ズーム16未満で広角ほどラベルを縮小
+        updateOverviewLabelScale();
 
         fitOverview(feats);
         showOverviewBar(bucket, skipped);
+    }
+    // ラベルのズーム連動スケール（z16以上=等倍／16未満は広角ほど小さく・下限0.5倍）
+    function overviewLabelScale() {
+        const z = map.getZoom();
+        if (z >= 16) return 1;
+        return Math.max(0.5, 1 - (16 - z) * 0.13);
+    }
+    function updateOverviewLabelScale() {
+        const s = overviewLabelScale();
+        overviewLabelMarkers.forEach(m => {
+            const inner = m.getElement && m.getElement() && m.getElement().firstElementChild;
+            if (inner) inner.style.transform = 'scale(' + s + ')';
+        });
     }
     function drawOverviewFeatures(fc) {
         const draw = () => {
@@ -3205,7 +3230,8 @@
     }
     // 枠内ラベルタップ：その区域を赤枠＋通常利用へ（既存 enterAreaFromList を流用＝「区域一覧に戻る」バーも出る）。
     function pickOverviewArea(label) {
-        const origin = (overviewBucket === 'whole') ? 'shared' : 'my';
+        const origin = (overviewBucket === 'whole') ? 'shared' : overviewBucket; // personal/group/shared
+
         exitAreaOverview();                       // 表示モード解除（枠・ラベル除去、編集ロック解除）
         suppressMapTapUntil = Date.now() + 1200;  // 抜けた直後の貫通タップ抑止
         enterAreaFromList(label, origin);         // 既存：赤枠＋上部ラベル＋?area=＋「区域一覧に戻る」バー
@@ -3217,6 +3243,7 @@
         overviewMode = false;
         overviewBucket = null;
         document.body.classList.remove('overview-mode');
+        map.off('zoom', updateOverviewLabelScale); // ラベルのズーム連動を解除
         clearOverviewLabels();
         if (hasSource) map.getSource('areas-overview').setData({ type: 'FeatureCollection', features: [] });
         hideOverviewBar();
@@ -3234,40 +3261,49 @@
         if (bar) bar.style.display = 'none';
     }
 
-    function showMyAreas() {
-        openAppModal('📋 個人・グループの区域');
+    // 区域一覧の1行（個人/グループ共通）。origin で「地図を表示」の戻り先と返却後の再読込先を切り替える。
+    function lendAreaRowHtml(a, origin) {
+        const canReturn = (a.lentTo === 'self') || (ME.level >= 1); // 個人=本人 / グループ=貸出係以上
+        const reload = (origin === 'group') ? 'showGroupAreas' : 'showPersonalAreas';
+        return `<div class="lend-row">`
+            + `<div class="grow"><b style="font-size:16px;">${escHtml(a.area)}</b>${a.count !== '' && a.count != null ? `<span style="color:#888; font-size:12px;">（${a.count}件）</span>` : ''}<br>`
+            + `<span style="color:#666; font-size:12px;">貸出: ${escHtml(a.lendDate || '-')} ／ 返却期日: <span class="${dueClass(a.dueDate)}">${escHtml(a.dueDate || '-')}</span></span></div>`
+            + `<div style="display:flex; flex-direction:column; gap:4px; flex-shrink:0;">`
+            + `<button class="choice-btn" style="background:#eef3f6; padding:5px 8px; font-size:12px;" onclick="enterAreaFromList('${escHtml(a.area)}','${origin}')">地図を表示</button>`
+            + (canReturn ? `<button class="clear-btn" style="padding:5px 8px; font-size:12px;" onclick="returnAreaConfirm(${a.id}, '${escHtml(a.area)}', ${reload})">区域を返却</button>` : '')
+            + `</div></div>`;
+    }
+    // 👤 個人の区域カード（青テーマ）
+    function showPersonalAreas() {
+        openAppModal('👤 個人の区域', 'personal');
         showBusy('読み込み中…');
         apiCall('getMyAreas', {}).then(list => {
-            const body = document.getElementById('app-modal-body');
-            if (!list || !list.length) { body.innerHTML = '<div style="color:#888; padding:8px;">現在割り当てられている区域はありません。</div>'; return; }
-            const rowHtml = a => {
-                const canReturn = (a.lentTo === 'self') || (ME.level >= 1); // 個人=本人 / グループ=貸出係以上
-                return `<div class="lend-row">`
-                    + `<div class="grow"><b style="font-size:16px;">${escHtml(a.area)}</b>${a.count !== '' && a.count != null ? `<span style="color:#888; font-size:12px;">（${a.count}件）</span>` : ''}<br>`
-                    + `<span style="color:#666; font-size:12px;">貸出: ${escHtml(a.lendDate || '-')} ／ 返却期日: <span class="${dueClass(a.dueDate)}">${escHtml(a.dueDate || '-')}</span></span></div>`
-                    + `<div style="display:flex; flex-direction:column; gap:4px; flex-shrink:0;">`
-                    + `<button class="choice-btn" style="background:#eef3f6; padding:5px 8px; font-size:12px;" onclick="enterAreaFromList('${escHtml(a.area)}','my')">地図を表示</button>`
-                    + (canReturn ? `<button class="clear-btn" style="padding:5px 8px; font-size:12px;" onclick="returnAreaConfirm(${a.id}, '${escHtml(a.area)}', showMyAreas)">区域を返却</button>` : '')
-                    + `</div></div>`;
-            };
-            const mine = list.filter(a => a.lentTo !== 'group'); // 自分個人への貸出
-            const grp = list.filter(a => a.lentTo === 'group');  // 自分の所属グループへの貸出
+            const mine = (list || []).filter(a => a.lentTo !== 'group'); // 自分個人への貸出
             overviewAreas.personal = mine; // 「🗺 全て表示」（一括枠表示）用に保持
-            overviewAreas.group = grp;
-            let html = `<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding-bottom:6px; border-bottom:1px solid #b9d6e2; margin-bottom:6px;">`
-                + `<span style="font-weight:bold; color:#356B82;">👤 個人の区域</span>`
+            const body = document.getElementById('app-modal-body');
+            let html = `<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding-bottom:6px; border-bottom:1px solid #9dc3e6; margin-bottom:6px;">`
+                + `<span style="font-weight:bold; color:#1558a0;">👤 個人の区域</span>`
                 + (mine.length ? `<button class="ov-allbtn ov-personal" onclick="enterAreaOverview('personal')" title="個人の区域を全て地図上に枠表示">🗺 全て表示</button>` : '')
                 + `</div>`;
-            html += mine.length ? mine.map(rowHtml).join('') : '<div style="color:#888; padding:8px;">あなた個人への割り当てはありません。</div>';
-            if (grp.length) {
-                html += `<div style="background:#e6f0f5; border:1px solid #9cc3d4; border-left:5px solid #5E9DB8; border-radius:6px; padding:8px; margin-top:16px;">`;
-                html += `<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding-bottom:6px; border-bottom:1px solid #b9d6e2; margin-bottom:4px;">`
-                    + `<span style="font-weight:bold; color:#356B82;">👥 グループの区域（${escHtml(grp[0].group)}）</span>`
-                    + `<button class="ov-allbtn ov-group" onclick="enterAreaOverview('group')" title="グループの区域を全て地図上に枠表示">🗺 全て表示</button>`
-                    + `</div>`;
-                html += grp.map(rowHtml).join('');
-                html += `</div>`;
-            }
+            html += mine.length ? mine.map(a => lendAreaRowHtml(a, 'personal')).join('')
+                : '<div style="color:#888; padding:8px;">あなた個人への割り当てはありません。</div>';
+            body.innerHTML = html;
+        }).catch(handleServerError).finally(hideBusy);
+    }
+    // 👥 グループの区域カード（緑テーマ）
+    function showGroupAreas() {
+        openAppModal('👥 グループの区域', 'group');
+        showBusy('読み込み中…');
+        apiCall('getMyAreas', {}).then(list => {
+            const grp = (list || []).filter(a => a.lentTo === 'group'); // 自分の所属グループへの貸出
+            overviewAreas.group = grp; // 「🗺 全て表示」（一括枠表示）用に保持
+            const body = document.getElementById('app-modal-body');
+            if (!grp.length) { body.innerHTML = '<div style="color:#888; padding:8px;">現在、グループへの割り当てはありません。</div>'; return; }
+            let html = `<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding-bottom:6px; border-bottom:1px solid #a6d8b3; margin-bottom:6px;">`
+                + `<span style="font-weight:bold; color:#1f7a35;">👥 グループの区域（${escHtml(grp[0].group)}）</span>`
+                + `<button class="ov-allbtn ov-group" onclick="enterAreaOverview('group')" title="グループの区域を全て地図上に枠表示">🗺 全て表示</button>`
+                + `</div>`;
+            html += grp.map(a => lendAreaRowHtml(a, 'group')).join('');
             body.innerHTML = html;
         }).catch(handleServerError).finally(hideBusy);
     }
@@ -3286,7 +3322,7 @@
         renderSharedAreas();
     }
     function showSharedAreas() {
-        openAppModal('👪 全体利用の区域');
+        openAppModal('👪 全体利用の区域', 'whole');
         showBusy('読み込み中…');
         apiCall('getSharedAreas', {}).then(list => {
             sharedState.areas = list || [];

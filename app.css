@@ -186,8 +186,10 @@
         .menu-item:active { background: #eef3f6; }
         .menu-item.need-lend, .menu-item.need-manage, .menu-item.need-sys { display: none; } /* 役割で出し分け */
         body.role-lend .menu-item.need-lend, body.role-manage .menu-item.need-manage, body.role-sys .menu-item.need-sys { display: block; background: #eef4f7; border-left: 3px solid #5E9DB8; } /* 権限項目は淡い青＋左の青帯で区別 */
-        /* カテゴリ色分け：区域＝緑カード、使い方＝橙カード（管理メニューの青カードと別カテゴリと分かるよう色で区別） */
-        .menu-item.cat-area { background: #edf5ec; border-left: 3px solid #6FA86E; }
+        /* カテゴリ色分け：個人=青／グループ=緑／全体利用=オレンジ（地図の枠色と統一）／使い方=橙 */
+        .menu-item.cat-personal { background: #e7f1fb; border-left: 3px solid #1971c2; }
+        .menu-item.cat-group { background: #e7f6ea; border-left: 3px solid #2f9e44; }
+        .menu-item.cat-whole { background: #fdeee2; border-left: 3px solid #e8590c; }
         .menu-item.cat-help { background: #fbf2e0; border-left: 3px solid #D9A441; }
         .menu-section { display: none; font-size: 11px; color: #7f8c93; font-weight: bold; padding: 9px 12px 3px; border-top: 1px solid #e1e6e9; margin-top: 4px; } /* 管理者メニューの見出し（adminのみ） */
         body.role-lend .menu-section { display: block; }
@@ -227,6 +229,16 @@
         #app-modal-title { flex: 1; font-weight: bold; font-size: 15px; }
         #app-modal-head button { min-width: 48px; background: #f0f0f0; border: 1px solid #ccc; border-radius: 6px; padding: 4px 8px; font-size: 13px; cursor: pointer; }
         #app-modal-body { padding: 12px; overflow-y: auto; font-size: 14px; }
+        /* 区域カードのテーマ配色（個人=青／グループ=緑／全体利用=オレンジ。ヘッダー＋本文の地色で区別） */
+        #app-modal-card.app-modal-theme-personal #app-modal-head { background: #e7f1fb; border-bottom-color: #9dc3e6; }
+        #app-modal-card.app-modal-theme-personal #app-modal-title { color: #1558a0; }
+        #app-modal-card.app-modal-theme-personal #app-modal-body { background: #f5f9fe; }
+        #app-modal-card.app-modal-theme-group #app-modal-head { background: #e7f6ea; border-bottom-color: #a6d8b3; }
+        #app-modal-card.app-modal-theme-group #app-modal-title { color: #1f7a35; }
+        #app-modal-card.app-modal-theme-group #app-modal-body { background: #f5fbf6; }
+        #app-modal-card.app-modal-theme-whole #app-modal-head { background: #fdeee2; border-bottom-color: #f0c19a; }
+        #app-modal-card.app-modal-theme-whole #app-modal-title { color: #c2530a; }
+        #app-modal-card.app-modal-theme-whole #app-modal-body { background: #fff8f3; }
         #app-modal-body select, #app-modal-body input { box-sizing: border-box; padding: 8px; font-size: 15px; border: 1px solid #bbb; border-radius: 6px; }
         /* アイコンのフィルタ（印ボタン長押し）。チェックした種類だけ地図に表示する */
         #icon-filter-modal { position: absolute; inset: 0; z-index: 10004; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; padding: 16px; touch-action: pan-x pan-y; }
@@ -399,7 +411,8 @@
         .ov-allbtn.ov-whole    { border-color: #e8590c; color: #e8590c; background: #fdeee2; }
         body.large-ui .ov-allbtn { font-size: 13px; padding: 6px 11px; }
         /* 枠内に出す丁目/番地ラベル（HTMLマーカー）。タップでその区域を選択（赤枠＋通常利用へ）。色は枠色に合わせてJSで上書き */
-        .area-ov-label { background: rgba(255,255,255,0.92); border: 1.5px solid #1971c2; color: #1971c2; border-radius: 12px; padding: 2px 7px; font-size: 12px; font-weight: bold; white-space: nowrap; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.25); -webkit-touch-callout: none; user-select: none; touch-action: manipulation; }
+        .area-ov-label-wrap { line-height: 0; }
+        .area-ov-label { background: rgba(255,255,255,0.92); border: 1.5px solid #1971c2; color: #1971c2; border-radius: 12px; padding: 2px 7px; font-size: 12px; font-weight: bold; line-height: 1.2; white-space: nowrap; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.25); transform-origin: center center; -webkit-touch-callout: none; user-select: none; touch-action: manipulation; }
         body.large-ui .area-ov-label { font-size: 13px; padding: 3px 8px; }
         /* 表示モード中の操作バー（中央下。区域一覧に戻るバーと同系の見た目） */
         #area-overview-bar { position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%); z-index: 9999; display: flex; align-items: stretch; background: #34495e; border-radius: 22px; box-shadow: 0 2px 8px rgba(0,0,0,0.35); overflow: hidden; max-width: 92%; }

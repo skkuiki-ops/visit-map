@@ -73,7 +73,7 @@
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-    <link rel="stylesheet" href="app.css?v=20260629c">
+    <link rel="stylesheet" href="app.css?v=20260630a">
 </head>
 <body>
 
@@ -103,8 +103,9 @@
 
 <!-- メニューパネル（割り当て区域／管理機能／サインアウト。管理項目は admin のみ表示） -->
 <div id="menu-panel">
-    <button class="menu-item cat-area" onclick="closeMenu(); showMyAreas();">📋 個人・グループの区域</button>
-    <button class="menu-item cat-area" onclick="closeMenu(); showSharedAreas();">👪 全体利用の区域</button>
+    <button class="menu-item cat-personal" onclick="closeMenu(); showPersonalAreas();">👤 個人の区域</button>
+    <button class="menu-item cat-group" onclick="closeMenu(); showGroupAreas();">👥 グループの区域</button>
+    <button class="menu-item cat-whole" onclick="closeMenu(); showSharedAreas();">👪 全体利用の区域</button>
     <button class="menu-item cat-help" onclick="closeMenu(); showHelp();">❓ アプリの使い方</button>
     <div class="menu-section">管理メニュー</div>
     <button class="menu-item need-lend" onclick="closeMenu(); showLendScreen();">🗂 区域の貸出・返却</button>
@@ -191,7 +192,7 @@
     </div>
 </div>
 
-<script src="app.js?v=20260629c"></script>
+<script src="app.js?v=20260630a"></script>
 
 </body>
 </html>
