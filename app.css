@@ -417,8 +417,10 @@
         /* 表示モード中の操作バー（中央下。区域一覧に戻るバーと同系の見た目） */
         #area-overview-bar { position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%); z-index: 9999; display: flex; align-items: stretch; background: #34495e; border-radius: 22px; box-shadow: 0 2px 8px rgba(0,0,0,0.35); overflow: hidden; max-width: 92%; }
         #area-overview-bar button { background: transparent; color: #fff; border: none; font-weight: bold; cursor: pointer; font-size: 16px; }
-        #area-overview-back { padding: 11px 18px; }
+        #area-overview-icons { padding: 11px 18px; }
         #area-overview-exit { padding: 11px 15px; font-size: 15px; border-left: 1px solid rgba(255,255,255,0.28); white-space: nowrap; }
+        /* 「アイコンを非表示」トグル中はピン（全マーカー）を隠す（オーバービュー中のみ・抜けると自動で戻る） */
+        body.overview-mode.icons-hidden .custom-marker { display: none !important; }
         /* 表示モード中はポップアップを「閲覧のみ」に：編集/削除/詳細ボタンを隠し、インライン編集を無効化（書き込みは apiCall でも遮断） */
         body.overview-mode .popup-content .detail-only,
         body.overview-mode .popup-content .detail-toggle,

@@ -73,7 +73,7 @@
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-    <link rel="stylesheet" href="app.css?v=20260630b">
+    <link rel="stylesheet" href="app.css?v=20260630e">
 </head>
 <body>
 
@@ -148,14 +148,10 @@
 
 <!-- 貸出プレビュー中の「戻る」ボタン（地図確認から貸出画面へ復帰） -->
 <button id="lend-preview-back" style="display:none;" onclick="backToLendScreen()">↩ 貸出画面に戻る</button>
-<!-- 区域一覧（個人/グループ/全体利用）の「地図を表示」で来たときの「区域一覧に戻る」バー。本文タップ＝一覧へ戻る／✕＝バーだけ閉じる -->
-<div id="area-list-back" style="display:none;">
-    <button id="area-list-back-main" onclick="returnToAreaList()">← 戻る</button>
-    <button id="area-list-back-x" onclick="dismissAreaListBar()" aria-label="バーを閉じる">✕</button>
-</div>
+<!-- （区域一覧に戻るバーは廃止：番地を表示したら住所選択遷移と同じ＝下部バーなし） -->
 <!-- 区域オーバービュー（個人/グループ/全体利用の「全て表示」）中の操作バー。枠内ラベルで区域を選ぶか、✕で表示を終了 -->
 <div id="area-overview-bar" style="display:none;">
-    <button id="area-overview-back" onclick="overviewBack()">← 戻る</button>
+    <button id="area-overview-icons" onclick="toggleOverviewIcons()">アイコンを非表示</button>
     <button id="area-overview-exit" onclick="exitAreaOverview()" aria-label="表示を終了">✕ 終了</button>
 </div>
 <button id="area-nav-btn" onclick="openAreaNav()" style="display:none;">🔍住所</button>
@@ -192,7 +188,7 @@
     </div>
 </div>
 
-<script src="app.js?v=20260630d"></script>
+<script src="app.js?v=20260630e"></script>
 
 </body>
 </html>

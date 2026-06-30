@@ -3084,10 +3084,7 @@
     let areaListBackTo = null; // 戻り先の一覧 'personal'(個人) | 'group'(グループ) | 'shared'(全体利用)。null=バー非表示
     function enterAreaFromList(area, origin) {
         closeAppModal();                 // 一覧モーダルを閉じてから地図へ
-        showAssignedArea(area);          // 区域へ flyTo（住所検索と同じ表示）
-        areaListBackTo = origin;
-        const bar = document.getElementById('area-list-back');
-        if (bar) bar.style.display = ''; // CSS既定の flex に戻す（=表示）
+        showAssignedArea(area);          // 区域へ flyTo（住所検索と同じ表示）。下部バーは出さない＝住所選択遷移と同じ状態
     }
     function returnToAreaList() {         // バーtap / Esc → 元の一覧を再オープン
         const origin = areaListBackTo;
@@ -3186,6 +3183,10 @@
 
         fitOverview(feats);
         showOverviewBar();
+        // アイコン表示は毎回「表示」状態から開始（前回の非表示を持ち越さない）
+        document.body.classList.remove('icons-hidden');
+        const ovIcons = document.getElementById('area-overview-icons');
+        if (ovIcons) ovIcons.textContent = 'アイコンを非表示';
         if (skipped) showToast(skipped + '件は地図に表示できませんでした', true);
     }
     // ラベルのズーム連動スケール（z16以上=等倍／16未満は広角ほど小さく・下限0.5倍）
@@ -3248,6 +3249,7 @@
         overviewMode = false;
         overviewBucket = null;
         document.body.classList.remove('overview-mode');
+        document.body.classList.remove('icons-hidden'); // 抜けたらアイコンは必ず表示に戻す（番地表示=住所選択遷移と同じ）
         map.off('zoom', updateOverviewLabelScale); // ラベルのズーム連動を解除
         clearOverviewLabels();
         if (hasSource) map.getSource('areas-overview').setData({ type: 'FeatureCollection', features: [] });
@@ -3268,6 +3270,12 @@
     function hideOverviewBar() {
         const bar = document.getElementById('area-overview-bar');
         if (bar) bar.style.display = 'none';
+    }
+    // オーバービューの「アイコンを非表示/表示」トグル（ピン＝全マーカーをCSSで一括非表示）。オーバービューを抜けると自動で戻る。
+    function toggleOverviewIcons() {
+        const hidden = document.body.classList.toggle('icons-hidden');
+        const btn = document.getElementById('area-overview-icons');
+        if (btn) btn.textContent = hidden ? 'アイコンを表示' : 'アイコンを非表示';
     }
 
     // 区域一覧の1行（個人/グループ共通）。origin で「地図を表示」の戻り先と返却後の再読込先を切り替える。
