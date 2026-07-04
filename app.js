@@ -823,17 +823,34 @@
     // ── ピン表示制限（lender以下）: 戸建ては「担当区域内」だけ表示する ──
     // これは表示の制限（getMapData は全件返す＝サーバ側のデータ遮断ではない）。集合住宅・施設・manager以上は常に全表示。
     // 番地判定は deriveAddress 同様フロントで実施し、マーカーごとに1回だけ算出してキャッシュする（deriveAddress は重い）。
-    let visibleAreaSet = null; // Set<番地ラベル>。null=未適用（manager以上／取得前／取得失敗＝制限しない＝可用性優先）
+    const AREA_SET_KEY = 'vm_areaSet'; // 担当区域ラベルのキャッシュ（起動時に即適用＝取得完了前/失敗時も制限を維持）
+    let visibleAreaSet = null; // Set<番地ラベル>。null=未適用（manager以上／キャッシュも取得もまだ）
+    // 起動直後にキャッシュを即適用（取得完了を待たず制限を効かせ、取得失敗でも fail-open にしない）。
+    //  この時点では ME.level 未確定=0（=user 扱い）なので lender以下として制限がかかる。manager と判明したら loadVisibleAreas が解除する。
+    try { const _c = JSON.parse(localStorage.getItem(AREA_SET_KEY) || 'null'); if (Array.isArray(_c)) visibleAreaSet = new Set(_c); } catch (e) {}
     function areaRestrictActive() { return !!visibleAreaSet && (ME.level || 0) <= 1; }
     function loadVisibleAreas() {
-        if ((ME.level || 0) >= 2) { visibleAreaSet = null; return; } // manager以上は全表示なので取得不要
+        if ((ME.level || 0) >= 2) { // manager以上は全表示＝制限なし。キャッシュも消して即解除。
+            visibleAreaSet = null;
+            try { localStorage.removeItem(AREA_SET_KEY); } catch (e) {}
+            applyZoomVisibility();
+            return;
+        }
+        fetchVisibleAreas_(0);
+    }
+    // 担当区域を取得して visibleAreaSet を更新。失敗時は数回リトライ（1回の失敗で制限がセッション中ずっと外れる＝区域外漏れを防ぐ）。
+    function fetchVisibleAreas_(attempt) {
         Promise.all([apiCall('getMyAreas', {}), apiCall('getSharedAreas', {})]).then(([mine, shared]) => {
             const set = new Set();
             (mine || []).forEach(a => { const k = addrWithoutGo(a.area); if (k) set.add(k); });   // 個人＋所属グループの貸出区域
             (shared || []).forEach(a => { const k = addrWithoutGo(a.area); if (k) set.add(k); });  // 全体利用の区域
             visibleAreaSet = set;   // 取得成功（空でも適用＝担当区域が無ければ戸建ては非表示）
+            try { localStorage.setItem(AREA_SET_KEY, JSON.stringify(Array.from(set))); } catch (e) {} // 次回起動で即適用するためキャッシュ
             applyZoomVisibility();  // 既存マーカーへ即反映
-        }).catch(() => { visibleAreaSet = null; }); // 取得失敗時は制限しない（可用性優先）
+        }).catch(() => {
+            // 取得失敗: 数回リトライ。全部失敗してもキャッシュ由来の visibleAreaSet はそのまま維持（＝fail-open にしない）。
+            if (attempt < 3) setTimeout(function () { fetchVisibleAreas_(attempt + 1); }, 1500 * (attempt + 1));
+        });
     }
     // 戸建てピンが現在のユーザーに見えてよいか（区域制限）。集合住宅・施設・manager以上は常に true。
     function pinAreaAllowed(m) {
@@ -855,6 +872,16 @@
         if (!areaRestrictActive()) return true; // manager以上／制限未適用は常に許可
         const label = addrWithoutGo(deriveAddress(lng, lat) || '');
         if (!label) return true; // 番地が判定できないときは許可（表示制限と同じフェイルオープン＝取りこぼし防止）
+        return visibleAreaSet.has(label);
+    }
+    // item（currentData の1件）が現在のユーザーに見えてよいか。pinAreaAllowed と同じ判定を item ベースで行う（?pin ディープリンクのバイパス防止用）。
+    function itemAreaAllowed_(item) {
+        if (!areaRestrictActive()) return true;
+        if (!item || String(item.種別) !== '戸建て') return true; // 集合住宅・施設は制限対象外
+        if (!addrPoints || !addrPoints.length) return true; // 住所データ未読込はフェイルオープン（隠さない）
+        const stored = (item.住所 && item.住所 !== '-' && String(item.住所).trim() !== '') ? addrWithoutGo(item.住所) : '';
+        const label = stored || addrWithoutGo(deriveAddress(parseFloat(item.経度), parseFloat(item.緯度)) || '');
+        if (!label) return true; // 判定不可はフェイルオープン
         return visibleAreaSet.has(label);
     }
 
@@ -1301,6 +1328,9 @@
             if (item) staleLink = true;
         }
         if (!item) { showToast('リンクのピンが見つかりませんでした', true); return; }
+        // user/lender は担当区域外のピンをディープリンクからも開けない（表示制限のバイパス防止）。
+        //  「見つからない」と同じ文言にして存在も伏せる（フェーズC本適用後はサーバ応答に含まれず自然に同じ挙動になる）。
+        if (!itemAreaAllowed_(item)) { showToast('リンクのピンが見つかりませんでした', false, true); return; }
         if (staleLink) showToast('リンクが古い可能性があります（別の世帯が開いていないかご確認ください）', true);
         const lng = parseFloat(item.経度), lat = parseFloat(item.緯度);
         if (isNaN(lng) || isNaN(lat)) { showToast('ピンの座標が不正です', true); return; }
