@@ -2791,14 +2791,19 @@
         const td = new Date(), ps = new Date(); ps.setMonth(ps.getMonth() - 6);
         const toVal = `${td.getFullYear()}-${pad(td.getMonth() + 1)}-${pad(td.getDate())}`;
         const fromVal = `${ps.getFullYear()}-${pad(ps.getMonth() + 1)}-${pad(ps.getDate())}`;
+        // 3区分をアコーディオンに分け、見出しを色分け（テラコッタ=期間クリア／紫=網羅／青=設定）して取り違えを防ぐ。基本は全部閉じた状態。
+        const acc = (cls, title, inner) =>
+            `<details class="dist-acc mnt-acc ${cls}"><summary><span class="da-name">${title}</span><span class="da-chev">▾</span></summary><div class="da-body">${inner}</div></details>`;
         body.innerHTML =
-            `<div style="font-size:13px; color:#555; margin-bottom:10px;">指定した期間の<b>訪問結果(不在/会えた/投函)と履歴</b>を消去します。<br>属性(拒否/外国語/空き家)・住所・個人宅・建物情報は<b>消えません</b>。</div>`
-            + `<div style="display:flex; gap:6px; align-items:center; margin-bottom:6px;"><label style="width:48px; font-size:13px; font-weight:bold;">開始</label><input type="date" id="mnt-from" value="${fromVal}" style="flex:1; min-width:0;"></div>`
-            + `<div style="display:flex; gap:6px; align-items:center; margin-bottom:14px;"><label style="width:48px; font-size:13px; font-weight:bold;">終了</label><input type="date" id="mnt-to" value="${toVal}" style="flex:1; min-width:0;"></div>`
-            + `<button class="clear-btn" style="width:100%; margin-bottom:8px;" onclick="runMaintenance('history')">🗑 この期間の履歴をクリア</button>`
-            + `<button class="clear-btn" style="width:100%; background:#8a6d3b;" onclick="runMaintenance('status')">🔄 この期間の訪問ステータスをクリア</button>`
-            + `<div style="margin-top:18px; padding-top:12px; border-top:1px solid #ddd;"><div style="font-size:13px; color:#555; margin-bottom:8px;">網羅履歴（各番地の貸出サイクル）を全てクリアします。各番地の最終返却日は「前回完了した日付」として保存され、次は第1網羅から数え直します（1〜2年周期の想定）。実行前に AreaList をバックアップします。</div>`
-            + `<button class="clear-btn" style="width:100%; background:#7a4a6a;" onclick="runClearCoverage()">📋 網羅履歴をクリア</button></div>`
+            acc('mnt-clear', '🗑 期間指定クリア（履歴・訪問ステータス）',
+                `<div style="font-size:13px; color:#555; margin-bottom:10px;">指定した期間の<b>訪問結果(不在/会えた/投函)と履歴</b>を消去します。<br>属性(拒否/外国語/空き家)・住所・個人宅・建物情報は<b>消えません</b>。</div>`
+                + `<div style="display:flex; gap:6px; align-items:center; margin-bottom:6px;"><label style="width:48px; font-size:13px; font-weight:bold;">開始</label><input type="date" id="mnt-from" value="${fromVal}" style="flex:1; min-width:0;"></div>`
+                + `<div style="display:flex; gap:6px; align-items:center; margin-bottom:14px;"><label style="width:48px; font-size:13px; font-weight:bold;">終了</label><input type="date" id="mnt-to" value="${toVal}" style="flex:1; min-width:0;"></div>`
+                + `<button class="clear-btn" style="width:100%; margin-bottom:8px;" onclick="runMaintenance('history')">🗑 この期間の履歴をクリア</button>`
+                + `<button class="clear-btn" style="width:100%; background:#8a6d3b;" onclick="runMaintenance('status')">🔄 この期間の訪問ステータスをクリア</button>`)
+            + acc('mnt-coverage', '📋 網羅履歴のクリア',
+                `<div style="font-size:13px; color:#555; margin-bottom:8px;">網羅履歴（各番地の貸出サイクル）を全てクリアします。各番地の最終返却日は「前回完了した日付」として保存され、次は第1網羅から数え直します（1〜2年周期の想定）。実行前に AreaList をバックアップします。</div>`
+                + `<button class="clear-btn" style="width:100%; background:#7a4a6a;" onclick="runClearCoverage()">📋 網羅履歴をクリア</button>`)
             + settingsSectionHtml_();
     }
     function runClearCoverage() {
@@ -2818,15 +2823,14 @@
         const row = (id, label, val, unit) =>
             `<div style="display:flex; gap:6px; align-items:center; margin-bottom:8px;"><label style="flex:1; font-size:13px;">${label}</label>`
             + `<input type="number" id="${id}" value="${val != null ? val : ''}" min="1" style="width:76px; text-align:right;"><span style="font-size:12px; color:#666; width:24px;">${unit}</span></div>`;
-        return `<div style="margin-top:18px; padding-top:12px; border-top:1px solid #ddd;">`
-            + `<div style="font-size:14px; font-weight:bold; color:#2c3e50; margin-bottom:4px;">⚙ 運用設定</div>`
+        return `<details class="dist-acc mnt-acc mnt-settings"><summary><span class="da-name">⚙ 運用設定（期間・しきい値）</span><span class="da-chev">▾</span></summary><div class="da-body">`
             + `<div style="font-size:12px; color:#777; margin-bottom:10px;">期間・しきい値を変更します（変更は最大2分で全端末に反映）。</div>`
             + row('cfg-expireKodateMonths', '「会えた/投函」を未に戻す（戸建て・小規模集合）', c.expireKodateMonths, 'か月')
             + row('cfg-expireLargeMonths', '同上（大規模集合＝13戸以上）', c.expireLargeMonths, 'か月')
             + row('cfg-coolingMonths', '区域の冷却期間（返却後この期間は再貸出不可）', c.coolingMonths, 'か月')
             + row('cfg-relendThreshold', '再貸出候補にする訪問率のしきい値', c.relendThreshold, '%')
             + `<button class="clear-btn" style="width:100%; margin-top:4px; background:#3d6b8a;" onclick="runSaveSettings()">💾 設定を保存</button>`
-            + `</div>`;
+            + `</div></details>`;
     }
     function runSaveSettings() {
         const keys = ['expireKodateMonths', 'expireLargeMonths', 'coolingMonths', 'relendThreshold'];
@@ -3209,9 +3213,9 @@
        枠＋薄塗り＋枠内の丁目/番地ラベルを描く。ラベルをタップするとその区域を赤枠＋通常利用
        （既存 enterAreaFromList）へ切り替える。終了は下部バーの✕／Esc／サインアウト。 */
     const OVERVIEW_COLORS = {
-        personal: { line: '#155d9e', fill: '#4dabf7' }, // 青
-        group:    { line: '#26823a', fill: '#69db7c' }, // 緑
-        whole:    { line: '#cc4c08', fill: '#ffa94d' }  // オレンジ
+        personal: { line: '#3D4E81', fill: '#8E9CCF' }, // インディゴ（メニュー・モーダル見出しと統一）
+        group:    { line: '#2F6B4F', fill: '#7FBFA0' }, // 深緑
+        whole:    { line: '#8E3E4E', fill: '#D08A97' }  // えんじ
     };
     // 区域ラベル「○○N丁目M番」→ ポリゴン(blocks.geojson)＋代表点。address_points.json でオフライン照合（ジオコーディング不要）。
     function resolveAreaFeature(areaLabel) {
@@ -3416,16 +3420,41 @@
     }
 
     // 区域一覧の1行（個人/グループ/全体利用 共通）。origin で返却後の再読込先を切り替える。
+    // 返却は誤タップ防止のため長押しのみ（タップは案内トースト。bindReturnHoldButtons が長押しを割り当てる）。
     function lendAreaRowHtml(a, origin) {
         const canReturn = (a.lentTo === 'self') || (ME.level >= 1); // 個人=本人 / グループ・全体利用=貸出係以上
-        const reload = (origin === 'group') ? 'showGroupAreas' : (origin === 'shared') ? 'showSharedAreas' : 'showPersonalAreas';
         return `<div class="lend-row">`
             + `<div class="grow"><b style="font-size:16px;">${escHtml(a.area)}</b>${a.count !== '' && a.count != null ? `<span style="color:#888; font-size:12px;">（${a.count}件）</span>` : ''}<br>`
             + `<span style="color:#666; font-size:12px;">貸出開始: ${escHtml(a.lendDate || '-')}<br>返却期日: <span class="${dueClass(a.dueDate)}">${escHtml(a.dueDate || '-')}</span>${daysLeftLabel(a.dueDate)}</span></div>`
             + `<div style="display:flex; flex-direction:column; gap:4px; flex-shrink:0;">`
             + `<button class="choice-btn" style="background:#eef3f6; padding:5px 8px; font-size:12px;" onclick="enterAreaFromList('${escHtml(a.area)}')">地図を表示</button>`
-            + (canReturn ? `<button class="clear-btn" style="padding:5px 8px; font-size:12px;" onclick="returnAreaConfirm(${a.id}, '${escHtml(a.area)}', ${reload})">区域を返却</button>` : '')
+            + (canReturn ? `<button class="clear-btn return-hold-btn" data-aid="${a.id}" data-area="${escHtml(a.area)}" data-origin="${origin}" style="padding:5px 8px; font-size:12px;">長押しで返却</button>` : '')
             + `</div></div>`;
+    }
+    // 「長押しで返却」ボタンに長押しを割り当てる（区域一覧の描画後に呼ぶ）。タップだけなら案内のみ＝押し間違いで返却が始まらない。
+    function bindReturnHoldButtons() {
+        document.querySelectorAll('#app-modal-body .return-hold-btn').forEach(btn => {
+            if (btn._holdBound) return; btn._holdBound = true;
+            const reloadFn = btn.dataset.origin === 'group' ? showGroupAreas
+                : btn.dataset.origin === 'shared' ? showSharedAreas : showPersonalAreas;
+            attachLongPress(btn,
+                () => showToast('返却するにはボタンを長押ししてください', false, true),
+                () => returnAreaConfirm(Number(btn.dataset.aid), btn.dataset.area, reloadFn));
+        });
+    }
+    // 区域一覧を地区ごとのアコーディオンにする（個人/グループ/全体利用 共通の見た目）。地区が1つだけなら開いた状態で出す。
+    function distAccHtml_(areas, origin) {
+        const byDist = {};
+        areas.forEach(a => { const d = districtOfArea(a.area); (byDist[d] = byDist[d] || []).push(a); });
+        const dists = AREA_GRID_ORDER.filter(d => (byDist[d] || []).length)
+            .concat(Object.keys(byDist).filter(d => AREA_GRID_ORDER.indexOf(d) < 0));
+        return dists.map(d => {
+            const rows = byDist[d] || [];
+            return `<details class="dist-acc"${dists.length === 1 ? ' open' : ''}>`
+                + `<summary><span class="da-name">${escHtml(d)}</span><span class="da-num">${rows.length}区域</span><span class="da-chev">▾</span></summary>`
+                + `<div class="da-body">${rows.map(a => lendAreaRowHtml(a, origin)).join('')}</div>`
+                + `</details>`;
+        }).join('');
     }
     // 👤 個人の区域カード（青テーマ）
     function showPersonalAreas() {
@@ -3435,9 +3464,10 @@
             overviewAreas.personal = mine; // 「🗺 全て表示」（一括枠表示）用に保持
             const body = document.getElementById('app-modal-body');
             if (!mine.length) { body.innerHTML = '<div style="color:#888; padding:8px;">あなた個人への割り当てはありません。</div>'; return; }
-            let html = `<button class="area-allbtn aa-personal" onclick="enterAreaOverview('personal')" title="個人の区域を全て地図上に枠表示"><span class="aa-ttl">🗺 全て表示</span><span class="aa-sub">地図に一括 ／ ${mine.length} 区域</span></button>`;
-            html += mine.map(a => lendAreaRowHtml(a, 'personal')).join('');
+            let html = `<button class="area-allbtn aa-personal" onclick="enterAreaOverview('personal')" title="個人の区域を全て地図上に枠表示"><span class="aa-ttl">🗺 地図上に全て表示</span><span class="aa-sub">地図に一括 ／ ${mine.length} 区域</span></button>`;
+            html += distAccHtml_(mine, 'personal'); // 地区ごとのアコーディオン（全体利用と同じ見た目）
             body.innerHTML = html;
+            bindReturnHoldButtons(); // 「長押しで返却」を有効化
         };
         // 起動時取得や前回表示の区域データがあれば待たずに即表示し、裏で最新化（体感ゼロ待ち）
         if (areaStore.mine) { render(areaStore.mine); refreshAreaHalf_('mine', 'personal', render); return; }
@@ -3454,9 +3484,10 @@
             const body = document.getElementById('app-modal-body');
             if (!grp.length) { body.innerHTML = '<div style="color:#888; padding:8px;">現在、グループへの割り当てはありません。</div>'; return; }
             document.getElementById('app-modal-title').textContent = '👥 グループの区域（' + grp[0].group + '）'; // 見出しに対象グループ名を表示
-            let html = `<button class="area-allbtn aa-group" onclick="enterAreaOverview('group')" title="グループの区域を全て地図上に枠表示"><span class="aa-ttl">🗺 全て表示</span><span class="aa-sub">地図に一括 ／ ${grp.length} 区域</span></button>`;
-            html += grp.map(a => lendAreaRowHtml(a, 'group')).join('');
+            let html = `<button class="area-allbtn aa-group" onclick="enterAreaOverview('group')" title="グループの区域を全て地図上に枠表示"><span class="aa-ttl">🗺 地図上に全て表示</span><span class="aa-sub">地図に一括 ／ ${grp.length} 区域</span></button>`;
+            html += distAccHtml_(grp, 'group'); // 地区ごとのアコーディオン（全体利用と同じ見た目）
             body.innerHTML = html;
+            bindReturnHoldButtons(); // 「長押しで返却」を有効化
         };
         // 起動時取得や前回表示の区域データがあれば待たずに即表示し、裏で最新化（体感ゼロ待ち）
         if (areaStore.mine) { render(areaStore.mine); refreshAreaHalf_('mine', 'group', render); return; }
@@ -3490,23 +3521,12 @@
         const body = document.getElementById('app-modal-body');
         const areas = sharedState.areas || [];
         if (!areas.length) { body.innerHTML = '<div style="color:#888; padding:8px;">現在、全体利用の区域はありません。</div>'; return; }
-        const byDist = {};
-        areas.forEach(a => { const d = districtOfArea(a.area); (byDist[d] = byDist[d] || []).push(a); });
-        // 表示する地区＝貸出中区域がある地区のみ（AREA_GRID_ORDER 順→一覧に無い地区は末尾）
-        const dists = AREA_GRID_ORDER.filter(d => (byDist[d] || []).length)
-            .concat(Object.keys(byDist).filter(d => AREA_GRID_ORDER.indexOf(d) < 0));
-        const rowHtml = a => lendAreaRowHtml(a, 'shared'); // 個人/グループと同一実装に一本化（全体利用は lentTo 無し＝canReturn は level>=1 に自然退化）
-        // ① アコーディオン群の一番上に「🗺 全て表示」（地図に一括枠表示）
-        let html = `<button class="area-allbtn aa-whole" onclick="enterAreaOverview('whole')" title="全体利用の区域を全て地図上に枠表示"><span class="aa-ttl">🗺 全て表示</span><span class="aa-sub">地図に一括 ／ 貸出中 計 ${areas.length} 区域</span></button>`;
-        // ② 地区ごとのアコーディオン（見出し＝地区名＋区域数。開くと一覧）
-        html += dists.map(d => {
-            const rows = byDist[d] || [];
-            return `<details class="dist-acc">`
-                + `<summary><span class="da-name">${escHtml(d)}</span><span class="da-num">${rows.length}区域</span><span class="da-chev">▾</span></summary>`
-                + `<div class="da-body">${rows.map(rowHtml).join('')}</div>`
-                + `</details>`;
-        }).join('');
+        // ① アコーディオン群の一番上に「🗺 地図上に全て表示」（地図に一括枠表示）
+        let html = `<button class="area-allbtn aa-whole" onclick="enterAreaOverview('whole')" title="全体利用の区域を全て地図上に枠表示"><span class="aa-ttl">🗺 地図上に全て表示</span><span class="aa-sub">地図に一括 ／ 貸出中 計 ${areas.length} 区域</span></button>`;
+        // ② 地区ごとのアコーディオン（個人/グループと共通の distAccHtml_。全体利用は lentTo 無し＝canReturn は level>=1 に自然退化）
+        html += distAccHtml_(areas, 'shared');
         body.innerHTML = html;
+        bindReturnHoldButtons(); // 「長押しで返却」を有効化
     }
     // （地区マップ表示は廃止：全体利用は地区アコーディオンの一覧表示に統一。decorateSharedMap を撤去）
 
@@ -3687,8 +3707,11 @@
         const allLent = lendState.areas.filter(a => a.user || a.group);
         const lent = allLent.filter(lentAreaMatches); // 上部の絞り込み（借りる人・地区/丁目/範囲）＋期間で自動フィルタ
         const pf = lendState.period || (lendState.period = { field: 'lend', from: '', to: '' });
-        html += `<div style="background:#d4dae0; border:1px solid #b3bcc4; border-radius:6px; padding:8px; margin-top:8px;">`;
-        html += `<div style="font-weight:bold; padding-bottom:6px; border-bottom:1px solid #aeb8c0; margin-bottom:6px;">貸出中の区域（${lent.length}${lent.length !== allLent.length ? ' / ' + allLent.length : ''}）</div>`;
+        // 貸出中の区域＝アコーディオン（基本は閉じる）。この画面は選択のたび全再描画されるため、開閉状態は lendState に保持して復元する。
+        lendState.lentDistOpen = lendState.lentDistOpen || {};
+        html += `<details class="dist-acc" style="margin-top:10px;"${lendState.lentOpen ? ' open' : ''} ontoggle="lendState.lentOpen=this.open">`
+            + `<summary><span class="da-name">📋 貸出中の区域</span><span class="da-num">${lent.length}${lent.length !== allLent.length ? ' / ' + allLent.length : ''}件</span><span class="da-chev">▾</span></summary>`
+            + `<div class="da-body">`;
         if (allLent.length) {
             // 期間フィルタ（貸出日／返却期日を切替・いつ〜いつ）。上部の借りる人・地区の絞り込みと合わせて下の一覧に効く
             html += `<div style="display:flex; gap:4px; align-items:center; flex-wrap:wrap; margin-bottom:6px;">`
@@ -3699,15 +3722,29 @@
                 + ((pf.from || pf.to) ? `<button class="lend-act-btn sm" style="background:#eef3f6;" onclick="lendPeriodClear()">期間クリア</button>` : '')
                 + `</div>`;
         }
-        html += lent.length ? lent.map(a =>
+        const lentRowHtml = a =>
             `<div class="lend-row"><div class="grow"><b>${escHtml(a.area)}</b>　<span style="font-size:13px; color:#333;">${escHtml(a.group ? (a.group === SHARED_GROUP_NAME ? '👪 全体利用' : a.group + '（グループ）') : (a.name || uname(a.user)))}</span><br>`
             + `<span style="font-size:12px; color:#666;">${escHtml(a.lendDate || '-')} → <span class="${dueClass(a.dueDate)}">${escHtml(a.dueDate || '-')}</span></span></div>`
             + `<div style="display:flex; gap:4px; flex:0 0 auto;">`
             + `<button class="lend-act-btn sm" style="background:#C75F56; border-color:#C75F56; color:#fff;" onclick="doReturnArea(${a.id}, '${escHtml(a.area)}')">返却</button>`
             + `<button class="lend-act-btn sm" style="background:#C58A3D; border-color:#C58A3D; color:#fff;" onclick="cancelLendArea(${a.id}, '${escHtml(a.area)}')">キャンセル</button>`
-            + `</div></div>`
-        ).join('') : `<div style="color:#888; padding:6px;">${allLent.length ? '条件に合う貸出はありません' : 'ありません'}</div>`;
-        html += `</div>`;
+            + `</div></div>`;
+        if (lent.length) {
+            // 地区ごとの内側アコーディオン（全体利用・網羅状況と同じ見た目。地区が1つだけなら開いた状態）
+            const byDist = {};
+            lent.forEach(a => { const d = districtOfArea(a.area); (byDist[d] = byDist[d] || []).push(a); });
+            const dists = AREA_GRID_ORDER.filter(d => (byDist[d] || []).length)
+                .concat(Object.keys(byDist).filter(d => AREA_GRID_ORDER.indexOf(d) < 0));
+            html += dists.map(d => {
+                const open = lendState.lentDistOpen[d] || dists.length === 1;
+                return `<details class="dist-acc"${open ? ' open' : ''} ontoggle="lendState.lentDistOpen['${escHtml(d)}']=this.open">`
+                    + `<summary><span class="da-name">${escHtml(d)}</span><span class="da-num">${(byDist[d] || []).length}件</span><span class="da-chev">▾</span></summary>`
+                    + `<div class="da-body">${(byDist[d] || []).map(lentRowHtml).join('')}</div></details>`;
+            }).join('');
+        } else {
+            html += `<div style="color:#888; padding:6px;">${allLent.length ? '条件に合う貸出はありません' : 'ありません'}</div>`;
+        }
+        html += `</div></details>`;
         body.innerHTML = html;
     }
     // プレビュー: モーダルを一旦隠して地図で区域を確認 →「戻る」で選択状態のまま貸出画面へ

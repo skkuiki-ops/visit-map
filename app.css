@@ -60,12 +60,12 @@
         .area-allbtn:active { transform:scale(0.99); }
         .area-allbtn .aa-ttl { font-size:18px; font-weight:bold; }
         .area-allbtn .aa-sub { font-size:12px; }
-        .area-allbtn.aa-personal { background:#e7f1fb; border-color:#155d9e; color:#0f4c8f; }
-        .area-allbtn.aa-personal .aa-sub { color:#3f78b0; }
-        .area-allbtn.aa-group { background:#e7f6ea; border-color:#26823a; color:#1c6e31; }
-        .area-allbtn.aa-group .aa-sub { color:#3f9255; }
-        .area-allbtn.aa-whole { background:#fdeee2; border-color:#cc4c08; color:#9a3a08; }
-        .area-allbtn.aa-whole .aa-sub { color:#b5642f; }
+        .area-allbtn.aa-personal { background:#edf0f7; border-color:#3D4E81; color:#35446F; }
+        .area-allbtn.aa-personal .aa-sub { color:#6b78a3; }
+        .area-allbtn.aa-group { background:#ecf4f0; border-color:#2F6B4F; color:#285C43; }
+        .area-allbtn.aa-group .aa-sub { color:#5f8a75; }
+        .area-allbtn.aa-whole { background:#f8f0f2; border-color:#8E3E4E; color:#7B3543; }
+        .area-allbtn.aa-whole .aa-sub { color:#a8707c; }
         .dist-acc { border:1px solid #d6dde2; border-radius:10px; margin-bottom:8px; overflow:hidden; background:#fff; }
         .dist-acc > summary { list-style:none; cursor:pointer; display:flex; align-items:center; gap:8px; padding:11px 14px; font-size:15px; font-weight:bold; color:#356B82; background:#f3f7f9; }
         .dist-acc > summary::-webkit-details-marker { display:none; }
@@ -75,6 +75,12 @@
         .dist-acc[open] > summary { border-bottom:1px solid #e3eaee; }
         .dist-acc[open] > summary .da-chev { transform:rotate(180deg); }
         .dist-acc .da-body { padding:8px 10px; }
+        /* メンテナンス画面のセクション・アコーディオン（dist-acc の見出し色替え版。区分ごとに色分けして取り違えを防ぐ） */
+        .mnt-acc > summary { color:#fff; }
+        .mnt-acc > summary .da-chev { color:rgba(255,255,255,0.85); }
+        .mnt-acc.mnt-clear > summary { background:#9E5A4A; }     /* 期間指定クリア＝テラコッタ */
+        .mnt-acc.mnt-coverage > summary { background:#7A4A6A; }  /* 網羅履歴クリア＝紫（実行ボタンと同系） */
+        .mnt-acc.mnt-settings > summary { background:#3D6B8A; }  /* 運用設定＝青（保存ボタンと同系） */
         /* 移動後の地域名ラベル（画面上部・常時表示・タップで枠/表示を消去） */
         #area-label { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 9999; background: rgba(44,62,80,0.92); color: #fff; font-weight: bold; font-size: 14px; padding: 8px 16px; border-radius: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); max-width: 92%; text-align: center; cursor: pointer; -webkit-touch-callout: none; user-select: none; touch-action: manipulation; }
 
@@ -192,17 +198,21 @@
         .menu-item { display: block; width: 100%; text-align: left; background: none; border: none; padding: 11px 12px; font-size: 15px; cursor: pointer; border-radius: 6px; }
         .menu-item:active { background: #eef3f6; }
         .menu-item.need-lend, .menu-item.need-manage, .menu-item.need-sys { display: none; } /* 役割で出し分け */
-        body.role-lend .menu-item.need-lend, body.role-manage .menu-item.need-manage, body.role-sys .menu-item.need-sys { display: block; background: #eef4f7; border-left: 3px solid #5E9DB8; } /* 権限項目は淡い青＋左の青帯で区別 */
-        /* カテゴリ色分け：個人=青／グループ=緑／全体利用=オレンジ（地図の枠色と統一）／使い方=橙 */
-        .menu-item.cat-personal { background: #155d9e; color: #fff; }
-        .menu-item.cat-personal:active { background: #114e85; }
-        .menu-item.cat-group { background: #26823a; color: #fff; }
-        .menu-item.cat-group:active { background: #1f6c30; }
-        .menu-item.cat-whole { background: #cc4c08; color: #fff; }
-        .menu-item.cat-whole:active { background: #ab3f06; }
+        /* 貸出メニュー（lender+）＝琥珀茶系／管理メニュー（manager+・sysadmin）＝スレート青系 で帯色を分けて区別 */
+        body.role-lend .menu-item.need-lend { display: block; background: #faf6ec; border-left: 3px solid #C09A5A; }
+        body.role-manage .menu-item.need-manage, body.role-sys .menu-item.need-sys { display: block; background: #f1f5f8; border-left: 3px solid #7C97AD; }
+        /* カテゴリ色分け：個人=インディゴ／グループ=深緑／全体利用=えんじ（反転見出し。地図の一括枠表示・モーダル見出しと統一）／使い方=橙 */
+        .menu-item.cat-personal { background: #3D4E81; color: #fff; }
+        .menu-item.cat-personal:active { background: #33436E; }
+        .menu-item.cat-group { background: #2F6B4F; color: #fff; }
+        .menu-item.cat-group:active { background: #275C43; }
+        .menu-item.cat-whole { background: #8E3E4E; color: #fff; }
+        .menu-item.cat-whole:active { background: #7B3543; }
         .menu-item.cat-help { background: #fbf2e0; border-left: 3px solid #D9A441; }
-        .menu-section { display: none; font-size: 11px; color: #7f8c93; font-weight: bold; padding: 9px 12px 3px; border-top: 1px solid #e1e6e9; margin-top: 4px; } /* 管理者メニューの見出し（adminのみ） */
-        body.role-lend .menu-section { display: block; }
+        /* メニュー見出し（貸出メニュー=lender+／管理メニュー=manager+ で出し分け。項目の帯色と同系で対応付け） */
+        .menu-section { display: none; font-size: 11px; font-weight: bold; padding: 9px 12px 3px; border-top: 1px solid #e1e6e9; margin-top: 4px; }
+        body.role-lend .menu-section.sec-lend { display: block; color: #8A6D3B; }
+        body.role-manage .menu-section.sec-manage { display: block; color: #4A6B84; }
         /* 印刷用表示（貸出係+・PC/タブレット。詳細地図1枚・向きは枠比で自動切替・白黒・大きめ文字。年配者向け） */
         @media (max-width: 768px) { body.role-lend .menu-item.pc-only { display: none; } } /* スマホでは出さない */
         #print-view { display: none; position: fixed; inset: 0; z-index: 10010; background: #fff; color: #000; overflow: auto; padding: 14px 18px; }
@@ -236,15 +246,15 @@
         #app-modal-head button { min-width: 48px; background: #f0f0f0; border: 1px solid #ccc; border-radius: 6px; padding: 4px 8px; font-size: 13px; cursor: pointer; }
         #app-modal-body { padding: 12px; overflow-y: auto; font-size: 14px; }
         /* 区域カードのテーマ配色（個人=青／グループ=緑／全体利用=オレンジ。ヘッダー＋本文の地色で区別） */
-        #app-modal-card.app-modal-theme-personal #app-modal-head { background: #155d9e; border-bottom-color: #15579a; }
+        #app-modal-card.app-modal-theme-personal #app-modal-head { background: #3D4E81; border-bottom-color: #384876; }
         #app-modal-card.app-modal-theme-personal #app-modal-title { color: #fff; }
-        #app-modal-card.app-modal-theme-personal #app-modal-body { background: #f5f9fe; }
-        #app-modal-card.app-modal-theme-group #app-modal-head { background: #26823a; border-bottom-color: #277f38; }
+        #app-modal-card.app-modal-theme-personal #app-modal-body { background: #f5f6fa; }
+        #app-modal-card.app-modal-theme-group #app-modal-head { background: #2F6B4F; border-bottom-color: #2B6248; }
         #app-modal-card.app-modal-theme-group #app-modal-title { color: #fff; }
-        #app-modal-card.app-modal-theme-group #app-modal-body { background: #f5fbf6; }
-        #app-modal-card.app-modal-theme-whole #app-modal-head { background: #cc4c08; border-bottom-color: #c44d0b; }
+        #app-modal-card.app-modal-theme-group #app-modal-body { background: #f4f9f6; }
+        #app-modal-card.app-modal-theme-whole #app-modal-head { background: #8E3E4E; border-bottom-color: #833948; }
         #app-modal-card.app-modal-theme-whole #app-modal-title { color: #fff; }
-        #app-modal-card.app-modal-theme-whole #app-modal-body { background: #fff8f3; }
+        #app-modal-card.app-modal-theme-whole #app-modal-body { background: #faf4f5; }
         #app-modal-card[class*="app-modal-theme-"] #app-modal-head button { background: rgba(255,255,255,0.92); border-color: rgba(255,255,255,0.55); color: #333; }
         #app-modal-body select, #app-modal-body input { box-sizing: border-box; padding: 8px; font-size: 15px; border: 1px solid #bbb; border-radius: 6px; }
         /* アイコンのフィルタ（印ボタン長押し）。チェックした種類だけ地図に表示する */
