@@ -12,7 +12,7 @@
     const MY_TOKEN = 'pk.eyJ1IjoidG9ydW8xMTA0IiwiYSI6ImNtcTdlOGp2MzBhY3QycXBocno2OHQ5dmoifQ.bfkHvR5OmkacGJsDorHL5Q';
     mapboxgl.accessToken = MY_TOKEN;
     // ↓ デプロイした GAS Webアプリの URL（.../exec）に置き換える
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbw0TtmgUx_YW95WWgc6gmGHe8bcd0bN2b-KQy_83lYFeLyzHf-a3J3LNsYylfznyKGH/exec";
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzleGjh0GB83sR1ijj1wsil0xXNONGTqVrGB4YefSvLDsqFc0njRP3se_tfGSlfCIRq/exec";
     // ↓ Google Cloud で発行した OAuth クライアントID（code_api.gs と同一値）
     const GOOGLE_CLIENT_ID = "273556684740-01e17ja1as1pchs4cvlfqvh67vbt51l3.apps.googleusercontent.com";
     // ↓ 地図スタイル（Mapbox Studio のスタイルURL。標準に戻す場合は 'mapbox://styles/mapbox/streets-v12'）
@@ -2375,34 +2375,35 @@
     // サーバー側エラーを画面に出して原因を分かるようにする
     function handleServerError(err) {
         if (err && err.code === 'overview_readonly') return; // 表示モードの編集ブロック（apiCallガードが通知済み・サーバ記録不要）
-        // 行ずれで対象が既に削除済み（RowMismatch）＝業務上の想定エラー。操作は自動再送せず、最新へ再同期して案内する。
+        // 行ずれで対象が既に削除済み（RowMismatch）＝業務上の想定エラー。操作は自動再送せず、最新へ再同期して落ち着いた案内(soft)。
         if (err && err.code === 'RowMismatch') {
-            showToast('対象のピンは削除されています。最新の状態に更新します', true);
+            showToast('対象のピンは削除されています。最新の状態に更新します', false, true);
             apiCall('getData', {}).then(renderMarkers).catch(() => {}); // 1回だけ再取得（失敗は握りつぶし＝ループ防止）
             return;
         }
-        // 冷却中/停止中の貸出拒否（CoolingDenied）＝業務上の想定エラー。サーバの理由文をそのまま案内（「通信エラー」扱いにしない）。
+        // 冷却中/停止中の貸出拒否（CoolingDenied）＝業務上の想定エラー。サーバの理由文を落ち着いた案内(soft)で出す（「通信エラー」扱いにしない）。
         if (err && err.code === 'CoolingDenied') {
-            showToast((err && err.message) ? err.message : '現在この区域は貸し出せません', true);
+            showToast((err && err.message) ? err.message : '現在この区域は貸し出せません', false, true);
             return;
         }
-        console.error('サーバーエラー:', err);
+        console.error('サーバーエラー:', err); // 原因調査はコンソール／ErrorLogで可能。画面には技術的な文言を出さない（不安を煽らない）。
         const msg = (err && err.message) ? err.message : String(err);
-        sendErrorToServer('CommError', msg, 'handleServerError'); // 誰の端末で起きたかを ErrorLog に集約する
-        // 認証エラー（トークン無効・期限切れ・権限なし）はログイン画面へ戻す。
-        // サーバーの具体的な理由（権限なしなら対象メール入り）をそのまま表示し、原因を分かるようにする。
+        sendErrorToServer('CommError', msg, 'handleServerError'); // 誰の端末で起きたかを ErrorLog に集約（画面表示とは独立して記録は残す）
+        // 認証エラー（トークン無効・期限切れ・権限なし）はログイン画面へ戻す。理由は落ち着いた案内(soft)で伝える（技術色の赤は使わない）。
         // 判定は GAS の error種別(code=AuthFailed/Forbidden)を優先し、文言一致はフォールバック（文言変更で壊れない）。
         // showLogin() は自動再サインインしないため、ここに来てもループにはならない。
         const code = (err && err.code) || '';
         if (code === 'AuthFailed' || code === 'Forbidden' || msg.indexOf('Access Denied') >= 0 || msg.indexOf('利用権限') >= 0 || msg.indexOf('サインイン') >= 0) {
-            showToast(msg, true);
+            showToast(msg, false, true);
             showLogin();
             return;
         }
-        showToast('通信エラー: ' + msg, true);
+        // 通信エラー・タイムアウト等の「よく分からない」技術エラーは、赤枠で不安を煽らず落ち着いた短文にする（技術文言は出さない）。
+        showToast('通信が不安定です。もう一度お試しください', false, true);
     }
 
-    function showToast(msg, isError) {
+    // isError=赤(失敗)/未指定=緑(成功)。soft=琥珀（通信の一時不調など「よく分からない技術エラー」の代わりの落ち着いた案内。赤で不安を煽らない）。
+    function showToast(msg, isError, soft) {
         let el = document.getElementById('app-toast');
         if (!el) {
             el = document.createElement('div');
@@ -2410,12 +2411,12 @@
             el.style.cssText = 'position:absolute; top:60px; left:50%; transform:translateX(-50%); z-index:10008; padding:8px 14px; border-radius:6px; font-size:14px; box-shadow:0 2px 6px rgba(0,0,0,0.3); max-width:90%; text-align:center;'; // トースト=結果通知は最前面（モーダル・busyより上）
             document.body.appendChild(el);
         }
-        el.style.background = isError ? '#C75F56' : '#5FA97D';
+        el.style.background = soft ? '#E0A458' : (isError ? '#C75F56' : '#5FA97D'); // soft=琥珀 / error=赤 / success=緑
         el.style.color = '#fff';
         el.textContent = msg;
         el.style.display = 'block';
         clearTimeout(window._toastTimer);
-        window._toastTimer = setTimeout(() => { el.style.display = 'none'; }, isError ? 8000 : 2500);
+        window._toastTimer = setTimeout(() => { el.style.display = 'none'; }, soft ? 4500 : (isError ? 8000 : 2500));
     }
 
     /* ── 確認ダイアログ（ネイティブ confirm/alert の代替・独自UI） ──
@@ -3300,6 +3301,36 @@
         if (btn) btn.textContent = hidden ? 'アイコンを表示' : 'アイコンを非表示';
     }
 
+    /* ── 区域読み込みの監視（個人/グループ/全体利用）──
+       応答がハングしても待ち続けないための保険。7秒で応答が来なければ「再度試す」を本文に出す。
+       遅れて届いた応答はボタン表示を上書きしない（done で破棄）。通信失敗も「よく分からない赤エラー」を出さず再試行へ誘導。 */
+    function runAreaLoad(loadPromise, onData, retryFn) {
+        let done = false;
+        const timer = setTimeout(function () {
+            if (done) return; done = true;
+            hideBusy();
+            showAreaRetry(retryFn); // 7秒経過＝時間がかかりすぎ → 再試行ボタン
+        }, 7000);
+        loadPromise.then(function (data) {
+            if (done) return; done = true; clearTimeout(timer); hideBusy();
+            onData(data);
+        }).catch(function () {
+            if (done) return; done = true; clearTimeout(timer); hideBusy();
+            showAreaRetry(retryFn); // 通信失敗も静かに再試行へ（handleServerError の赤トーストは出さない）
+        });
+    }
+    // モーダル本文に「再度試す」を表示（区域読み込みが遅い/失敗したとき）。retryFn は該当の show*Areas。
+    function showAreaRetry(retryFn) {
+        const body = document.getElementById('app-modal-body');
+        if (!body) return;
+        body.innerHTML = '<div style="text-align:center; padding:26px 14px; color:#555;">'
+            + '<div style="font-size:15px; line-height:1.6; margin-bottom:16px;">読み込みに時間がかかっています。<br>通信の状態を確認して、もう一度お試しください。</div>'
+            + '<button class="choice-btn" id="area-retry-btn" style="background:#5E9DB8; color:#fff; padding:10px 22px; font-size:15px; border:none; border-radius:8px;">🔄 再度試す</button>'
+            + '</div>';
+        const btn = document.getElementById('area-retry-btn');
+        if (btn) btn.onclick = retryFn;
+    }
+
     // 区域一覧の1行（個人/グループ/全体利用 共通）。origin で返却後の再読込先を切り替える。
     function lendAreaRowHtml(a, origin) {
         const canReturn = (a.lentTo === 'self') || (ME.level >= 1); // 個人=本人 / グループ・全体利用=貸出係以上
@@ -3316,7 +3347,7 @@
     function showPersonalAreas() {
         openAppModal('👤 個人の区域', 'personal');
         showBusy('読み込み中…');
-        apiCall('getMyAreas', {}).then(list => {
+        runAreaLoad(apiCall('getMyAreas', {}), list => {
             const mine = (list || []).filter(a => a.lentTo !== 'group'); // 自分個人への貸出
             overviewAreas.personal = mine; // 「🗺 全て表示」（一括枠表示）用に保持
             const body = document.getElementById('app-modal-body');
@@ -3324,13 +3355,13 @@
             let html = `<button class="area-allbtn aa-personal" onclick="enterAreaOverview('personal')" title="個人の区域を全て地図上に枠表示"><span class="aa-ttl">🗺 全て表示</span><span class="aa-sub">地図に一括 ／ ${mine.length} 区域</span></button>`;
             html += mine.map(a => lendAreaRowHtml(a, 'personal')).join('');
             body.innerHTML = html;
-        }).catch(handleServerError).finally(hideBusy);
+        }, showPersonalAreas); // 7秒で応答なし／失敗 → 「再度試す」
     }
     // 👥 グループの区域カード（緑テーマ）
     function showGroupAreas() {
         openAppModal('👥 グループの区域', 'group');
         showBusy('読み込み中…');
-        apiCall('getMyAreas', {}).then(list => {
+        runAreaLoad(apiCall('getMyAreas', {}), list => {
             const grp = (list || []).filter(a => a.lentTo === 'group'); // 自分の所属グループへの貸出
             overviewAreas.group = grp; // 「🗺 全て表示」（一括枠表示）用に保持
             const body = document.getElementById('app-modal-body');
@@ -3339,7 +3370,7 @@
             let html = `<button class="area-allbtn aa-group" onclick="enterAreaOverview('group')" title="グループの区域を全て地図上に枠表示"><span class="aa-ttl">🗺 全て表示</span><span class="aa-sub">地図に一括 ／ ${grp.length} 区域</span></button>`;
             html += grp.map(a => lendAreaRowHtml(a, 'group')).join('');
             body.innerHTML = html;
-        }).catch(handleServerError).finally(hideBusy);
+        }, showGroupAreas); // 7秒で応答なし／失敗 → 「再度試す」
     }
 
     // ── 全体利用（共同利用）の区域：地区ごとに集計し、一覧／地区マップで表示（閲覧は全員可） ──
@@ -3354,10 +3385,10 @@
     function showSharedAreas() {
         openAppModal('👪 全体利用の区域', 'whole');
         showBusy('読み込み中…');
-        apiCall('getSharedAreas', {}).then(list => {
+        runAreaLoad(apiCall('getSharedAreas', {}), list => {
             sharedState.areas = list || [];
             renderSharedAreas();
-        }).catch(handleServerError).finally(hideBusy);
+        }, showSharedAreas); // 7秒で応答なし／失敗 → 「再度試す」
     }
     function renderSharedAreas() {
         const body = document.getElementById('app-modal-body');
