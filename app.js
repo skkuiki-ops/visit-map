@@ -12,7 +12,7 @@
     const MY_TOKEN = 'pk.eyJ1IjoidG9ydW8xMTA0IiwiYSI6ImNtcTdlOGp2MzBhY3QycXBocno2OHQ5dmoifQ.bfkHvR5OmkacGJsDorHL5Q';
     mapboxgl.accessToken = MY_TOKEN;
     // ↓ デプロイした GAS Webアプリの URL（.../exec）に置き換える
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbxdfcfwusKEx2YvSKpNO75hMszk2cYVYr22-22zLir39falLWUNFnkSZcHUrCUxQEMT/exec";
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbxajMJtyb59VyjLnynVHd3UqwCW8EjN0uNRsCdttvL6IMhzj3uZqIUJUKvdJ4BwYfc0/exec";
     // ↓ Google Cloud で発行した OAuth クライアントID（code_api.gs と同一値）
     const GOOGLE_CLIENT_ID = "273556684740-01e17ja1as1pchs4cvlfqvh67vbt51l3.apps.googleusercontent.com";
     // ↓ 地図スタイル（Mapbox Studio のスタイルURL。標準に戻す場合は 'mapbox://styles/mapbox/streets-v12'）
@@ -211,7 +211,7 @@
         return fetch(GAS_API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify(Object.assign({ action: action, idToken: idToken }, params || {}))
+            body: JSON.stringify(Object.assign({ action: action, idToken: idToken, userAgent: (navigator && navigator.userAgent) || '' }, params || {}))
         })
         .then(function (r) { return r.json(); })
         .then(function (res) {
@@ -220,7 +220,7 @@
         });
     }
 
-    // 外部リンク（URLパラメータ）：?area=東小岩3丁目5番 で番地表示、?pin=行番号 でその行のピンの吹き出しを開く
+    // 外部リンク（URLパラメータ）：?area=東小岩3丁目5番 で番地表示、?pin=ID でそのIDのピンの吹き出しを開く
     const _urlParams = new URLSearchParams(location.search);
     const DEEP_LINK_AREA = _urlParams.get('area');
     const DEEP_LINK_PIN = _urlParams.get('pin');
@@ -457,17 +457,18 @@
     }
 
     // ── 施設（目印になる建物）の種類 ── 種別='施設'。種類は属性(I列)に保存。マーカーは絵文字のみ（丸なし）。
+    // color は未使用（マーカー色は styleFacilityMarker が単一の正。郵便局のみ〒赤太字）。
     const FACILITY_TYPES = [
-        { v: '区の施設',          icon: '🏛️', color: '#7B5EA7' },
-        { v: 'コンビニ',          icon: '🏪', color: '#E08A3C' },
-        { v: 'スーパー',          icon: '🛍️', color: '#4F8FBF' },
-        { v: '病院',             icon: '🏥', color: '#C9544B' },
-        { v: '郵便局',           icon: '〒', color: '#E60012' }, // 〒マーク（マーカーは赤・太字で表示）
-        { v: '公園',             icon: '🌳', color: '#4F9E5E' },
-        { v: '学校',             icon: '🏫', color: '#D9A441' },
-        { v: 'カフェ・レストラン', icon: '🍴', color: '#B07A4F' },
-        { v: '銭湯',             icon: '♨️', color: '#3E8E8A' },
-        { v: 'ドラッグストア',    icon: '💊', color: '#C75B9E' }
+        { v: '区の施設',          icon: '🏛️' },
+        { v: 'コンビニ',          icon: '🏪' },
+        { v: 'スーパー',          icon: '🛍️' },
+        { v: '病院',             icon: '🏥' },
+        { v: '郵便局',           icon: '〒' }, // 〒マーク（マーカーは赤・太字で表示）
+        { v: '公園',             icon: '🌳' },
+        { v: '学校',             icon: '🏫' },
+        { v: 'カフェ・レストラン', icon: '🍴' },
+        { v: '銭湯',             icon: '♨️' },
+        { v: 'ドラッグストア',    icon: '💊' }
     ];
     // 旧値「コンビニ・スーパー」の後方互換（🏪で表示。編集で「コンビニ」「スーパー」に付け替え可）
     const FACILITY_LEGACY_ICON_ = { 'コンビニ・スーパー': '🏪' };
@@ -614,7 +615,7 @@
         renderIconFilterBody(); applyZoomVisibility();
     }
 
-    // 集合住宅のオートロック有無（新方式=S列。旧データはメモ内から後方互換で取得）
+    // 集合住宅のオートロック有無（R列。旧データはメモ内から後方互換で取得）
     function getAutolock(item) {
         if (item.オートロック) return item.オートロック;
         const m = String(item.特記事項 || '').match(/オートロック:(あり|なし)/);
@@ -633,12 +634,6 @@
         return String(s == null ? '' : s).replace(/[&<>"']/g, c => (
             { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
         ));
-    }
-
-    // ポップアップが画面内に収まるよう、ピンを画面の下寄り中央へ寄せる（上向き吹き出し用・簡易版）
-    function centerForPopup(lngLat) {
-        const h = map.getContainer().clientHeight;
-        map.easeTo({ center: lngLat, offset: [0, h * 0.18], duration: 300 });
     }
 
     // 吹き出しの実高さを測り、吹き出しが画面の縦中央に来るよう地図を移動する。
@@ -1274,14 +1269,21 @@
             showToast('リンクの住所が見つかりませんでした', true);
         }
     }
-    // 外部リンク(?pin=行番号)で指定された行のピンへ寄り、その吹き出しを開く（スプレッドシートの行リンク用）。
-    function openPinDeepLink(rowNumber) {
-        const item = currentData.find(d => d.rowNumber === rowNumber);
+    // 外部リンク(?pin=ID)で指定されたピンへ寄り、その吹き出しを開く（スプレッドシートの行リンク用）。
+    // 安定ID(A列)で照合し、見つからなければ旧行番号リンク互換として rowNumber で照合＋警告を出す。
+    function openPinDeepLink(pinKey) {
+        let item = currentData.find(d => String(d.ID) === String(pinKey));
+        let staleLink = false;
+        if (!item) { // ID で見つからなければ、旧 ?pin=行番号 リンクとして行番号で照合する
+            item = currentData.find(d => d.rowNumber === Number(pinKey));
+            if (item) staleLink = true;
+        }
         if (!item) { showToast('リンクのピンが見つかりませんでした', true); return; }
+        if (staleLink) showToast('リンクが古い可能性があります（別の世帯が開いていないかご確認ください）', true);
         const lng = parseFloat(item.経度), lat = parseFloat(item.緯度);
         if (isNaN(lng) || isNaN(lat)) { showToast('ピンの座標が不正です', true); return; }
         const openIt = () => {
-            const marker = currentMarkers.find(m => m._rowNumber === rowNumber);
+            const marker = currentMarkers.find(m => m._rowNumber === item.rowNumber);
             if (!marker) return; // 間引き表示で未描画なら、寄った後の再描画で再試行される
             if (activeNewMarker) { activeNewMarker.remove(); activeNewMarker = null; }
             currentMarkers.forEach(o => { const p = o.getPopup(); if (o !== marker && p && p.isOpen()) o.togglePopup(); });
@@ -1353,7 +1355,7 @@
         if (typeof onArrive === 'function') onArrive();
     }
 
-    /* ── 住所の表示（街区内包方式で番地を判定）。手動指定(E列)があればそれを優先 ── */
+    /* ── 住所の表示（街区内包方式で番地を判定）。手動指定(D列)があればそれを優先 ── */
     // 詳細ポップアップに入れる「住所」行。未指定の住所は吹き出し表示時に fillDerivedAddress で算出して埋める。
     // attrHtml: 戸建てで住所の右側に置く属性の現在値ボタン（集合住宅は未使用）
     function addrRowHtml(item, attrHtml) {
@@ -1397,50 +1399,9 @@
             attachLongPress(el, () => outlineAddrForPin(rn), () => {});
         });
     }
-    function saveAddressFor(rowNumber, addr) {
-        showBusy('更新中…');
-        apiCall('updateAddress', { rowNumber: rowNumber, address: addr }).then((latest) => {
-            applyInPlace(rowNumber, latest);
-            showToast('住所を保存しました', false);
-        }).catch(handleServerError).finally(hideBusy);
-    }
     // 新規登録フォームで指定中の住所（登録時に送信）
     let newPinAddress = '';
     let newPinLng = NaN, newPinLat = NaN; // 新規登録地点の座標（住所タップで赤枠表示するのに使う）
-    // 住所の「号」を選ぶモーダル（なし＋1〜50）。cb(go) で選択値（''=なし）を返す。Esc/枠外で閉じる。
-    function pickGoNumber(curGo, cb) {
-        let ov = document.getElementById('go-pick-overlay');
-        if (!ov) { ov = document.createElement('div'); ov.id = 'go-pick-overlay'; document.body.appendChild(ov); }
-        let g = `<button class="go-pick-btn${!curGo ? ' cur' : ''}" data-go="">なし</button>`;
-        for (let i = 1; i <= 50; i++) g += `<button class="go-pick-btn${String(i) === String(curGo) ? ' cur' : ''}" data-go="${i}">${i}</button>`;
-        ov.innerHTML = `<div id="go-pick-card"><div id="go-pick-title">「号」を選んでください</div><div id="go-pick-grid">${g}</div><button id="go-pick-cancel">キャンセル</button></div>`;
-        ov.style.display = 'flex';
-        const close = () => { ov.style.display = 'none'; document.removeEventListener('keydown', onKey, true); };
-        const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
-        document.addEventListener('keydown', onKey, true);
-        ov.onclick = (e) => { if (e.target === ov) close(); };
-        ov.querySelectorAll('.go-pick-btn').forEach(b => { b.onclick = () => { close(); cb(b.dataset.go); }; });
-        document.getElementById('go-pick-cancel').onclick = close;
-    }
-    // 既存ピンの住所に「号」を設定（番地部分は維持し、号だけ差し替え）
-    function pickGoForPin(rn) {
-        const item = currentData.find(d => d.rowNumber === rn);
-        if (!item) return;
-        let base = (item.住所 && item.住所 !== '-' && String(item.住所).trim() !== '') ? item.住所 : (deriveAddress(parseFloat(item.経度), parseFloat(item.緯度)) || '');
-        base = addrWithoutGo(base);
-        if (!base) { showToast('先に番地を表示してください', true); return; }
-        pickGoNumber(addrGoOf(item.住所), go => saveAddressFor(rn, addrWithGo(base, go)));
-    }
-    // 新規登録フォームの住所に「号」を設定
-    function pickGoForNew() {
-        let base = addrWithoutGo(newPinAddress || deriveAddress(newPinLng, newPinLat) || '');
-        if (!base) { showToast('先に番地を指定してください', true); return; }
-        pickGoNumber(addrGoOf(newPinAddress), go => {
-            newPinAddress = addrWithGo(base, go);
-            const el = document.getElementById('new-addr-text');
-            if (el) el.textContent = newPinAddress;
-        });
-    }
     // 新規登録フォームに入れる「住所」行。attrHtml: 戸建てで右側に置く属性の現在値ボタン
     function newAddrRowHtml(attrHtml) {
         return `<div style="font-size:14px; color:#555; margin:-2px 0 6px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">`
@@ -1526,7 +1487,7 @@
         return null;
     }
 
-    /* ── 住所の「号」ヘルパー ── 住所(E列)は「○○3丁目5番」または「○○3丁目5番16号」。
+    /* ── 住所の「号」ヘルパー ── 住所(D列)は「○○3丁目5番」または「○○3丁目5番16号」。
        号は末尾の「M号」で表す。街区検索・?area は番地部分だけを使う（号は表示・記録用）。 */
     function addrWithoutGo(addr) { return String(addr || '').replace(/\d+号\s*$/, '').trim(); }
     function addrWithGo(banchi, go) { banchi = addrWithoutGo(banchi); return (go ? banchi + go + '号' : banchi); }
@@ -1592,7 +1553,7 @@
     function showAreaLabel(text) {
         const el = document.getElementById('area-label');
         // 住所だけを表示。タップ＝枠線と住所表示の消去（消去前に確認ダイアログを出すので誤タップでも即消えない）
-        // ※利用者入力(住所D/E列・AreaList区域名)が来るため必ず escHtml（保存型XSS対策）。
+        // ※利用者入力(住所D列・AreaList区域名)が来るため必ず escHtml（保存型XSS対策）。
         el.innerHTML = '<span id="area-label-text">' + escHtml(text) + '</span>';
         el.style.display = 'block';
         attachLongPress(document.getElementById('area-label-text'), () => askClearAreaSelection(), () => {});
@@ -1748,7 +1709,7 @@
         el.addEventListener('contextmenu', (e) => e.preventDefault()); // 長押し時のコールアウト（選択メニュー）を抑止
     }
 
-    map.on('load', () => { /* データ取得はサインイン成功後（handleCredential）に行う */ });
+    // （データ取得はサインイン成功後 onAuthStateChanged→enterApp で行う。map.on('load') 起点は廃止）
 
     // 他アプリ等から戻った時に地図が消えている対策。
     // ① まずサイズ再計算＋再描画（軽い処理）で復帰を試みる。
@@ -1879,12 +1840,11 @@
     });
     map.on('touchend', () => { clearTimeout(window.longPressTimer); });
 
-    // PC: Escape キーで入力フォーム／ポップアップをキャンセル。他に閉じる物が無く「区域一覧に戻る」バー表示中なら一覧へ戻る。
+    // PC: Escape キーで入力フォーム／ポップアップをキャンセル。表示モード中は Esc で終了。
     document.addEventListener('keydown', (e) => {
         if (e.key !== 'Escape') return;
         if (closeOpenForms()) return;
         if (overviewMode) { exitAreaOverview(); return; } // 表示モード中は Esc で終了
-        if (areaListBackTo) returnToAreaList();
     });
 
     // 吹き出し・住所モーダル上でのピンチ（2本指）による画面ズームを抑止する。
@@ -1919,7 +1879,7 @@
         const lngVal = parseFloat(lngLat.lng);
         // タップ地点から住所を逆算して初期値に（号は下で Mapbox から付加。手動上書きは不可）
         newPinAddress = deriveAddress(lngVal, latVal) || '';
-        // 最寄りの「号」(住居番号)を Mapbox から取得して住所に付加（取れなければ番地のみ。手動でも設定可）
+        // 最寄りの「号」(住居番号)を Mapbox から取得して住所に付加（取れなければ番地のみ。手動設定UIは廃止）
         if (newPinAddress) fetchNearestHouseNum(lngVal, latVal).then(go => {
             if (!go || addrGoOf(newPinAddress)) return;       // 取れない／既に号があるなら何もしない
             newPinAddress = addrWithGo(newPinAddress, go);
@@ -2213,15 +2173,13 @@
         if (!type) { appAlert('施設の種類を選んでください'); return; }
         const data = { type: '施設', name: document.getElementById('new-name').value, lat: parseFloat(lat), lng: parseFloat(lng),
             memo: document.getElementById('new-memo').value, attribute: type, address: newPinAddress };
-        const btn = document.getElementById('reg-btn');
-        btn.disabled = true; btn.innerText = '登録中...';
+        // 戸建て/集合の新規登録と同じ楽観型に統一：押した瞬間に吹き出しを閉じ、登録(addNew)は裏で実行する。
+        if (activeNewMarker) activeNewMarker.remove();
+        activeNewMarker = null;
         showSaving();
-        apiCall('addNew', { data: data }).then((latest) => {
-            if (activeNewMarker) activeNewMarker.remove();
-            activeNewMarker = null;
-            showDone('登録しました');
-            renderMarkers(latest);
-        }).catch((err) => { btn.disabled = false; btn.innerText = '登録'; handleServerError(err); }).finally(hideSaving);
+        apiCall('addNew', { data: data })
+            .then((latest) => { currentData = latest; renderMarkers(latest); showDone('登録しました'); })
+            .catch(handleServerError).finally(hideSaving);
     }
 
     function submitNewLocation(lat, lng, type) {
@@ -2321,7 +2279,7 @@
     }
     function loadDataFromSheet() {
         const openDeepLinkPin = () => {
-            // スプレッドシートの行リンク(?pin=行番号)で来た場合は、そのピンの吹き出しを開く（初回のみ）
+            // スプレッドシートの行リンク(?pin=ID)で来た場合は、そのピンの吹き出しを開く（初回のみ）
             if (DEEP_LINK_PIN && !deepLinkPinDone) {
                 deepLinkPinDone = true;
                 openPinDeepLink(Number(DEEP_LINK_PIN));
@@ -2810,7 +2768,7 @@
                 try { map = JSON.parse(item.部屋ステータス || '{}') || {}; } catch (e) { map = {}; }
                 let roomsDone = 0;
                 Object.keys(map).forEach(k => {
-                    if (!validSet[k]) return; // 有効部屋リストにある部屋だけ集計（建物編集で外れた部屋のT列残骸は無視＝率が100%超になるのを防ぐ）
+                    if (!validSet[k]) return; // 有効部屋リストにある部屋だけ集計（建物編集で外れた部屋のS列残骸は無視＝率が100%超になるのを防ぐ）
                     const v = String(map[k] || '');
                     if (isVisitResult_(v)) roomsDone++;
                     else if (v.indexOf('空き家') >= 0) st.vacant++;
@@ -2915,7 +2873,7 @@
         body.innerHTML = html;
     }
 
-    // ── 管理: 印刷用表示（admin・PC/タブレット）。A4横で 左=詳細地図（実地図＋赤枠＋ピン＋集合住宅カード）/ 右=広域地図。白黒・大きめ。
+    // ── 管理: 印刷用表示（貸出係+・PC/タブレット）。詳細地図1枚（実地図＋赤枠＋ピン＋集合住宅カード）。向きは枠比で自動切替。白黒・大きめ。
     //    実地図は Mapbox Static Images API のラスター画像（WebGLの生地図は印刷に弱いため）。重ね物は同じWebメルカトル投影で位置合わせ。
     const PRINT_STYLE = 'mapbox/light-v11'; // 暫定: 建物＋号の両方を描ける既製スタイル。印刷専用スタイル(A案)ができたら 'toruo1104/xxxx' に差し替え
     function staticMapUrl_(lng, lat, zoom, w, h) {
@@ -3090,26 +3048,11 @@
                 .catch(handleServerError).finally(hideBusy);
         });
     }
-    // ── 区域一覧（個人/グループ/全体利用）から「地図を表示」で地図へ来たときに出す「区域一覧に戻る」バー ──
-    // 共通の showAssignedArea/arriveAt は直接フックせず、区域一覧の「地図を表示」ボタン経由でのみ出す
-    // （住所検索・ピン操作・貸出プレビューでは出さない）。消えるのは明示操作のみ：バーtap→一覧を再オープン、✕→バーだけ閉じる。
-    let areaListBackTo = null; // 戻り先の一覧 'personal'(個人) | 'group'(グループ) | 'shared'(全体利用)。null=バー非表示
-    function enterAreaFromList(area, origin) {
+    // 区域一覧（個人/グループ/全体利用）から「地図を表示」で地図へ来たときの遷移。
+    // 共通の showAssignedArea を使い、区域へ flyTo（住所検索と同じ表示）。
+    function enterAreaFromList(area) {
         closeAppModal();                 // 一覧モーダルを閉じてから地図へ
-        showAssignedArea(area);          // 区域へ flyTo（住所検索と同じ表示）。下部バーは出さない＝住所選択遷移と同じ状態
-    }
-    function returnToAreaList() {         // バーtap / Esc → 元の一覧を再オープン
-        const origin = areaListBackTo;
-        hideAreaListBar();
-        if (origin === 'shared') showSharedAreas();
-        else if (origin === 'group') showGroupAreas();
-        else if (origin === 'personal') showPersonalAreas();
-    }
-    function dismissAreaListBar() { hideAreaListBar(); } // ✕ → バーだけ閉じる（地図に留まる）
-    function hideAreaListBar() {
-        areaListBackTo = null;
-        const bar = document.getElementById('area-list-back');
-        if (bar) bar.style.display = 'none';
+        showAssignedArea(area);          // 区域へ flyTo（住所検索と同じ表示）
     }
 
     /* ── 区域オーバービュー：利用可能区域を一括で枠表示（個人=青/グループ=緑/全体利用=オレンジ） ──
@@ -3150,7 +3093,6 @@
         const areas = overviewBucketAreas(bucket);
         if (!areas.length) { showToast('表示できる区域がありません', true); return; }
         closeAppModal();              // 一覧モーダルを閉じてから地図へ
-        hideAreaListBar();            // 「区域一覧に戻る」バーが出ていれば消す
         clearBanchiBox();             // 既存の赤枠を消す
         document.getElementById('area-label').style.display = 'none'; // 上部の住所ラベルも消す
         clearOverviewLabels();        // 念のため前回ラベルを除去
@@ -3246,13 +3188,11 @@
         overviewLabelMarkers.forEach(m => m.remove());
         overviewLabelMarkers = [];
     }
-    // 枠内ラベルタップ：その区域を赤枠＋通常利用へ（既存 enterAreaFromList を流用＝「区域一覧に戻る」バーも出る）。
+    // 枠内ラベルタップ：その区域を赤枠＋通常利用へ（既存 enterAreaFromList を流用）。
     function pickOverviewArea(label) {
-        const origin = (overviewBucket === 'whole') ? 'shared' : overviewBucket; // personal/group/shared
-
         exitAreaOverview();                       // 表示モード解除（枠・ラベル除去、編集ロック解除）
         suppressMapTapUntil = Date.now() + 1200;  // 抜けた直後の貫通タップ抑止
-        enterAreaFromList(label, origin);         // 既存：赤枠＋上部ラベル＋?area=＋「区域一覧に戻る」バー
+        enterAreaFromList(label);                 // 赤枠＋上部ラベル＋?area=
     }
     // 表示モード終了：枠・薄塗り・ラベルを消して通常地図へ戻す（赤枠 banchi-box には触らない）。
     function exitAreaOverview() {
@@ -3271,14 +3211,6 @@
         const bar = document.getElementById('area-overview-bar');
         if (bar) bar.style.display = '';
     }
-    // 表示モードの「← 戻る」：表示を解除し、起動元の区域カードを開き直す（個人/グループ/全体利用）。
-    function overviewBack() {
-        const b = overviewBucket;
-        exitAreaOverview();
-        if (b === 'personal') showPersonalAreas();
-        else if (b === 'group') showGroupAreas();
-        else if (b === 'whole') showSharedAreas();
-    }
     function hideOverviewBar() {
         const bar = document.getElementById('area-overview-bar');
         if (bar) bar.style.display = 'none';
@@ -3290,15 +3222,15 @@
         if (btn) btn.textContent = hidden ? 'アイコンを表示' : 'アイコンを非表示';
     }
 
-    // 区域一覧の1行（個人/グループ共通）。origin で「地図を表示」の戻り先と返却後の再読込先を切り替える。
+    // 区域一覧の1行（個人/グループ/全体利用 共通）。origin で返却後の再読込先を切り替える。
     function lendAreaRowHtml(a, origin) {
-        const canReturn = (a.lentTo === 'self') || (ME.level >= 1); // 個人=本人 / グループ=貸出係以上
-        const reload = (origin === 'group') ? 'showGroupAreas' : 'showPersonalAreas';
+        const canReturn = (a.lentTo === 'self') || (ME.level >= 1); // 個人=本人 / グループ・全体利用=貸出係以上
+        const reload = (origin === 'group') ? 'showGroupAreas' : (origin === 'shared') ? 'showSharedAreas' : 'showPersonalAreas';
         return `<div class="lend-row">`
             + `<div class="grow"><b style="font-size:16px;">${escHtml(a.area)}</b>${a.count !== '' && a.count != null ? `<span style="color:#888; font-size:12px;">（${a.count}件）</span>` : ''}<br>`
             + `<span style="color:#666; font-size:12px;">貸出開始: ${escHtml(a.lendDate || '-')}<br>返却期日: <span class="${dueClass(a.dueDate)}">${escHtml(a.dueDate || '-')}</span>${daysLeftLabel(a.dueDate)}</span></div>`
             + `<div style="display:flex; flex-direction:column; gap:4px; flex-shrink:0;">`
-            + `<button class="choice-btn" style="background:#eef3f6; padding:5px 8px; font-size:12px;" onclick="enterAreaFromList('${escHtml(a.area)}','${origin}')">地図を表示</button>`
+            + `<button class="choice-btn" style="background:#eef3f6; padding:5px 8px; font-size:12px;" onclick="enterAreaFromList('${escHtml(a.area)}')">地図を表示</button>`
             + (canReturn ? `<button class="clear-btn" style="padding:5px 8px; font-size:12px;" onclick="returnAreaConfirm(${a.id}, '${escHtml(a.area)}', ${reload})">区域を返却</button>` : '')
             + `</div></div>`;
     }
@@ -3358,14 +3290,7 @@
         // 表示する地区＝貸出中区域がある地区のみ（AREA_GRID_ORDER 順→一覧に無い地区は末尾）
         const dists = AREA_GRID_ORDER.filter(d => (byDist[d] || []).length)
             .concat(Object.keys(byDist).filter(d => AREA_GRID_ORDER.indexOf(d) < 0));
-        const canReturn = (ME.level >= 1); // 全体利用は貸出係以上のみ返却可
-        const rowHtml = a => `<div class="lend-row">`
-            + `<div class="grow"><b style="font-size:16px;">${escHtml(a.area)}</b>${a.count !== '' && a.count != null ? `<span style="color:#888; font-size:12px;">（${a.count}件）</span>` : ''}<br>`
-            + `<span style="color:#666; font-size:12px;">貸出開始: ${escHtml(a.lendDate || '-')}<br>返却期日: <span class="${dueClass(a.dueDate)}">${escHtml(a.dueDate || '-')}</span>${daysLeftLabel(a.dueDate)}</span></div>`
-            + `<div style="display:flex; flex-direction:column; gap:4px; flex-shrink:0;">`
-            + `<button class="choice-btn" style="background:#eef3f6; padding:5px 8px; font-size:12px;" onclick="enterAreaFromList('${escHtml(a.area)}','shared')">地図を表示</button>`
-            + (canReturn ? `<button class="clear-btn" style="padding:5px 8px; font-size:12px;" onclick="returnAreaConfirm(${a.id}, '${escHtml(a.area)}', showSharedAreas)">区域を返却</button>` : '')
-            + `</div></div>`;
+        const rowHtml = a => lendAreaRowHtml(a, 'shared'); // 個人/グループと同一実装に一本化（全体利用は lentTo 無し＝canReturn は level>=1 に自然退化）
         // ① アコーディオン群の一番上に「🗺 全て表示」（地図に一括枠表示）
         let html = `<button class="area-allbtn aa-whole" onclick="enterAreaOverview('whole')" title="全体利用の区域を全て地図上に枠表示"><span class="aa-ttl">🗺 全て表示</span><span class="aa-sub">地図に一括 ／ 貸出中 計 ${areas.length} 区域</span></button>`;
         // ② 地区ごとのアコーディオン（見出し＝地区名＋区域数。開くと一覧）
@@ -3381,13 +3306,14 @@
     // （地区マップ表示は廃止：全体利用は地区アコーディオンの一覧表示に統一。decorateSharedMap を撤去）
 
     // ── 管理: 区域の貸出・返却 ──
-    let lendState = { users: [], areas: [], sel: { group: '', email: '', district: '', chome: '', range: '' }, period: { field: 'lend', from: '', to: '' } };
+    let lendState = { users: [], areas: [], groups: [], sel: { group: '', email: '', district: '', chome: '', range: '' }, period: { field: 'lend', from: '', to: '' } };
     function showLendScreen() {
         openAppModal('🗂 区域の貸出・返却');
         showBusy('読み込み中…');
         apiCall('getLendData', {}).then(d => {
             lendState.users = d.users || [];
             lendState.areas = d.areas || [];
+            lendState.groups = d.groups || []; // グループ候補はGASの activeGroups_ を単一の正として採用（フロント再計算を廃止・監査TD-14）
             renderLendScreen();
         }).catch(handleServerError).finally(hideBusy);
     }
@@ -3410,7 +3336,7 @@
         const opt = (v, l, cur) => `<option value="${escHtml(String(v))}" ${String(cur) === String(v) ? 'selected' : ''}>${escHtml(String(l))}</option>`;
         // 無効化(active=false)ユーザーは貸出先に出さない（参照できない人への貸出＝区域の滞留を入口で防ぐ。最終防御はGAS lendArea）
         const activeUsers = lendState.users.filter(u => u.active !== false);
-        const groups = Array.from(new Set(activeUsers.map(u => u.group).filter(Boolean)));
+        const groups = lendState.groups || []; // GAS の activeGroups_（有効ユーザーのいるグループ）を採用（監査TD-14）
         const users = isShared ? [] : activeUsers.filter(u => !s.group || u.group === s.group);
         if (s.email && s.email !== '__GROUP__' && !users.some(u => u.email === s.email)) s.email = '';
         const noChome = s.district && AREA_DATA[s.district] === null;
@@ -3535,7 +3461,7 @@
                 : { areaId: a.id, targetEmail: u.email, dueDate: due ? due.replace(/-/g, '/') : '' };
             apiCall('lendArea', params)
                 .then(d => {
-                    lendState.users = d.users; lendState.areas = d.areas;
+                    lendState.users = d.users; lendState.areas = d.areas; lendState.groups = d.groups || lendState.groups;
                     renderLendScreen(); // 借りる人・区域・範囲の選択は保持＝続けて同じ範囲の別番地を貸し出せる
                     showToast('貸し出しました', false);
                 })
@@ -3547,7 +3473,7 @@
             if (!ok) return;
             showBusy('返却中…');
             apiCall('returnArea', { areaId: id })
-                .then(d => { lendState.users = d.users; lendState.areas = d.areas; renderLendScreen(); showToast('返却しました', false); })
+                .then(d => { lendState.users = d.users; lendState.areas = d.areas; lendState.groups = d.groups || lendState.groups; renderLendScreen(); showToast('返却しました', false); })
                 .catch(handleServerError).finally(hideBusy);
         });
     }
@@ -3557,7 +3483,7 @@
             if (!ok) return;
             showBusy('取り消し中…');
             apiCall('cancelLendArea', { areaId: id })
-                .then(d => { lendState.users = d.users; lendState.areas = d.areas; renderLendScreen(); showToast('貸出を取り消しました', false); })
+                .then(d => { lendState.users = d.users; lendState.areas = d.areas; lendState.groups = d.groups || lendState.groups; renderLendScreen(); showToast('貸出を取り消しました', false); })
                 .catch(handleServerError).finally(hideBusy);
         });
     }
@@ -3980,7 +3906,7 @@
             <div class="form-group"><label>メモ</label><input type="text" id="fac-edit-memo" value="${escHtml(cleanMemo(item))}"></div>
             <div class="btn-row">
                 <button class="submit-btn" id="fac-edit-save" onclick="saveFacilityEdit(${rowNumber}, this)">更新を保存</button>
-                <button class="clear-btn" onclick="refreshFacilityPopup(${rowNumber}, currentData)">閉じる</button>
+                <button class="clear-btn" onclick="cancelFacilityEdit(${rowNumber}, this)">閉じる</button>
             </div>
         `;
         const marker = currentMarkers.find(m => m._rowNumber === rowNumber);
@@ -3999,6 +3925,21 @@
             renderMarkers(latest);
         }).catch((err) => { btn.disabled = false; btn.innerText = '更新を保存'; handleServerError(err); }).finally(hideBusy);
     }
+    // 施設編集の「閉じる」＝保存せず詳細表示のまま戻す（cancelShugaEdit と同型。簡易表示に畳まない）。
+    function cancelFacilityEdit(rowNumber, btn) {
+        const item = currentData.find(d => d.rowNumber === rowNumber);
+        const container = btn.closest('.popup-content');
+        if (item && container) {
+            container.innerHTML = createFacilityViewHtml(item);
+            fillDerivedAddress(container);
+            bindTitleCopy(container, rowNumber);
+            // 編集ボタンは詳細表示からのみ押せるため .detail は残っている。トグルの表記を実状態に合わせる。
+            const t = container.querySelector('.detail-toggle');
+            if (t && container.classList.contains('detail')) t.textContent = '▲ 詳細を隠す';
+        } else {
+            closeOpenForms();
+        }
+    }
 
     // 集合住宅詳細・グリッドテーブル画面
     function createShugaViewHtml(items) {
@@ -4007,7 +3948,7 @@
         const maxRoom = parseInt(first.最大部屋番号 || 1);
         const validRoomsArr = String(first.有効部屋リスト || "").split(',').map(Number);
 
-        // 部屋ごとの現在ステータス（T列のJSON）を取得し、色分けに使う
+        // 部屋ごとの現在ステータス（S列のJSON）を取得し、色分けに使う
         let roomStatusMap = {};
         try { roomStatusMap = JSON.parse(first.部屋ステータス || '{}') || {}; } catch(e) { roomStatusMap = {}; }
         // 部屋ごとの言語（V列JSON）。連携しない外国語は☆にせず数字表記のままにする判定に使う。
@@ -4355,7 +4296,7 @@
         return '不在(' + n + '回目)';
     }
 
-    // 部屋の現在値（T列の部屋ステータスJSON）を安全に取り出す共通ヘルパー
+    // 部屋の現在値（S列の部屋ステータスJSON）を安全に取り出す共通ヘルパー
     function roomStatusOf(item, roomNum) {
         try { return (JSON.parse((item && item.部屋ステータス) || '{}') || {})[roomNum] || ''; } catch (e) { return ''; }
     }
@@ -4513,7 +4454,7 @@
     }
 
     // 部屋の更新（訪問結果・属性 共通）。ポップアップを閉じず、グリッドの色・履歴を楽観的に即反映する。
-    function applyRoomChange(buildingRow, roomNum, finalStatus, addHistory) {
+    function applyRoomChange(buildingRow, roomNum, finalStatus, addHistory, doneMsg) {
         const idx = currentData.findIndex(d => d.rowNumber === buildingRow);
         if (idx < 0) return;
         if (roomStatusOf(currentData[idx], roomNum) === finalStatus) return; // 同値スキップ（不在は繰り上げ済みで一致しない）
@@ -4533,7 +4474,7 @@
             send: () => apiCall('updateRoom', { buildingRow: buildingRow, roomNum: roomNum, status: finalStatus, addHistory: addHistory }),
             reconcile: (latest) => reconcileShugaRoom(buildingRow, roomNum, latest),
             restore: (snap) => { const i = currentData.findIndex(d => d.rowNumber === buildingRow); if (i >= 0) { currentData[i] = Object.assign({}, currentData[i], snap); renderShugaRoom(buildingRow, roomNum); } },
-            onSuccess: () => showDone('更新しました')
+            onSuccess: () => showDone(doneMsg || '更新しました') // 訪問結果/属性で文言を出し分け（戸建てと対称に）
         });
     }
 
@@ -4544,7 +4485,7 @@
             const item = currentData.find(d => d.rowNumber === buildingRow);
             status = nextAbsence(roomStatusOf(item, roomNum));
         }
-        applyRoomChange(buildingRow, roomNum, status, true);
+        applyRoomChange(buildingRow, roomNum, status, true, '訪問結果を記録しました');
     }
 
     // 戸建ての属性（通常/訪問拒否/外国語/空き家）。タップ即反映（ピン形・色も変わる）→ 裏で保存 → 失敗で巻き戻し。
@@ -4586,7 +4527,7 @@
             openReportForm({ reportType: state, kind: '集合住宅', buildingRow: buildingRow, roomNum: roomNum, item: item });
             return;
         }
-        applyRoomChange(buildingRow, roomNum, state, true);
+        applyRoomChange(buildingRow, roomNum, state, true, '属性を更新しました');
     }
 
     /* ── 報告フォーム（拒否・外国語）──────────────────────────────
@@ -4604,9 +4545,16 @@
         if (m) return { town: m[1], banchi: m[2].trim() };
         return { town: s, banchi: '' };
     }
-    // 共通リンク生成（report・infoCopy で同式を使うため小ヘルパーに集約）。Googleマップ＝座標、アプリ＝?pin=行番号。
+    // 共通リンク生成（report・infoCopy で同式を使うため小ヘルパーに集約）。Googleマップ＝座標、アプリ＝?pin=ID（安定ID）。
     function gmapLink_(lat, lng) { return (!isNaN(lat) && !isNaN(lng)) ? ('https://www.google.com/maps/search/?api=1&query=' + lat + ',' + lng) : ''; }
-    function pinAppLink_(rowNumber) { return rowNumber ? (location.origin + location.pathname + '?pin=' + rowNumber) : ''; }
+    // 引数は rowNumber。ピン削除で行番号が繰り上がっても別世帯を指さないよう、安定ID(A列)へ解決してリンク化する。
+    // currentData に見つからない（新規登録直後で未反映等）ときのみ従来どおり rowNumber で発行（openPinDeepLink が互換照合する）。
+    function pinAppLink_(rowNumber) {
+        if (!rowNumber) return '';
+        const d = currentData.find(x => x.rowNumber === rowNumber);
+        const key = (d && d.ID != null && d.ID !== '') ? d.ID : rowNumber;
+        return location.origin + location.pathname + '?pin=' + key;
+    }
     function openReportForm(ctx) {
         const isShuga = ctx.kind === '集合住宅';
         const isNewPin = !!ctx.newPin; // 戸建て新規＝item がまだ無く、登録(addNew)が裏で進行中（rowNumber は後で注入）
@@ -4823,8 +4771,8 @@
         infoCopyCtx = {
             addr: addr,
             histList: histRecords_(item, roomNum),
-            app: location.origin + location.pathname + '?pin=' + rowNumber,
-            map: (!isNaN(lat) && !isNaN(lng)) ? ('https://www.google.com/maps/search/?api=1&query=' + lat + ',' + lng) : ''
+            app: pinAppLink_(rowNumber),
+            map: gmapLink_(lat, lng)
         };
         const f = infoCopyCtx;
         const rowOpt = (key, label, val) => val ? `<label class="copy-opt"><input type="checkbox" data-ck="${key}" checked><span><span class="co-label">${escHtml(label)}</span><br><span class="co-val">${escHtml(val)}</span></span></label>` : '';
@@ -4900,7 +4848,7 @@
         });
     }
 
-    // 履歴欄(R列)をすべてクリアする。削除と同様に実行前に必ず確認する。
+    // 履歴欄(Q列)をすべてクリアする。削除と同様に実行前に必ず確認する。
     function confirmClearHistory(rowNumber, isShuga) {
         appConfirm("この地点の履歴欄をすべてクリアします。\n元に戻せません。", { okLabel: 'クリアする', danger: true }).then(ok => {
             if (!ok) return;

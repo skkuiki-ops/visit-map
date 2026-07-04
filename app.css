@@ -54,12 +54,6 @@
         .area-map .chome-badge:hover circle { fill: rgba(165,165,165,0.78); }
         .area-map .chome-badge:active circle { fill: rgba(135,135,135,0.88); }
         .area-map .chome-badge text { fill: #444; font-size: 35px; font-weight: bold; text-anchor: middle; dominant-baseline: central; pointer-events: none; user-select: none; }
-        /* 全体利用の区域：地区グリッド（地区名＋貸出中数） */
-        .shared-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-        .shared-grid .shared-cell { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; padding: 10px 4px; }
-        .shared-cell .sc-name { font-size: 14px; }
-        .shared-cell .sc-num { font-size: 20px; font-weight: bold; }
-        .shared-cell.is-empty { background: #c7cdd1; color: #eef0f1; cursor: default; }
         /* 全体利用：トップの「🗺 全て表示」＋地区アコーディオン */
         /* 「🗺 全て表示」プロミネントボタン（個人=青/グループ=緑/全体=オレンジ。大きめ・全幅） */
         .area-allbtn { display:flex; flex-direction:column; align-items:flex-start; gap:2px; width:100%; box-sizing:border-box; border:1.5px solid; border-radius:11px; padding:12px 16px; cursor:pointer; margin-bottom:12px; text-align:left; -webkit-touch-callout:none; user-select:none; touch-action:manipulation; }
@@ -171,14 +165,6 @@
         /* 更新中の操作ブロック用オーバーレイ（クリックを吸収して操作不可にする） */
         /* busy はモーダル類（住所10002・管理10003・確認10005）より上＝どの画面の操作でも見える最前面に置く */
         #busy-overlay { position: absolute; inset: 0; z-index: 10009; background: rgba(0,0,0,0.06); display: none; cursor: progress; } /* 報告フォーム(#report-form-modal=10008)より前面＝送信中はオーバーレイがモーダルも覆って操作をブロックする */
-        /* 住所の「号」選択モーダル */
-        #go-pick-overlay { position: absolute; inset: 0; z-index: 10007; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; }
-        #go-pick-card { background: #fff; border-radius: 10px; padding: 16px; width: 88%; max-width: 360px; max-height: 80vh; overflow: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
-        #go-pick-title { font-size: 16px; font-weight: bold; margin-bottom: 10px; text-align: center; }
-        #go-pick-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
-        .go-pick-btn { padding: 12px 0; font-size: 16px; border: 1px solid #ccc; border-radius: 6px; background: #f7f7f7; cursor: pointer; }
-        .go-pick-btn.cur { background: #3D7FA8; color: #fff; border-color: #3D7FA8; }
-        #go-pick-cancel { display: block; width: 100%; margin-top: 12px; padding: 12px; font-size: 15px; border: 1px solid #ccc; border-radius: 6px; background: #eef1f4; cursor: pointer; }
         /* アイコン移動モードの振動（rotate個別プロパティ＝Mapboxの位置transformを保ちつつ回転） */
         /* アイコン移動モード：金色の縁＋外側に向かって薄くなるグロー（現在地の青丸の外側のイメージ） */
         .custom-marker.marker-moving { box-shadow: 0 0 0 3px #FFD700, 0 0 10px 4px rgba(255,200,0,0.55), 0 0 22px 11px rgba(255,200,0,0.22) !important; z-index: 10000; }
@@ -217,15 +203,12 @@
         .menu-item.cat-help { background: #fbf2e0; border-left: 3px solid #D9A441; }
         .menu-section { display: none; font-size: 11px; color: #7f8c93; font-weight: bold; padding: 9px 12px 3px; border-top: 1px solid #e1e6e9; margin-top: 4px; } /* 管理者メニューの見出し（adminのみ） */
         body.role-lend .menu-section { display: block; }
-        /* 印刷用表示（admin・PC/タブレット。A4横・左=詳細地図/右=広域地図・白黒・大きめ文字。年配者向け） */
+        /* 印刷用表示（貸出係+・PC/タブレット。詳細地図1枚・向きは枠比で自動切替・白黒・大きめ文字。年配者向け） */
         @media (max-width: 768px) { body.role-lend .menu-item.pc-only { display: none; } } /* スマホでは出さない */
         #print-view { display: none; position: fixed; inset: 0; z-index: 10010; background: #fff; color: #000; overflow: auto; padding: 14px 18px; }
         #print-view * { box-sizing: border-box; }
         .print-head { font-size: 22px; font-weight: bold; border-bottom: 3px solid #000; padding-bottom: 6px; margin-bottom: 8px; }
         .print-legend { font-size: 15px; border: 1.5px solid #000; padding: 8px 10px; margin-bottom: 10px; line-height: 1.9; }
-        .print-main { display: flex; gap: 14px; align-items: flex-start; }
-        .print-left, .print-right { flex: 0 0 auto; }
-        .print-panel-title { font-size: 16px; font-weight: bold; margin-bottom: 4px; }
         .print-map-wrap { position: relative; border: 1.5px solid #000; overflow: hidden; }
         .print-map-wrap img.basemap { display: block; width: 100%; height: 100%; object-fit: cover; filter: grayscale(1) brightness(0.95) contrast(1.15); } /* 建物が見える程度の白黒化（飛ばし過ぎない）。クリーンな白背景＋建物線はA案の専用スタイルで */
         .print-map-wrap .ov { position: absolute; inset: 0; pointer-events: none; }
@@ -236,7 +219,6 @@
         .print-grid td { border: 1px solid #000; width: 40px; height: 36px; text-align: center; vertical-align: middle; padding: 0; }
         .print-grid td.pf { background: #000; color: #fff; font-size: 12px; width: 26px; }
         .print-grid td.pe { border: none; }
-        .print-grid td.pv { background: #d6d6d6; } /* 訪問済み＝網掛け */
         .print-grid .pn { font-size: 16px; line-height: 1.05; color: #222; } /* 部屋番号を大きく */
         .print-grid .ps { font-size: 16px; font-weight: bold; line-height: 1.15; }
         .print-grid .pm { font-size: 13px; font-weight: bold; line-height: 1.1; color: #000; } /* 個人宅/会社マーク（番号の代わり） */
@@ -245,7 +227,7 @@
             body.printing > *:not(#print-view) { display: none !important; }
             #print-view { position: static !important; overflow: visible !important; padding: 0 !important; }
             .print-hide { display: none !important; }
-            .print-grid td.pf, .print-grid td.pv, .print-map-wrap img.basemap { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .print-grid td.pf, .print-map-wrap img.basemap { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         }
         #app-modal { position: absolute; inset: 0; z-index: 10003; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; padding: 16px; touch-action: pan-x pan-y; }
         #app-modal-card { background: #fff; border-radius: 10px; width: min(430px, 94vw); max-height: 84vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
@@ -283,8 +265,7 @@
         .iff-ic { font-size: 15px; line-height: 1; flex-shrink: 0; }
         .iff-note { font-size: 11px; color: #888; margin-top: 8px; line-height: 1.6; }
         /* アプリの使い方（図解ヘルプ）。クラスは vmh- 接頭辞で既存と衝突回避。現物の配色に合わせる */
-        .vmh-fsbar { display: flex; align-items: center; gap: 4px; justify-content: flex-end; margin: -2px 0 8px; }
-        .vmh-fsbar .vmh-lab { font-size: 10px; color: #9aa7ad; margin-right: 2px; }
+        #help-fs-header .vmh-lab { font-size: 10px; color: #9aa7ad; margin-right: 2px; }
         .vmh-fsbtn { font-size: 12px; border: 1px solid #cbd5da; border-radius: 5px; padding: 3px 12px; color: #5a737e; background: #fff; cursor: pointer; font-weight: bold; }
         .vmh-fsbtn.on { background: #2c5b6e; color: #fff; border-color: #2c5b6e; }
         .vmh-root { font-size: 14px; color: #333; }
@@ -422,19 +403,8 @@
         .due-over { color: #C75F56; font-weight: bold; } /* 返却期日超過 */
         .due-soon { color: #B0763C; font-weight: bold; } /* 期日まで2週間以内（落ち着いたアンバー） */
         #lend-preview-back { position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%); z-index: 9999; background: #34495e; color: #fff; border: none; border-radius: 20px; padding: 11px 20px; font-size: 15px; font-weight: bold; box-shadow: 0 2px 8px rgba(0,0,0,0.35); cursor: pointer; }
-        /* 区域一覧に戻るバー（lend-preview-back と同じ下部中央・トースト/busyと重ならない位置）。本文＝戻る／✕＝バーだけ閉じる */
-        #area-list-back { position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%); z-index: 9999; display: flex; align-items: stretch; background: #34495e; border-radius: 22px; box-shadow: 0 2px 8px rgba(0,0,0,0.35); overflow: hidden; }
-        #area-list-back button { background: transparent; color: #fff; border: none; font-weight: bold; cursor: pointer; font-size: 16px; }
-        #area-list-back-main { padding: 11px 18px; }
-        #area-list-back-x { padding: 11px 15px; font-size: 15px; border-left: 1px solid rgba(255,255,255,0.28); }
 
         /* ── 区域オーバービュー（「🗺 全て表示」）── */
-        /* 一覧見出し右の起動ボタン。バケット色で区別（青=個人/緑=グループ/橙=全体利用） */
-        .ov-allbtn { flex: 0 0 auto; padding: 5px 10px; border-radius: 6px; border: 1.5px solid #c8cfd6; background: #fff; color: #333; font-size: 12px; font-weight: bold; white-space: nowrap; cursor: pointer; -webkit-touch-callout: none; user-select: none; touch-action: manipulation; }
-        .ov-allbtn.ov-personal { border-color: #155d9e; color: #155d9e; background: #e7f1fb; }
-        .ov-allbtn.ov-group    { border-color: #26823a; color: #26823a; background: #e7f6ea; }
-        .ov-allbtn.ov-whole    { border-color: #cc4c08; color: #cc4c08; background: #fdeee2; }
-        body.large-ui .ov-allbtn { font-size: 13px; padding: 6px 11px; }
         /* 枠内に出す丁目/番地ラベル（HTMLマーカー）。タップでその区域を選択（赤枠＋通常利用へ）。色は枠色に合わせてJSで上書き */
         .area-ov-label-wrap { line-height: 0; }
         .area-ov-label { background: rgba(255,255,255,0.92); border: 1.5px solid #155d9e; color: #155d9e; border-radius: 12px; padding: 2px 7px; font-size: 12px; font-weight: bold; line-height: 1.2; white-space: nowrap; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.25); transform-origin: center center; -webkit-touch-callout: none; user-select: none; touch-action: manipulation; }
