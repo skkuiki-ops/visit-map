@@ -838,15 +838,28 @@
         }
         fetchVisibleAreas_(0);
     }
-    // 担当区域を取得して visibleAreaSet を更新。失敗時は数回リトライ（1回の失敗で制限がセッション中ずっと外れる＝区域外漏れを防ぐ）。
+    // 起動時（fetchVisibleAreas_）や区域一覧画面で取得した区域データの生値をセッション内に保持する。
+    //  区域一覧（個人/グループ/全体利用）はこれで「開いた瞬間に即表示 → 裏で最新化」でき、毎回のサーバ待ちが消える。
+    //  mine=getMyAreas（個人＋所属グループ）／shared=getSharedAreas（全体利用）。null=未取得。
+    const areaStore = { mine: null, shared: null };
+    // areaStore の両半分から visibleAreaSet（ピン表示制限）を作り直す。
+    //  片方だけで作ると欠けた集合＝担当区域の誤非表示になるため、両方そろってからのみ更新。manager以上は制限なし＝触らない。
+    function rebuildVisibleAreaSet_() {
+        if ((ME.level || 0) >= 2) return;                 // manager以上（set は loadVisibleAreas が解除済み）
+        if (!areaStore.mine || !areaStore.shared) return; // 両半分そろってから
+        const set = new Set();
+        areaStore.mine.forEach(a => { const k = addrWithoutGo(a.area); if (k) set.add(k); });   // 個人＋所属グループの貸出区域
+        areaStore.shared.forEach(a => { const k = addrWithoutGo(a.area); if (k) set.add(k); }); // 全体利用の区域
+        visibleAreaSet = set;   // 空でも適用（担当区域が無ければ戸建ては非表示）
+        try { localStorage.setItem(AREA_SET_KEY, JSON.stringify(Array.from(set))); } catch (e) {} // 次回起動で即適用するためキャッシュ
+        applyZoomVisibility();  // 既存マーカーへ即反映
+    }
+    // 担当区域を取得して areaStore＋visibleAreaSet を更新。失敗時は数回リトライ（1回の失敗で制限がセッション中ずっと外れる＝区域外漏れを防ぐ）。
     function fetchVisibleAreas_(attempt) {
         Promise.all([apiCall('getMyAreas', {}), apiCall('getSharedAreas', {})]).then(([mine, shared]) => {
-            const set = new Set();
-            (mine || []).forEach(a => { const k = addrWithoutGo(a.area); if (k) set.add(k); });   // 個人＋所属グループの貸出区域
-            (shared || []).forEach(a => { const k = addrWithoutGo(a.area); if (k) set.add(k); });  // 全体利用の区域
-            visibleAreaSet = set;   // 取得成功（空でも適用＝担当区域が無ければ戸建ては非表示）
-            try { localStorage.setItem(AREA_SET_KEY, JSON.stringify(Array.from(set))); } catch (e) {} // 次回起動で即適用するためキャッシュ
-            applyZoomVisibility();  // 既存マーカーへ即反映
+            areaStore.mine = mine || [];
+            areaStore.shared = shared || [];
+            rebuildVisibleAreaSet_();
         }).catch(() => {
             // 取得失敗: 数回リトライ。全部失敗してもキャッシュ由来の visibleAreaSet はそのまま維持（＝fail-open にしない）。
             if (attempt < 3) setTimeout(function () { fetchVisibleAreas_(attempt + 1); }, 1500 * (attempt + 1));
@@ -3153,7 +3166,15 @@
             if (!ok) return;
             showBusy('返却中…');
             apiCall('returnArea', { areaId: areaId })
-                .then(() => { showToast('返却しました', false); if (typeof onDone === 'function') onDone(); })
+                .then((res) => {
+                    showToast('返却しました', false);
+                    // 区域キャッシュを返却後の状態に合わせる（古い一覧＝返却済み区域が残った表示を出さないため）。
+                    //  一般ユーザーの個人返却は応答が最新の getMyAreas 配列（B-1 の出し分け）＝そのまま採用。それ以外は破棄して再取得させる。
+                    areaStore.mine = Array.isArray(res) ? res : null;
+                    areaStore.shared = null;
+                    fetchVisibleAreas_(0); // ピン表示制限も返却に追従（裏で両方を再取得して作り直す）
+                    if (typeof onDone === 'function') onDone();
+                })
                 .catch(handleServerError).finally(hideBusy);
         });
     }
@@ -3362,6 +3383,19 @@
         if (btn) btn.onclick = retryFn;
     }
 
+    // 区域一覧の裏最新化: areaStore の該当半分を再取得し、内容が変わっていて・まだ同じ画面を開いているときだけ静かに差し替える。
+    //  （変化なしでの再描画はスクロール位置が飛ぶだけなのでしない。裏の更新失敗は無視＝表示済みの内容を維持）
+    function refreshAreaHalf_(half, theme, render) {
+        apiCall(half === 'shared' ? 'getSharedAreas' : 'getMyAreas', {}).then(list => {
+            const changed = JSON.stringify(list || []) !== JSON.stringify(areaStore[half] || []);
+            areaStore[half] = list || [];
+            rebuildVisibleAreaSet_(); // 貸出・返却がピン表示制限にも追従する
+            if (!changed) return;
+            const modal = document.getElementById('app-modal'), card = document.getElementById('app-modal-card');
+            if (modal && modal.style.display !== 'none' && card && card.className === 'app-modal-theme-' + theme) render(areaStore[half]);
+        }).catch(() => {});
+    }
+
     // 区域一覧の1行（個人/グループ/全体利用 共通）。origin で返却後の再読込先を切り替える。
     function lendAreaRowHtml(a, origin) {
         const canReturn = (a.lentTo === 'self') || (ME.level >= 1); // 個人=本人 / グループ・全体利用=貸出係以上
@@ -3377,8 +3411,7 @@
     // 👤 個人の区域カード（青テーマ）
     function showPersonalAreas() {
         openAppModal('👤 個人の区域', 'personal');
-        showBusy('読み込み中…');
-        runAreaLoad(apiCall('getMyAreas', {}), list => {
+        const render = list => {
             const mine = (list || []).filter(a => a.lentTo !== 'group'); // 自分個人への貸出
             overviewAreas.personal = mine; // 「🗺 全て表示」（一括枠表示）用に保持
             const body = document.getElementById('app-modal-body');
@@ -3386,13 +3419,17 @@
             let html = `<button class="area-allbtn aa-personal" onclick="enterAreaOverview('personal')" title="個人の区域を全て地図上に枠表示"><span class="aa-ttl">🗺 全て表示</span><span class="aa-sub">地図に一括 ／ ${mine.length} 区域</span></button>`;
             html += mine.map(a => lendAreaRowHtml(a, 'personal')).join('');
             body.innerHTML = html;
-        }, showPersonalAreas); // 12秒で応答なし／失敗 → 「再度試す」
+        };
+        // 起動時取得や前回表示の区域データがあれば待たずに即表示し、裏で最新化（体感ゼロ待ち）
+        if (areaStore.mine) { render(areaStore.mine); refreshAreaHalf_('mine', 'personal', render); return; }
+        showBusy('読み込み中…');
+        runAreaLoad(apiCall('getMyAreas', {}).then(l => { areaStore.mine = l || []; rebuildVisibleAreaSet_(); return l; }),
+            render, showPersonalAreas); // 12秒で応答なし／失敗 → 「再度試す」
     }
     // 👥 グループの区域カード（緑テーマ）
     function showGroupAreas() {
         openAppModal('👥 グループの区域', 'group');
-        showBusy('読み込み中…');
-        runAreaLoad(apiCall('getMyAreas', {}), list => {
+        const render = list => {
             const grp = (list || []).filter(a => a.lentTo === 'group'); // 自分の所属グループへの貸出
             overviewAreas.group = grp; // 「🗺 全て表示」（一括枠表示）用に保持
             const body = document.getElementById('app-modal-body');
@@ -3401,7 +3438,12 @@
             let html = `<button class="area-allbtn aa-group" onclick="enterAreaOverview('group')" title="グループの区域を全て地図上に枠表示"><span class="aa-ttl">🗺 全て表示</span><span class="aa-sub">地図に一括 ／ ${grp.length} 区域</span></button>`;
             html += grp.map(a => lendAreaRowHtml(a, 'group')).join('');
             body.innerHTML = html;
-        }, showGroupAreas); // 12秒で応答なし／失敗 → 「再度試す」
+        };
+        // 起動時取得や前回表示の区域データがあれば待たずに即表示し、裏で最新化（体感ゼロ待ち）
+        if (areaStore.mine) { render(areaStore.mine); refreshAreaHalf_('mine', 'group', render); return; }
+        showBusy('読み込み中…');
+        runAreaLoad(apiCall('getMyAreas', {}).then(l => { areaStore.mine = l || []; rebuildVisibleAreaSet_(); return l; }),
+            render, showGroupAreas); // 12秒で応答なし／失敗 → 「再度試す」
     }
 
     // ── 全体利用（共同利用）の区域：地区ごとに集計し、一覧／地区マップで表示（閲覧は全員可） ──
@@ -3415,11 +3457,15 @@
     // （地図/一覧トグルは廃止：全体利用は常に一覧＝地区アコーディオン表示）
     function showSharedAreas() {
         openAppModal('👪 全体利用の区域', 'whole');
-        showBusy('読み込み中…');
-        runAreaLoad(apiCall('getSharedAreas', {}), list => {
+        const render = list => {
             sharedState.areas = list || [];
             renderSharedAreas();
-        }, showSharedAreas); // 12秒で応答なし／失敗 → 「再度試す」
+        };
+        // 起動時取得や前回表示の区域データがあれば待たずに即表示し、裏で最新化（体感ゼロ待ち）
+        if (areaStore.shared) { render(areaStore.shared); refreshAreaHalf_('shared', 'whole', render); return; }
+        showBusy('読み込み中…');
+        runAreaLoad(apiCall('getSharedAreas', {}).then(l => { areaStore.shared = l || []; rebuildVisibleAreaSet_(); return l; }),
+            render, showSharedAreas); // 12秒で応答なし／失敗 → 「再度試す」
     }
     function renderSharedAreas() {
         const body = document.getElementById('app-modal-body');
