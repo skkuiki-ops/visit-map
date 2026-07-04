@@ -209,10 +209,17 @@
         .menu-item.cat-whole { background: #8E3E4E; color: #fff; }
         .menu-item.cat-whole:active { background: #7B3543; }
         .menu-item.cat-help { background: #fbf2e0; border-left: 3px solid #D9A441; }
-        /* メニュー見出し（貸出メニュー=lender+／管理メニュー=manager+ で出し分け。項目の帯色と同系で対応付け） */
-        .menu-section { display: none; font-size: 11px; font-weight: bold; padding: 9px 12px 3px; border-top: 1px solid #e1e6e9; margin-top: 4px; }
-        body.role-lend .menu-section.sec-lend { display: block; color: #8A6D3B; }
-        body.role-manage .menu-section.sec-manage { display: block; color: #4A6B84; }
+        /* 貸出/管理メニューのアコーディオン（基本閉じ）。権限（貸出=lender+／管理=manager+）が無いと details ごと非表示 */
+        .menu-acc { display: none; }
+        body.role-lend .menu-acc.acc-lend { display: block; }
+        body.role-manage .menu-acc.acc-manage { display: block; }
+        .menu-acc > summary { list-style: none; cursor: pointer; display: flex; align-items: center; font-size: 11px; font-weight: bold; padding: 10px 12px 6px; border-top: 1px solid #e1e6e9; margin-top: 4px; -webkit-touch-callout: none; user-select: none; }
+        .menu-acc > summary::-webkit-details-marker { display: none; }
+        .menu-acc > summary .ms-chev { margin-left: auto; font-size: 11px; color: #9aa7ae; transition: transform .15s; }
+        .menu-acc[open] > summary .ms-chev { transform: rotate(180deg); }
+        .menu-acc > summary.sec-lend { color: #8A6D3B; }
+        .menu-acc > summary.sec-manage { color: #4A6B84; }
+        .menu-section { font-size: 11px; font-weight: bold; } /* 見出し共通（summary として使用） */
         /* 印刷用表示（貸出係+・PC/タブレット。詳細地図1枚・向きは枠比で自動切替・白黒・大きめ文字。年配者向け） */
         @media (max-width: 768px) { body.role-lend .menu-item.pc-only { display: none; } } /* スマホでは出さない */
         #print-view { display: none; position: fixed; inset: 0; z-index: 10010; background: #fff; color: #000; overflow: auto; padding: 14px 18px; }

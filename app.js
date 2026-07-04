@@ -3442,7 +3442,7 @@
                 () => returnAreaConfirm(Number(btn.dataset.aid), btn.dataset.area, reloadFn));
         });
     }
-    // 区域一覧を地区ごとのアコーディオンにする（個人/グループ/全体利用 共通の見た目）。地区が1つだけなら開いた状態で出す。
+    // 区域一覧を地区ごとのアコーディオンにする（個人/グループ/全体利用 共通の見た目）。最初はすべて閉じた状態（2026-07-04 ユーザー指定）。
     function distAccHtml_(areas, origin) {
         const byDist = {};
         areas.forEach(a => { const d = districtOfArea(a.area); (byDist[d] = byDist[d] || []).push(a); });
@@ -3450,7 +3450,7 @@
             .concat(Object.keys(byDist).filter(d => AREA_GRID_ORDER.indexOf(d) < 0));
         return dists.map(d => {
             const rows = byDist[d] || [];
-            return `<details class="dist-acc"${dists.length === 1 ? ' open' : ''}>`
+            return `<details class="dist-acc">`
                 + `<summary><span class="da-name">${escHtml(d)}</span><span class="da-num">${rows.length}区域</span><span class="da-chev">▾</span></summary>`
                 + `<div class="da-body">${rows.map(a => lendAreaRowHtml(a, origin)).join('')}</div>`
                 + `</details>`;
