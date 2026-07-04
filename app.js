@@ -377,6 +377,28 @@
     let gridRoomMark = {}; // 登録/編集グリッドの部屋マーク {部屋番号:'p'(個人宅)|'c'(会社)}。長押しで 無→個人→会社→無 と循環
     let currentData = []; // 直近にサーバーから受け取ったデータ（編集機能で参照）
 
+    // ── 行整合（ID検証）フロント側ヘルパー（TD-9） ──
+    // 書き込み時に安定ID(A列)を併送する。サーバの resolveRow_ が rowNumber↔ID を照合し、
+    // 他ユーザーの削除で行がずれても正しい行へ解決する。ID未知（旧データ等）は undefined＝従来動作。
+    function pinIdOf(rowNumber) {
+        if (rowNumber == null) return undefined;
+        const it = currentData.find(d => d.rowNumber === rowNumber);
+        return (it && it.ID != null && it.ID !== '') ? it.ID : undefined;
+    }
+    // 応答(latest=全件・最新行番号)を使う reconcile/インプレース更新の前段ガード。
+    // 送信時の rowNumber の行が、期待した ID と食い違う＝別ユーザーの削除で行がずれている。
+    // そのときは半端な stale を残さず全再同期する（応答は全件なので renderMarkers で正しく戻る）。
+    // ずれ無し（通常系）は false を返し、呼び出し側は従来どおり1行だけインプレース更新する。
+    function shiftGuard_(rowNumber, latest) {
+        const cur = currentData.find(d => d.rowNumber === rowNumber);
+        const id = cur ? cur.ID : null;
+        if (id == null || !Array.isArray(latest)) return false; // ID未知（旧データ等）→従来動作
+        const atRow = latest.find(d => d.rowNumber === rowNumber);
+        if (atRow && atRow.ID === id) return false; // 行ずれなし
+        renderMarkers(latest); // 行ずれ検知 → 全件を最新へ再同期（別世帯の混入を防ぐ）
+        return true;
+    }
+
     // 集合住宅ピンの色（構成属性で見分ける／落ち着いたトーン）
     function shugaColor(attr) {
         switch (attr) {
@@ -1676,7 +1698,7 @@
             appConfirm('このピンをここへ移動しますか？', { okLabel: '移動する' }).then(ok => {
                 if (!ok) { renderMarkers(currentData); return; } // キャンセル → 元の位置へ戻す
                 showBusy('移動中…');
-                apiCall('updateCoords', { rowNumber: rowNumber, lat: ll.lat, lng: ll.lng })
+                apiCall('updateCoords', { rowNumber: rowNumber, lat: ll.lat, lng: ll.lng, id: pinIdOf(rowNumber) })
                     .then(latest => { showToast('移動しました', false); renderMarkers(latest); })
                     .catch(err => { handleServerError(err); renderMarkers(currentData); })
                     .finally(hideBusy);
@@ -2353,6 +2375,12 @@
     // サーバー側エラーを画面に出して原因を分かるようにする
     function handleServerError(err) {
         if (err && err.code === 'overview_readonly') return; // 表示モードの編集ブロック（apiCallガードが通知済み・サーバ記録不要）
+        // 行ずれで対象が既に削除済み（RowMismatch）＝業務上の想定エラー。操作は自動再送せず、最新へ再同期して案内する。
+        if (err && err.code === 'RowMismatch') {
+            showToast('対象のピンは削除されています。最新の状態に更新します', true);
+            apiCall('getData', {}).then(renderMarkers).catch(() => {}); // 1回だけ再取得（失敗は握りつぶし＝ループ防止）
+            return;
+        }
         console.error('サーバーエラー:', err);
         const msg = (err && err.message) ? err.message : String(err);
         sendErrorToServer('CommError', msg, 'handleServerError'); // 誰の端末で起きたかを ErrorLog に集約する
@@ -2700,7 +2728,40 @@
             + `<div style="display:flex; gap:6px; align-items:center; margin-bottom:6px;"><label style="width:48px; font-size:13px; font-weight:bold;">開始</label><input type="date" id="mnt-from" value="${fromVal}" style="flex:1; min-width:0;"></div>`
             + `<div style="display:flex; gap:6px; align-items:center; margin-bottom:14px;"><label style="width:48px; font-size:13px; font-weight:bold;">終了</label><input type="date" id="mnt-to" value="${toVal}" style="flex:1; min-width:0;"></div>`
             + `<button class="clear-btn" style="width:100%; margin-bottom:8px;" onclick="runMaintenance('history')">🗑 この期間の履歴をクリア</button>`
-            + `<button class="clear-btn" style="width:100%; background:#8a6d3b;" onclick="runMaintenance('status')">🔄 この期間の訪問ステータスをクリア</button>`;
+            + `<button class="clear-btn" style="width:100%; background:#8a6d3b;" onclick="runMaintenance('status')">🔄 この期間の訪問ステータスをクリア</button>`
+            + settingsSectionHtml_();
+    }
+    // メンテ画面の設定セクション（sysadmin）。運用で調整する期間・しきい値を編集して保存する（Config／saveSettings）。
+    // 値は getMe が配布した ME.config を初期表示に使う（未取得なら空欄＝サーバ既定のまま）。
+    function settingsSectionHtml_() {
+        const c = (ME && ME.config) || {};
+        const row = (id, label, val, unit) =>
+            `<div style="display:flex; gap:6px; align-items:center; margin-bottom:8px;"><label style="flex:1; font-size:13px;">${label}</label>`
+            + `<input type="number" id="${id}" value="${val != null ? val : ''}" min="1" style="width:76px; text-align:right;"><span style="font-size:12px; color:#666; width:24px;">${unit}</span></div>`;
+        return `<div style="margin-top:18px; padding-top:12px; border-top:1px solid #ddd;">`
+            + `<div style="font-size:14px; font-weight:bold; color:#2c3e50; margin-bottom:4px;">⚙ 運用設定</div>`
+            + `<div style="font-size:12px; color:#777; margin-bottom:10px;">期間・しきい値を変更します（変更は最大2分で全端末に反映）。</div>`
+            + row('cfg-expireKodateMonths', '「会えた/投函」を未に戻す（戸建て・小規模集合）', c.expireKodateMonths, 'か月')
+            + row('cfg-expireLargeMonths', '同上（大規模集合＝13戸以上）', c.expireLargeMonths, 'か月')
+            + row('cfg-coolingMonths', '区域の冷却期間（返却後この期間は再貸出不可）', c.coolingMonths, 'か月')
+            + row('cfg-relendThreshold', '再貸出候補にする訪問率のしきい値', c.relendThreshold, '%')
+            + `<button class="clear-btn" style="width:100%; margin-top:4px; background:#3d6b8a;" onclick="runSaveSettings()">💾 設定を保存</button>`
+            + `</div>`;
+    }
+    function runSaveSettings() {
+        const keys = ['expireKodateMonths', 'expireLargeMonths', 'coolingMonths', 'relendThreshold'];
+        const settings = {};
+        for (const k of keys) {
+            const el = document.getElementById('cfg-' + k);
+            const n = el ? Number(el.value) : NaN;
+            if (!isFinite(n) || n <= 0) { appAlert('設定値は正の数で入力してください（' + k + '）'); return; }
+            settings[k] = n;
+        }
+        showBusy('保存中…');
+        apiCall('saveSettings', { settings: settings }).then(cfg => {
+            if (cfg) ME.config = cfg; // 返ってきた確定値で ME を更新（次に画面を開くと反映）
+            showToast('設定を保存しました', false);
+        }).catch(handleServerError).finally(hideBusy);
     }
     function runMaintenance(kind) {
         const from = (document.getElementById('mnt-from') || {}).value || '';
@@ -3916,7 +3977,7 @@
     function saveFacilityEdit(rowNumber, btn) {
         const type = document.getElementById('new-fac-type').value;
         if (!type) { appAlert('施設の種類を選んでください'); return; }
-        const data = { rowNumber: rowNumber, name: document.getElementById('fac-edit-name').value,
+        const data = { rowNumber: rowNumber, id: pinIdOf(rowNumber), name: document.getElementById('fac-edit-name').value,
             facilityType: type, memo: document.getElementById('fac-edit-memo').value };
         btn.disabled = true; btn.innerText = '保存中...';
         showBusy('更新中…');
@@ -4094,6 +4155,7 @@
 
         const data = {
             rowNumber: rowNumber,
+            id: pinIdOf(rowNumber),
             name: name,
             floors: floors,
             maxRoomNum: maxRoom,
@@ -4271,7 +4333,7 @@
             const v = document.getElementById('hist-edit-dt').value;
             if (!v) { showToast('日時を入力してください', true); return; }
             close(); showBusy('更新中…');
-            apiCall('editHistory', { rowNumber: rn, index: idx, op: 'time', newTime: formatLogTime(new Date(v)) })
+            apiCall('editHistory', { rowNumber: rn, index: idx, op: 'time', newTime: formatLogTime(new Date(v)), id: pinIdOf(rn) })
                 .then(latest => { showToast('履歴を更新しました', false); after(latest); })
                 .catch(handleServerError).finally(hideBusy);
         };
@@ -4280,7 +4342,7 @@
             appConfirm('この履歴を削除しますか？', { okLabel: '削除', danger: true }).then(ok => {
                 if (!ok) return;
                 showBusy('削除中…');
-                apiCall('editHistory', { rowNumber: rn, index: idx, op: 'delete' })
+                apiCall('editHistory', { rowNumber: rn, index: idx, op: 'delete', id: pinIdOf(rn) })
                     .then(latest => { showToast('履歴を削除しました', false); after(latest); })
                     .catch(handleServerError).finally(hideBusy);
             });
@@ -4304,6 +4366,7 @@
     // サーバー更新後の最新データを、ポップアップを閉じずにその場で反映する（種別を自動判別）。
     // 集合住宅は refreshShugaPopup、戸建ては applyKodateChange に委譲して挙動を統一する。
     function applyInPlace(rowNumber, latest) {
+        if (shiftGuard_(rowNumber, latest)) return; // 行ずれは全再同期で処理（別世帯の混入防止）
         const item = (latest || []).find(d => d.rowNumber === rowNumber);
         if (item && item.種別 === '集合住宅') refreshShugaPopup(rowNumber, latest);
         else if (item && item.種別 === '施設') refreshFacilityPopup(rowNumber, latest);
@@ -4384,6 +4447,7 @@
     // currentData の該当行だけを source（getMapData の戻り）の同じ行で差し替え、その場再描画する。
     // 全件置換にしないのは、別の行で飛んでいる楽観更新を巻き戻さないため。
     function reconcileKodate(rowNumber, source) {
+        if (shiftGuard_(rowNumber, source)) return; // 行ずれは全再同期で処理（別世帯の混入防止）
         const i = currentData.findIndex(d => d.rowNumber === rowNumber);
         const src = source ? source.find(d => d.rowNumber === rowNumber) : null;
         if (i >= 0 && src) { currentData[i] = src; applyKodateChange(rowNumber)(currentData); }
@@ -4410,7 +4474,7 @@
                 });
                 applyKodateChange(rowNumber)(currentData);
             },
-            send: () => apiCall('updateLocation', { rowNumber: rowNumber, status: status, memoText: null, isClearMemo: false }),
+            send: () => apiCall('updateLocation', { rowNumber: rowNumber, status: status, memoText: null, isClearMemo: false, id: pinIdOf(rowNumber) }),
             reconcile: (latest) => reconcileKodate(rowNumber, latest),
             restore: (snap) => { const i = currentData.findIndex(d => d.rowNumber === rowNumber); if (i >= 0) { currentData[i] = Object.assign({}, currentData[i], snap); applyKodateChange(rowNumber)(currentData); } },
             onSuccess: () => showDone('訪問結果を記録しました')
@@ -4447,6 +4511,7 @@
 
     // 該当建物行を source の同じ行で差し替えてから再描画する（他行の楽観更新を壊さない）。
     function reconcileShugaRoom(buildingRow, roomNum, source) {
+        if (shiftGuard_(buildingRow, source)) return; // 行ずれは全再同期で処理（別世帯の混入防止）
         const i = currentData.findIndex(d => d.rowNumber === buildingRow);
         const src = source ? source.find(d => d.rowNumber === buildingRow) : null;
         if (i >= 0 && src) currentData[i] = src;
@@ -4471,7 +4536,7 @@
                 currentData[i] = Object.assign({}, it, patch);
                 renderShugaRoom(buildingRow, roomNum);
             },
-            send: () => apiCall('updateRoom', { buildingRow: buildingRow, roomNum: roomNum, status: finalStatus, addHistory: addHistory }),
+            send: () => apiCall('updateRoom', { buildingRow: buildingRow, roomNum: roomNum, status: finalStatus, addHistory: addHistory, id: pinIdOf(buildingRow) }),
             reconcile: (latest) => reconcileShugaRoom(buildingRow, roomNum, latest),
             restore: (snap) => { const i = currentData.findIndex(d => d.rowNumber === buildingRow); if (i >= 0) { currentData[i] = Object.assign({}, currentData[i], snap); renderShugaRoom(buildingRow, roomNum); } },
             onSuccess: () => showDone(doneMsg || '更新しました') // 訪問結果/属性で文言を出し分け（戸建てと対称に）
@@ -4510,7 +4575,7 @@
                 });
                 applyKodateChange(rowNumber)(currentData);
             },
-            send: () => apiCall('updateLocation', { rowNumber: rowNumber, status: null, memoText: null, isClearMemo: false, addHistory: true, attribute: attribute }),
+            send: () => apiCall('updateLocation', { rowNumber: rowNumber, status: null, memoText: null, isClearMemo: false, addHistory: true, attribute: attribute, id: pinIdOf(rowNumber) }),
             reconcile: (latest) => reconcileKodate(rowNumber, latest),
             restore: (snap) => { const i = currentData.findIndex(d => d.rowNumber === rowNumber); if (i >= 0) { currentData[i] = Object.assign({}, currentData[i], snap); applyKodateChange(rowNumber)(currentData); } },
             onSuccess: () => showDone('属性を更新しました')
@@ -4672,12 +4737,15 @@
             }
             resolvedRow = rn;
             const params = Object.assign({}, fields);
+            // 行ずれ対策(TD-9): 送信時点の currentData は addNew 反映後で最新＝rowNumber から安定IDを引ける。
             if (c.kind === '集合住宅') {
                 params.buildingRow = c.buildingRow; params.roomNum = c.roomNum; params.buildingName = c.buildingName; params.appLink = c.app;
+                params.id = pinIdOf(c.buildingRow);
             } else {
                 if (!rn) throw new Error('登録の確定待ちです。数秒おいてもう一度お試しください。');
                 params.rowNumber = rn;
                 params.appLink = pinAppLink_(rn);
+                params.id = pinIdOf(rn);
             }
             return apiCall('report', params);
         }).then(latest => {
@@ -4701,7 +4769,7 @@
         appConfirm("このピンを削除します。\n登録内容・履歴もすべて消え、元に戻せません。", { okLabel: '削除する', danger: true }).then(ok => {
             if (!ok) return;
             showBusy('更新中…');
-            apiCall('deleteLocation', { rowNumber: rowNumber })
+            apiCall('deleteLocation', { rowNumber: rowNumber, id: pinIdOf(rowNumber) })
                 .then((latest) => { showToast('削除しました', false); renderMarkers(latest); })
                 .catch(handleServerError).finally(hideBusy);
         });
@@ -4710,7 +4778,7 @@
     function saveMemo(rowNumber) {
         const txt = document.getElementById(`memo-${rowNumber}`).value;
         showBusy('更新中…');
-        apiCall('updateLocation', { rowNumber: rowNumber, status: null, memoText: txt, isClearMemo: false })
+        apiCall('updateLocation', { rowNumber: rowNumber, status: null, memoText: txt, isClearMemo: false, id: pinIdOf(rowNumber) })
             .then((latest) => { applyInPlace(rowNumber, latest); showToast('メモを保存しました', false); })
             .catch(handleServerError).finally(hideBusy);
     }
@@ -4719,7 +4787,7 @@
         appConfirm("メモをクリアしますか？", { okLabel: 'クリアする', danger: true }).then(ok => {
             if (!ok) return;
             showBusy('更新中…');
-            apiCall('updateLocation', { rowNumber: rowNumber, status: null, memoText: null, isClearMemo: true })
+            apiCall('updateLocation', { rowNumber: rowNumber, status: null, memoText: null, isClearMemo: true, id: pinIdOf(rowNumber) })
                 .then((latest) => { applyInPlace(rowNumber, latest); showToast('メモを削除しました', false); })
                 .catch(handleServerError).finally(hideBusy);
         });
@@ -4853,7 +4921,7 @@
         appConfirm("この地点の履歴欄をすべてクリアします。\n元に戻せません。", { okLabel: 'クリアする', danger: true }).then(ok => {
             if (!ok) return;
             showBusy('更新中…');
-            apiCall('clearHistory', { rowNumber: rowNumber }).then((latest) => {
+            apiCall('clearHistory', { rowNumber: rowNumber, id: pinIdOf(rowNumber) }).then((latest) => {
                 applyInPlace(rowNumber, latest); // 種別は自動判別（戸建て/集合住宅で共通）
                 showToast('履歴欄をクリアしました', false);
             }).catch(handleServerError).finally(hideBusy);
