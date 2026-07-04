@@ -3332,15 +3332,16 @@
     }
 
     /* ── 区域読み込みの監視（個人/グループ/全体利用）──
-       応答がハングしても待ち続けないための保険。7秒で応答が来なければ「再度試す」を本文に出す。
+       応答がハングしても待ち続けないための保険。12秒で応答が来なければ「再度試す」を本文に出す。
        遅れて届いた応答はボタン表示を上書きしない（done で破棄）。通信失敗も「よく分からない赤エラー」を出さず再試行へ誘導。 */
+    const AREA_LOAD_TIMEOUT_MS = 12000; // 区域読み込みの再試行しきい値（12秒。回線が遅いと数秒かかるため短すぎない値に）
     function runAreaLoad(loadPromise, onData, retryFn) {
         let done = false;
         const timer = setTimeout(function () {
             if (done) return; done = true;
             hideBusy();
-            showAreaRetry(retryFn); // 7秒経過＝時間がかかりすぎ → 再試行ボタン
-        }, 7000);
+            showAreaRetry(retryFn); // しきい値経過＝時間がかかりすぎ → 再試行ボタン
+        }, AREA_LOAD_TIMEOUT_MS);
         loadPromise.then(function (data) {
             if (done) return; done = true; clearTimeout(timer); hideBusy();
             onData(data);
@@ -3385,7 +3386,7 @@
             let html = `<button class="area-allbtn aa-personal" onclick="enterAreaOverview('personal')" title="個人の区域を全て地図上に枠表示"><span class="aa-ttl">🗺 全て表示</span><span class="aa-sub">地図に一括 ／ ${mine.length} 区域</span></button>`;
             html += mine.map(a => lendAreaRowHtml(a, 'personal')).join('');
             body.innerHTML = html;
-        }, showPersonalAreas); // 7秒で応答なし／失敗 → 「再度試す」
+        }, showPersonalAreas); // 12秒で応答なし／失敗 → 「再度試す」
     }
     // 👥 グループの区域カード（緑テーマ）
     function showGroupAreas() {
@@ -3400,7 +3401,7 @@
             let html = `<button class="area-allbtn aa-group" onclick="enterAreaOverview('group')" title="グループの区域を全て地図上に枠表示"><span class="aa-ttl">🗺 全て表示</span><span class="aa-sub">地図に一括 ／ ${grp.length} 区域</span></button>`;
             html += grp.map(a => lendAreaRowHtml(a, 'group')).join('');
             body.innerHTML = html;
-        }, showGroupAreas); // 7秒で応答なし／失敗 → 「再度試す」
+        }, showGroupAreas); // 12秒で応答なし／失敗 → 「再度試す」
     }
 
     // ── 全体利用（共同利用）の区域：地区ごとに集計し、一覧／地区マップで表示（閲覧は全員可） ──
@@ -3418,7 +3419,7 @@
         runAreaLoad(apiCall('getSharedAreas', {}), list => {
             sharedState.areas = list || [];
             renderSharedAreas();
-        }, showSharedAreas); // 7秒で応答なし／失敗 → 「再度試す」
+        }, showSharedAreas); // 12秒で応答なし／失敗 → 「再度試す」
     }
     function renderSharedAreas() {
         const body = document.getElementById('app-modal-body');
@@ -4046,14 +4047,16 @@
 
     // ✨ 最重要: スプレッドシートから読み込んだ瞬間に「絶対数値化」する描画処理
     function renderMarkers(data) {
-        currentMarkers.forEach(m => m.remove());
-        currentMarkers = [];
-
+        // 非配列（想定外の応答・通信の乱れで undefined 等）は、地図を白紙にせず現状のピンを保持し、赤エラーも出さない（不安を煽らない）。
+        //  ★チェックは「マーカー全削除より前」に置く（従来は削除後だったので非配列時に地図が真っ白になっていた）。
+        //  原因調査用に ErrorLog へ静かに記録だけする（頻発するなら別途調査）。
         if (!Array.isArray(data)) {
             console.error('renderMarkers: 配列ではありません', data);
-            showToast('データ形式が不正です（配列ではありません）', true);
-            return;
+            sendErrorToServer('RenderDataShape', 'renderMarkers に非配列（' + (data === undefined ? 'undefined' : typeof data) + '）', 'renderMarkers');
+            return; // 既存 currentMarkers はそのまま＝画面が真っ白にならない
         }
+        currentMarkers.forEach(m => m.remove());
+        currentMarkers = [];
         currentData = data;
         saveDataCache(data); // 次回起動の先行表示用に保存（同一データの再保存は無害）
 
