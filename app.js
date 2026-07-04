@@ -2358,6 +2358,7 @@
                 if (activeNewMarker || document.querySelector('.mapboxgl-popup')) {
                     currentData = data;   // 操作中は差し替えを保留（以後の再描画・更新で反映される）
                     saveDataCache(data);
+                    refreshOpenPopupAfterFresh_(data); // 開いている吹き出しの履歴・メモだけは閉じずに最新化（キャッシュには無いため）
                 } else {
                     renderMarkers(data);  // キャッシュ保存は renderMarkers 内で行う
                 }
@@ -2371,6 +2372,24 @@
             renderMarkers(data);
             openDeepLinkPin();
         }).catch(handleServerError).finally(hideBusy);
+    }
+
+    // 起動時の裏最新化が届いたとき、開きっぱなしの吹き出しを「閉じずに」最新へ差し替える。
+    //  先行表示キャッシュには履歴・メモ・言語を保存しない（端末に機微情報を残さない方針＝CACHE_OMIT_FIELDS）ため、
+    //  起動直後に開いた吹き出しは履歴欄が「読み込み中」のまま。最新が届いたこの時点で反映しないと、
+    //  閉じて開き直すまで履歴が出ない。ただしユーザーの操作状態は壊さない（下記ガードでは保留＝従来どおり）。
+    function refreshOpenPopupAfterFresh_(latest) {
+        try {
+            if (activeNewMarker) return; // 新規登録フォーム表示中は触らない
+            const m = currentMarkers.find(mk => { const p = mk.getPopup && mk.getPopup(); return p && p.isOpen(); });
+            if (!m) return;
+            if (m._rowNumbers && m._rowNumbers.length > 1) return; // 同一座標ページャは対象外（作り直すとページ位置が壊れるため・稀）
+            if (document.querySelector('.cell-operating')) return; // 集合住宅の部屋パネル操作中＝作り直すと選択中の部屋が消えるため保留
+            const el = m.getPopup().getElement();
+            const ae = document.activeElement;
+            if (el && ae && el.contains(ae) && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return; // メモ等の入力中は保留
+            applyInPlace(m._rowNumber, latest); // 吹き出しを閉じずに履歴・メモ・色を最新化（種別ごとの既存経路）
+        } catch (e) {}
     }
 
     /* フロントで起きたエラーをバックエンドの ErrorLog へ「コッソリ」送る（遠隔で原因特定するため）。
@@ -4275,7 +4294,7 @@
             <div style="font-weight:bold; font-size:14px; margin:2px 0 4px;">訪問結果</div>
             ${resultChoiceHtml(item.最新ステータス, `saveStatus(${item.rowNumber}, '%v')`)}
             <div style="font-weight:bold; font-size:14px; margin-top:6px;">履歴欄</div>
-            <div class="history-box">${historyHtml || '<div style="color:#aaa;">履歴なし</div>'}</div>
+            <div class="history-box">${historyHtml || (('履歴データ' in item) ? '<div style="color:#aaa;">履歴なし</div>' : '<div style="color:#aaa;">履歴を読み込み中…</div>')}</div>
 
             <div class="memo-section${memoCls}">
                 <label style="font-size:11px; font-weight:bold;">メモ</label>
@@ -4664,7 +4683,7 @@
             <div style="font-weight:bold; font-size:12px; margin:2px 0 4px;">訪問結果</div>
             ${resultChoiceHtml(curRoomVal, `saveRoomStatus(${buildingRow}, ${roomKeyJs(roomNum)}, '%v')`)}
             <div style="font-weight:bold; font-size:14px; margin-top:4px;">部屋の履歴:</div>
-            <div class="history-box" style="min-height:46px; max-height:60px; margin-top:2px;">${historyHtml || '<div style="color:#aaa;">履歴なし</div>'}</div>
+            <div class="history-box" style="min-height:46px; max-height:60px; margin-top:2px;">${historyHtml || ((item && ('履歴データ' in item)) ? '<div style="color:#aaa;">履歴なし</div>' : '<div style="color:#aaa;">履歴を読み込み中…</div>')}</div>
         `;
         const area = document.getElementById('room-action-area');
         if (area) { area.innerHTML = html; attachHistoryLongPress(area, buildingRow, true, roomNum); }
