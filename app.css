@@ -209,6 +209,7 @@
         .menu-item.cat-whole { background: #8E3E4E; color: #fff; }
         .menu-item.cat-whole:active { background: #7B3543; }
         .menu-item.cat-help { background: #fbf2e0; border-left: 3px solid #D9A441; }
+        .mi-ico { width: 21px; height: 21px; vertical-align: -5px; margin-right: 7px; } /* 区域カテゴリの自作SVGアイコン（白シルエット。メニュー3ボタン・モーダルのテーマ見出しで共用） */
         /* 貸出/管理メニューのアコーディオン（基本閉じ）。権限（貸出=lender+／管理=manager+）が無いと details ごと非表示 */
         .menu-acc { display: none; }
         body.role-lend .menu-acc.acc-lend { display: block; }

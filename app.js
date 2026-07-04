@@ -2549,6 +2549,18 @@
     }
     function toggleMenu() { document.getElementById('menu-panel').classList.toggle('show'); }
     function closeMenu() { document.getElementById('menu-panel').classList.remove('show'); }
+
+    /* ── 区域カテゴリの自作SVGアイコン（個人/グループ/全体利用）──
+       白の単色シルエット（表情なし・メイン=白・後ろの人物=半透明白）。深色背景（メニュー3ボタン・
+       モーダルのテーマ見出し）専用。絵文字はOS依存で見た目を制御できないため自作。ここが唯一の定義
+       （メニューへは下の mi-slot 注入・モーダルへは openAppModal が挿入）。 */
+    const MI_ICON = {
+        personal: '<svg class="mi-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.2" r="4.8" fill="#fff"/><path d="M12 14.2c-4.3 0-7.2 2.6-7.2 6 0 .9.7 1.3 1.5 1.3h11.4c.8 0 1.5-.4 1.5-1.3 0-3.4-2.9-6-7.2-6z" fill="#fff"/></svg>',
+        group: '<svg class="mi-ico" viewBox="0 0 24 24" aria-hidden="true"><g fill="rgba(255,255,255,0.55)"><circle cx="16.6" cy="8.6" r="3.8"/><path d="M16.6 13.5c-3.3 0-5.6 2-5.6 4.7 0 .8.6 1.2 1.3 1.2h8.6c.7 0 1.3-.4 1.3-1.2 0-2.7-2.3-4.7-5.6-4.7z"/></g><g fill="#fff"><circle cx="8.8" cy="8.2" r="4.4"/><path d="M8.8 13.7c-3.9 0-6.6 2.4-6.6 5.5 0 .9.6 1.3 1.4 1.3h10.4c.8 0 1.4-.4 1.4-1.3 0-3.1-2.7-5.5-6.6-5.5z"/></g></svg>',
+        whole: '<svg class="mi-ico" viewBox="0 0 24 24" aria-hidden="true"><g fill="rgba(255,255,255,0.5)"><circle cx="5.4" cy="9.2" r="3.1"/><path d="M5.4 13c-2.6 0-4.4 1.6-4.4 3.9 0 .7.5 1.1 1.1 1.1h3.4c0-2 .9-3.6 2.4-4.6-.7-.3-1.6-.4-2.5-.4z"/><circle cx="18.6" cy="9.2" r="3.1"/><path d="M18.6 13c2.6 0 4.4 1.6 4.4 3.9 0 .7-.5 1.1-1.1 1.1h-3.4c0-2-.9-3.6-2.4-4.6.7-.3 1.6-.4 2.5-.4z"/></g><g fill="#fff"><circle cx="12" cy="8.4" r="4.1"/><path d="M12 13.6c-3.6 0-6.1 2.2-6.1 5.1 0 .8.6 1.2 1.3 1.2h9.6c.7 0 1.3-.4 1.3-1.2 0-2.9-2.5-5.1-6.1-5.1z"/></g></svg>'
+    };
+    // メニュー（index.html の <span class="mi-slot" data-mi="...">）へアイコンを注入（起動時1回・定義の一元化）
+    document.querySelectorAll('.mi-slot').forEach(s => { s.innerHTML = MI_ICON[s.dataset.mi] || ''; });
     /* ホーム画面アプリ（PWA）はブラウザの更新UIが無く、引っ張って更新も分かりにくい。
        メニューから強制リロードする。URLに v=時刻 を付け直すことでキャッシュされた古い
        index.html の再表示を防ぐ（Ctrl+Shift+R 相当）。?area=/?pin= 等の既存パラメータは保持。 */
@@ -2569,7 +2581,10 @@
     });
 
     function openAppModal(title, theme) {
-        document.getElementById('app-modal-title').textContent = title;
+        const tEl = document.getElementById('app-modal-title');
+        // 区域系（personal/group/whole）はテーマ色の見出しに白シルエットの自作アイコンを付ける（メニューと統一）。それ以外は従来どおりテキストのみ。
+        if (theme && MI_ICON[theme]) tEl.innerHTML = MI_ICON[theme] + escHtml(title);
+        else tEl.textContent = title;
         document.getElementById('app-modal-body').innerHTML = '<div style="color:#888; padding:8px;">読み込み中…</div>';
         // カードのテーマ配色（personal=青/group=緑/whole=オレンジ）。無指定は既定（白）。
         document.getElementById('app-modal-card').className = theme ? ('app-modal-theme-' + theme) : '';
@@ -2713,9 +2728,9 @@
               <div class="vmh-s"><span class="vmh-num">2</span><div><div class="vmh-act">各区域の <span class="vmh-mbtn" style="background:#5E9DB8;border-color:#5E9DB8;color:#fff;">地図を表示</span> で場所を確認</div><div class="vmh-dt">返却期日が近い／過ぎていると色（黄・赤）で分かります</div></div></div>
               <div class="vmh-s"><span class="vmh-num">3</span><div><div class="vmh-act">終わったら <span class="vmh-mbtn" style="background:#A8554E;border-color:#A8554E;color:#fff;">区域を返却</span></div><div class="vmh-dt">自分が借りた区域は自分で返せます</div></div></div>
             </div>
-            <div class="vmh-sub">👪 全体利用の区域（みんなで使う区域）</div>
+            <div class="vmh-sub">全体利用の区域（みんなで使う区域）</div>
             <div class="vmh-steps"${isLend ? ' style="margin-bottom:12px;"' : ''}>
-              <div class="vmh-s"><span class="vmh-num">1</span><div><div class="vmh-act">左下メニュー → <span class="vmh-mbtn" style="background:#eef2f4;border-color:#dfe4e8;color:#555;">👪 全体利用の区域</span></div><div class="vmh-dt">特定の人ではなく、全員で共同利用する区域です</div></div></div>
+              <div class="vmh-s"><span class="vmh-num">1</span><div><div class="vmh-act">左下メニュー → <span class="vmh-mbtn" style="background:#8E3E4E;border-color:#8E3E4E;color:#fff;">全体利用の区域</span></div><div class="vmh-dt">特定の人ではなく、全員で共同利用する区域です</div></div></div>
               <div class="vmh-s"><span class="vmh-num">2</span><div><div class="vmh-act">地区の地図 か <span class="vmh-mbtn" style="background:#eef2f4;border-color:#dfe4e8;color:#555;">☰ 一覧</span> で見られます</div><div class="vmh-dt">地区をタップすると、その地区の区域が出ます</div></div></div>
             </div>`;
         if (isLend) {
@@ -3458,7 +3473,7 @@
     }
     // 👤 個人の区域カード（青テーマ）
     function showPersonalAreas() {
-        openAppModal('👤 個人の区域', 'personal');
+        openAppModal('個人の区域', 'personal'); // アイコンは openAppModal が MI_ICON.personal を付ける
         const render = list => {
             const mine = (list || []).filter(a => a.lentTo !== 'group'); // 自分個人への貸出
             overviewAreas.personal = mine; // 「🗺 全て表示」（一括枠表示）用に保持
@@ -3477,13 +3492,13 @@
     }
     // 👥 グループの区域カード（緑テーマ）
     function showGroupAreas() {
-        openAppModal('👥 グループの区域', 'group');
+        openAppModal('グループの区域', 'group'); // アイコンは openAppModal が MI_ICON.group を付ける
         const render = list => {
             const grp = (list || []).filter(a => a.lentTo === 'group'); // 自分の所属グループへの貸出
             overviewAreas.group = grp; // 「🗺 全て表示」（一括枠表示）用に保持
             const body = document.getElementById('app-modal-body');
             if (!grp.length) { body.innerHTML = '<div style="color:#888; padding:8px;">現在、グループへの割り当てはありません。</div>'; return; }
-            document.getElementById('app-modal-title').textContent = '👥 グループの区域（' + grp[0].group + '）'; // 見出しに対象グループ名を表示
+            document.getElementById('app-modal-title').innerHTML = MI_ICON.group + escHtml('グループの区域（' + grp[0].group + '）'); // 見出しに対象グループ名を表示（アイコンつき）
             let html = `<button class="area-allbtn aa-group" onclick="enterAreaOverview('group')" title="グループの区域を全て地図上に枠表示"><span class="aa-ttl">🗺 地図上に全て表示</span><span class="aa-sub">地図に一括 ／ ${grp.length} 区域</span></button>`;
             html += distAccHtml_(grp, 'group'); // 地区ごとのアコーディオン（全体利用と同じ見た目）
             body.innerHTML = html;
@@ -3506,7 +3521,7 @@
     }
     // （地図/一覧トグルは廃止：全体利用は常に一覧＝地区アコーディオン表示）
     function showSharedAreas() {
-        openAppModal('👪 全体利用の区域', 'whole');
+        openAppModal('全体利用の区域', 'whole'); // アイコンは openAppModal が MI_ICON.whole を付ける
         const render = list => {
             sharedState.areas = list || [];
             renderSharedAreas();
@@ -3647,9 +3662,9 @@
             listAreas = chomeAreas.filter(a => { const n = banchiNum(a); return n >= rstart && n <= rstart + 19; });
         }
 
-        const groupSel = `<select style="flex:1; min-width:0;" onchange="lendSel('group', this.value)"><option value="">グループ選択</option>${groups.map(g => opt(g, g, s.group)).join('')}${opt(SHARED_GROUP_NAME, '👪 全体利用（共同利用）', s.group)}</select>`;
+        const groupSel = `<select style="flex:1; min-width:0;" onchange="lendSel('group', this.value)"><option value="">グループ選択</option>${groups.map(g => opt(g, g, s.group)).join('')}${opt(SHARED_GROUP_NAME, '全体利用（共同利用）', s.group)}</select>`;
         const userSel = isShared
-            ? `<select style="flex:2; min-width:0;" disabled><option selected>👪 全体利用（全員で共同利用）</option></select>`
+            ? `<select style="flex:2; min-width:0;" disabled><option selected>全体利用（全員で共同利用）</option></select>`
             : `<select style="flex:2; min-width:0;" onchange="lendSel('email', this.value)"><option value="">-- ユーザー選択 --</option>${s.group ? opt('__GROUP__', '🟢 ' + s.group + '（グループ全体）', s.email) : ''}${users.map(u => opt(u.email, (u.name || u.email) + (u.group ? '（' + u.group + '）' : ''), s.email)).join('')}</select>`;
         let html = '<div style="font-weight:bold; margin-bottom:4px;">借りる人</div>'
             + '<div style="display:flex; gap:6px; margin-bottom:10px;">'
@@ -3666,7 +3681,7 @@
             html += listAreas.slice().sort((a, b) => banchiNum(a) - banchiNum(b)).map(a => {
                 const num = noChome ? a.area : String(a.area).replace(/^.*丁目/, '');
                 const lent2 = !!(a.user || a.group);
-                const who = a.group ? (a.group === SHARED_GROUP_NAME ? '👪 全体利用' : a.group + '（グループ）') : (a.name || uname(a.user));
+                const who = a.group ? (a.group === SHARED_GROUP_NAME ? '全体利用' :a.group + '（グループ）') : (a.name || uname(a.user));
                 // 機能②: 未貸出は冷却状態を判定。冷却中/停止中はバッジ＋貸出ボタン無効、manager には状態切替ボタンを出す。
                 const cool = lent2 ? null : coolingStateOf_(a);
                 const blocked = !!(cool && (cool.state === 'cooling' || cool.state === 'hold')); // 貸出不可（冷却中/停止中）
@@ -3723,7 +3738,7 @@
                 + `</div>`;
         }
         const lentRowHtml = a =>
-            `<div class="lend-row"><div class="grow"><b>${escHtml(a.area)}</b>　<span style="font-size:13px; color:#333;">${escHtml(a.group ? (a.group === SHARED_GROUP_NAME ? '👪 全体利用' : a.group + '（グループ）') : (a.name || uname(a.user)))}</span><br>`
+            `<div class="lend-row"><div class="grow"><b>${escHtml(a.area)}</b>　<span style="font-size:13px; color:#333;">${escHtml(a.group ? (a.group === SHARED_GROUP_NAME ? '全体利用' :a.group + '（グループ）') : (a.name || uname(a.user)))}</span><br>`
             + `<span style="font-size:12px; color:#666;">${escHtml(a.lendDate || '-')} → <span class="${dueClass(a.dueDate)}">${escHtml(a.dueDate || '-')}</span></span></div>`
             + `<div style="display:flex; gap:4px; flex:0 0 auto;">`
             + `<button class="lend-act-btn sm" style="background:#C75F56; border-color:#C75F56; color:#fff;" onclick="doReturnArea(${a.id}, '${escHtml(a.area)}')">返却</button>`
@@ -3930,9 +3945,9 @@
         const users = isShared ? [] : activeUsers.filter(u => !s.group || u.group === s.group);
         if (s.email && s.email !== '__GROUP__' && !users.some(u => u.email === s.email)) s.email = '';
         const canRelend = isShared || s.email === '__GROUP__' || !!s.email;
-        const groupSel = `<select style="flex:1; min-width:0;" onchange="relendSelSet('group', this.value)"><option value="">グループ選択</option>${groups.map(g => opt(g, g, s.group)).join('')}${opt(SHARED_GROUP_NAME, '👪 全体利用（共同利用）', s.group)}</select>`;
+        const groupSel = `<select style="flex:1; min-width:0;" onchange="relendSelSet('group', this.value)"><option value="">グループ選択</option>${groups.map(g => opt(g, g, s.group)).join('')}${opt(SHARED_GROUP_NAME, '全体利用（共同利用）', s.group)}</select>`;
         const userSel = isShared
-            ? `<select style="flex:2; min-width:0;" disabled><option selected>👪 全体利用（全員で共同利用）</option></select>`
+            ? `<select style="flex:2; min-width:0;" disabled><option selected>全体利用（全員で共同利用）</option></select>`
             : `<select style="flex:2; min-width:0;" onchange="relendSelSet('email', this.value)"><option value="">-- ユーザー選択 --</option>${s.group ? opt('__GROUP__', '🟢 ' + s.group + '（グループ全体）', s.email) : ''}${users.map(u => opt(u.email, (u.name || u.email) + (u.group ? '（' + u.group + '）' : ''), s.email)).join('')}</select>`;
         // 候補算出: 未貸出＋直近に完了サイクルあり＋訪問率 < しきい値
         const threshold = ((ME.config && ME.config.relendThreshold) || 30) / 100;

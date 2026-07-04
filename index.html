@@ -73,7 +73,7 @@
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-    <link rel="stylesheet" href="app.css?v=20260704b">
+    <link rel="stylesheet" href="app.css?v=20260704d">
 </head>
 <body>
 
@@ -103,9 +103,10 @@
 
 <!-- メニューパネル（割り当て区域／管理機能／サインアウト。管理項目は admin のみ表示） -->
 <div id="menu-panel">
-    <button class="menu-item cat-personal" onclick="closeMenu(); showPersonalAreas();">👤 個人の区域</button>
-    <button class="menu-item cat-group" onclick="closeMenu(); showGroupAreas();">👥 グループの区域</button>
-    <button class="menu-item cat-whole" onclick="closeMenu(); showSharedAreas();">👪 全体利用の区域</button>
+    <!-- 区域3ボタンのアイコンは自作SVG（白シルエット）。定義は app.js の MI_ICON（唯一の正）で、起動時に .mi-slot へ注入される -->
+    <button class="menu-item cat-personal" onclick="closeMenu(); showPersonalAreas();"><span class="mi-slot" data-mi="personal"></span>個人の区域</button>
+    <button class="menu-item cat-group" onclick="closeMenu(); showGroupAreas();"><span class="mi-slot" data-mi="group"></span>グループの区域</button>
+    <button class="menu-item cat-whole" onclick="closeMenu(); showSharedAreas();"><span class="mi-slot" data-mi="whole"></span>全体利用の区域</button>
     <button class="menu-item cat-help" onclick="closeMenu(); showHelp();">❓ アプリの使い方</button>
     <!-- 貸出/管理メニューはアコーディオン（基本閉じ）。権限（role-lend/role-manage）が無いと details ごと非表示 -->
     <details class="menu-acc acc-lend">
@@ -196,7 +197,7 @@
     </div>
 </div>
 
-<script src="app.js?v=20260704b"></script>
+<script src="app.js?v=20260704d"></script>
 
 </body>
 </html>
