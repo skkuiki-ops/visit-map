@@ -12,7 +12,7 @@
     const MY_TOKEN = 'pk.eyJ1IjoidG9ydW8xMTA0IiwiYSI6ImNtcTdlOGp2MzBhY3QycXBocno2OHQ5dmoifQ.bfkHvR5OmkacGJsDorHL5Q';
     mapboxgl.accessToken = MY_TOKEN;
     // ↓ デプロイした GAS Webアプリの URL（.../exec）に置き換える
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzsJ4yRAAc2E0BikL63SyVCr3VQBgUSDFrh4SV_iAAqrtAKOQrhGwCjsqTKDtqxUdav/exec";
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyovuYyrCZDqqpisSKnpyS1DaFVn1QuJANCHtgbkrKAaOQWE7OZKB-brV-2YW36Yxk7/exec";
     // ↓ Google Cloud で発行した OAuth クライアントID（code_api.gs と同一値）
     const GOOGLE_CLIENT_ID = "273556684740-01e17ja1as1pchs4cvlfqvh67vbt51l3.apps.googleusercontent.com";
     // ↓ 地図スタイル（Mapbox Studio のスタイルURL。標準に戻す場合は 'mapbox://styles/mapbox/streets-v12'）
@@ -2381,6 +2381,11 @@
             apiCall('getData', {}).then(renderMarkers).catch(() => {}); // 1回だけ再取得（失敗は握りつぶし＝ループ防止）
             return;
         }
+        // 冷却中/停止中の貸出拒否（CoolingDenied）＝業務上の想定エラー。サーバの理由文をそのまま案内（「通信エラー」扱いにしない）。
+        if (err && err.code === 'CoolingDenied') {
+            showToast((err && err.message) ? err.message : '現在この区域は貸し出せません', true);
+            return;
+        }
         console.error('サーバーエラー:', err);
         const msg = (err && err.message) ? err.message : String(err);
         sendErrorToServer('CommError', msg, 'handleServerError'); // 誰の端末で起きたかを ErrorLog に集約する
@@ -3440,17 +3445,29 @@
                 const num = noChome ? a.area : String(a.area).replace(/^.*丁目/, '');
                 const lent2 = !!(a.user || a.group);
                 const who = a.group ? (a.group === SHARED_GROUP_NAME ? '👪 全体利用' : a.group + '（グループ）') : (a.name || uname(a.user));
+                // 機能②: 未貸出は冷却状態を判定。冷却中/停止中はバッジ＋貸出ボタン無効、manager には状態切替ボタンを出す。
+                const cool = lent2 ? null : coolingStateOf_(a);
+                const blocked = !!(cool && (cool.state === 'cooling' || cool.state === 'hold')); // 貸出不可（冷却中/停止中）
+                const coolBadge = !cool ? ''
+                    : cool.state === 'cooling' ? `<span style="color:#2f6d8f; font-weight:bold;">❄ 冷却中（あと${cool.days}日）</span><br>`
+                    : cool.state === 'hold'    ? `<span style="color:#8a6d3b; font-weight:bold;">⏸ 停止中</span><br>`
+                    : cool.state === 'open'    ? `<span style="color:#2f9e44; font-weight:bold;">解禁済み（次の貸出まで）</span><br>` : '';
                 const statusHtml = lent2
                     ? `<span style="color:#C75F56;">貸出中（${a.lendCount || 1}回目）: ${escHtml(who)}（${escHtml(a.lendDate || '-')} → <span class="${dueClass(a.dueDate)}">${escHtml(a.dueDate || '-')}</span>）</span>`
-                    : `<span style="color:#555;">最終返却日: ${escHtml(a.lastReturn || 'なし')}　これまで ${a.lendCount || 0} 回</span>`;
-                const dateInput = lent2 ? '' : `<span style="margin-left:8px; color:#555;">貸出期限</span><input type="date" id="lend-due-${a.id}" value="${lendDefaultDue()}" style="font-size:12px; padding:2px 4px; width:106px; margin-left:4px; vertical-align:middle;">`; // 未貸出のみ。状態行の「これまでX回」の右に「貸出期限＋日付」を小さく表示
-                // 貸出中の番地は「返却(赤)＋キャンセル(琥珀)」を縦並び（幅は貸出ボタンと揃える）、未貸出は「貸出」（借りる人未選択ならグレーアウト）
+                    : `${coolBadge}<span style="color:#555;">最終返却日: ${escHtml(a.lastReturn || 'なし')}　これまで ${a.lendCount || 0} 回</span>`;
+                const dateInput = (lent2 || blocked) ? '' : `<span style="margin-left:8px; color:#555;">貸出期限</span><input type="date" id="lend-due-${a.id}" value="${lendDefaultDue()}" style="font-size:12px; padding:2px 4px; width:106px; margin-left:4px; vertical-align:middle;">`; // 未貸出かつ貸出可のみ
+                const canLendThis = canLend && !blocked; // 借りる人が選択済み かつ 冷却中/停止中でない
+                const mgrBtns = (!lent2 && (ME.level || 0) >= 2) ? managerStateBtns_(a, cool) : ''; // 状態切替は manager+ のみ
+                // 貸出中の番地は「返却(赤)＋キャンセル(琥珀)」を縦並び。未貸出は「貸出」（不可ならグレーアウト）＋(manager)状態切替。
                 const actBtn = lent2
                     ? `<div style="display:flex; flex-direction:column; gap:4px; flex:0 0 auto;">`
                         + `<button class="lend-act-btn" style="background:#C75F56; border-color:#C75F56; color:#fff;" onclick="doReturnArea(${a.id}, '${escHtml(a.area)}')">返却</button>`
                         + `<button class="lend-act-btn" style="background:#C58A3D; border-color:#C58A3D; color:#fff;" onclick="cancelLendArea(${a.id}, '${escHtml(a.area)}')">キャンセル</button>`
                       + `</div>`
-                    : `<button class="lend-act-btn" style="${canLend ? 'background:#5E9DB8; border-color:#5E9DB8; color:#fff;' : 'background:#b9c2c8; border-color:#b9c2c8; color:#f0f0f0; cursor:not-allowed;'}" onclick="doLendArea(${a.id})" ${canLend ? '' : 'disabled'}>貸出</button>`;
+                    : `<div style="display:flex; flex-direction:column; gap:4px; flex:0 0 auto;">`
+                        + `<button class="lend-act-btn" style="${canLendThis ? 'background:#5E9DB8; border-color:#5E9DB8; color:#fff;' : 'background:#b9c2c8; border-color:#b9c2c8; color:#f0f0f0; cursor:not-allowed;'}" onclick="doLendArea(${a.id})" ${canLendThis ? '' : 'disabled'}>貸出</button>`
+                        + mgrBtns
+                      + `</div>`;
                 return `<div class="lend-item">`
                     + `<div style="display:flex; gap:6px; align-items:center;">`
                     + `<div style="flex:1; min-width:0;"><b style="font-size:15px;">${escHtml(num)}</b><span style="color:#777; font-size:12px;">（${a.count === '' || a.count == null ? '-' : a.count}件）</span></div>`
@@ -3535,6 +3552,47 @@
             showBusy('返却中…');
             apiCall('returnArea', { areaId: id })
                 .then(d => { lendState.users = d.users; lendState.areas = d.areas; lendState.groups = d.groups || lendState.groups; renderLendScreen(); showToast('返却しました', false); })
+                .catch(handleServerError).finally(hideBusy);
+        });
+    }
+    /* ── 機能②: 区域の冷却・貸出状態 ──
+       未貸出区域は「返却後 coolingMonths が経つまで再貸出不可（冷却）」。manager は手動で解禁(open)/停止(hold)できる。
+       表示はここ（フロント）で判定し、実際の貸出可否は lendArea がサーバで最終検証する（フェーズA設計＝サーバ境界）。*/
+    function coolingDaysLeft_(lastReturn, months) {
+        const m = String(lastReturn || '').match(/(\d{4})\/(\d{1,2})\/(\d{1,2})/);
+        if (!m) return 0; // 返却日が無い/読めない＝冷却なし（フェイルオープン）
+        const end = new Date(+m[1], +m[2] - 1 + Number(months || 0), +m[3]); end.setHours(0, 0, 0, 0); // 返却日 + coolingMonths か月
+        const now = new Date(); now.setHours(0, 0, 0, 0);
+        return end > now ? Math.ceil((end - now) / 86400000) : 0;
+    }
+    // 未貸出区域の状態: 'hold'(停止) / 'open'(解禁済み) / 'cooling'(冷却中) / 'ok'(貸出可)。サーバ coolingRemainingDays_ と揃える。
+    function coolingStateOf_(a) {
+        const ov = String(a.lendOverride || '').trim();
+        if (ov === 'hold') return { state: 'hold', days: 0 };
+        if (ov === 'open') return { state: 'open', days: 0 };
+        const months = (ME.config && ME.config.coolingMonths) || 4;
+        const days = coolingDaysLeft_(a.lastReturn, months);
+        return days > 0 ? { state: 'cooling', days: days } : { state: 'ok', days: 0 };
+    }
+    // manager 用の状態切替ボタン（各未貸出行）。状態に応じて 解禁(open)/停止(hold)/自動('') を出し分ける。
+    function managerStateBtns_(a, cool) {
+        const btn = (label, state, bg) => `<button class="lend-act-btn sm" style="background:${bg}; border-color:${bg}; color:#fff;" onclick="runSetAreaLendState(${a.id}, '${state}', '${escHtml(a.area)}')">${label}</button>`;
+        const GREY = '#8a97a0';
+        switch (cool.state) {
+            case 'cooling': return btn('解禁', 'open', '#2f9e44') + btn('停止', 'hold', '#C58A3D');
+            case 'hold':    return btn('解禁', 'open', '#2f9e44') + btn('自動', '', GREY);
+            case 'open':    return btn('自動', '', GREY) + btn('停止', 'hold', '#C58A3D');
+            default:        return btn('停止', 'hold', '#C58A3D'); // 'ok'（貸出可）
+        }
+    }
+    // 区域の貸出状態（I列）を手動変更する（manager+）。setAreaLendState → 再描画。
+    function runSetAreaLendState(areaId, state, label) {
+        const labelJp = state === 'open' ? '解禁（次の貸出まで冷却を無視）' : state === 'hold' ? '停止（貸出不可）' : '自動（冷却に従う）';
+        appConfirm(`「${label}」の貸出状態を\n「${labelJp}」に変更します。`, { okLabel: '変更する' }).then(ok => {
+            if (!ok) return;
+            showBusy('変更中…');
+            apiCall('setAreaLendState', { areaId: areaId, state: state })
+                .then(d => { lendState.users = d.users; lendState.areas = d.areas; lendState.groups = d.groups || lendState.groups; renderLendScreen(); showToast('貸出状態を変更しました', false); })
                 .catch(handleServerError).finally(hideBusy);
         });
     }
