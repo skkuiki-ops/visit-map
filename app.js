@@ -3606,6 +3606,144 @@
                 .catch(handleServerError).finally(hideBusy);
         });
     }
+    /* ── 機能②b: 再貸出候補（訪問率が低い区域を manager が即時に貸し直す） ──
+       返却済み区域について「直近の貸出期間中の訪問率」を計算し、しきい値(relendThreshold・既定30%)未満を一覧。
+       訪問率＝区域内の戸建てピンのうち貸出期間内に訪問結果(不在/会えた/投函)が1件以上あるピン ÷ 区域内の戸建てピン総数。
+       集計はフロントその場計算（進捗モニタリングと同方式）。区域判定は D列住所→番地ラベル（フェーズC §4.1 areaLabelOfAddr_ と互換）。*/
+    let relendSel = { group: '', email: '' }; // 再貸出の借りる人（貸出画面と別の選択状態）
+    // 戸建てピンの番地ラベル（'-'・空は deriveAddress で逆算→addrWithoutGo。aggregateProgress / フェーズC設計と同じ導出）。
+    function areaLabelForPin_(item) {
+        const lng = parseFloat(item.経度), lat = parseFloat(item.緯度);
+        if (isNaN(lng) || isNaN(lat) || lng === 0 || lat === 0) return '';
+        const has = item.住所 && item.住所 !== '-' && String(item.住所).trim() !== '';
+        return addrWithoutGo(has ? item.住所 : (deriveAddress(lng, lat) || '')) || '';
+    }
+    function parseHistTimeLoose_(s) {
+        const m = String(s || '').match(/(\d{4})\/(\d{1,2})\/(\d{1,2}).*?(\d{1,2}):(\d{2})/);
+        return m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]) : null;
+    }
+    function parseYmdLoose_(s, end) {
+        const m = String(s || '').match(/(\d{4})\/(\d{1,2})\/(\d{1,2})/);
+        return m ? new Date(+m[1], +m[2] - 1, +m[3], end ? 23 : 0, end ? 59 : 0, end ? 59 : 0) : null;
+    }
+    // ピンの履歴に、期間[from,to]内の訪問結果(不在/会えた/投函)エントリが1件でもあるか。
+    function pinVisitedInPeriod_(item, fromStr, toStr) {
+        let arr = [];
+        try { arr = JSON.parse(item.履歴データ || '[]') || []; } catch (e) { return false; }
+        const from = parseYmdLoose_(fromStr, false), to = parseYmdLoose_(toStr, true);
+        for (const h of (arr || [])) {
+            if (!isVisitResult_(h && h.status)) continue; // 属性ログ等は除外
+            const t = parseHistTimeLoose_(h && h.time);
+            if (!t) continue;
+            if ((!from || t >= from) && (!to || t <= to)) return true;
+        }
+        return false;
+    }
+    // 戸建てピンを番地ラベルでグループ化（1回だけ算出）。{label: [item,...]}
+    function kodatePinsByLabel_(data) {
+        const map = {};
+        (data || []).forEach(item => {
+            if (item.種別 !== '戸建て') return;
+            const label = areaLabelForPin_(item);
+            if (!label) return;
+            (map[label] || (map[label] = [])).push(item);
+        });
+        return map;
+    }
+    let _relendByLabel = null; // 再貸出候補用の「番地ラベル→戸建てピン」（履歴つき最新データから算出・グローバル currentData は汚さない）
+    function showRelendCandidates() {
+        openAppModal('⟳ 再貸出候補');
+        const body = document.getElementById('app-modal-body');
+        body.innerHTML = '<div style="color:#888; padding:12px;">読み込み中…</div>';
+        // 訪問率の判定に履歴が要る → getData を確実に取り直す（キャッシュ先行だと履歴が欠ける）。貸出データも取得。
+        Promise.all([apiCall('getData', {}), apiCall('getLendData', {})]).then(([data, lend]) => {
+            _relendByLabel = kodatePinsByLabel_(data); // 取得データはローカルに保持（地図の currentData/マーカーには触れない）
+            lendState.users = lend.users; lendState.areas = lend.areas; lendState.groups = lend.groups || lendState.groups;
+            renderRelendCandidates();
+        }).catch(handleServerError);
+    }
+    function relendTarget_() {
+        const s = relendSel;
+        if (s.group === SHARED_GROUP_NAME) return { targetGroup: SHARED_GROUP_NAME };
+        if (s.email === '__GROUP__' && s.group) return { targetGroup: s.group };
+        if (s.email && s.email !== '__GROUP__') return { targetEmail: s.email };
+        return null;
+    }
+    function relendWhoLabel_() {
+        const s = relendSel;
+        if (s.group === SHARED_GROUP_NAME) return '全体利用（全員で共同利用）に貸し出します';
+        if (s.email === '__GROUP__' && s.group) return `グループ「${s.group}」全体に貸し出します`;
+        const u = lendState.users.find(x => x.email === s.email);
+        return u ? `${u.name || u.email} さんに貸し出します` : '';
+    }
+    function relendSelSet(kind, val) {
+        if (kind === 'group') { relendSel.group = val; relendSel.email = (val === SHARED_GROUP_NAME) ? SHARED_GROUP_NAME : ''; }
+        else relendSel.email = val;
+        renderRelendCandidates();
+    }
+    function renderRelendCandidates() {
+        const body = document.getElementById('app-modal-body');
+        const s = relendSel;
+        const isShared = (s.group === SHARED_GROUP_NAME);
+        const opt = (v, l, cur) => `<option value="${escHtml(String(v))}" ${String(cur) === String(v) ? 'selected' : ''}>${escHtml(String(l))}</option>`;
+        const activeUsers = lendState.users.filter(u => u.active !== false);
+        const groups = lendState.groups || [];
+        const users = isShared ? [] : activeUsers.filter(u => !s.group || u.group === s.group);
+        if (s.email && s.email !== '__GROUP__' && !users.some(u => u.email === s.email)) s.email = '';
+        const canRelend = isShared || s.email === '__GROUP__' || !!s.email;
+        const groupSel = `<select style="flex:1; min-width:0;" onchange="relendSelSet('group', this.value)"><option value="">グループ選択</option>${groups.map(g => opt(g, g, s.group)).join('')}${opt(SHARED_GROUP_NAME, '👪 全体利用（共同利用）', s.group)}</select>`;
+        const userSel = isShared
+            ? `<select style="flex:2; min-width:0;" disabled><option selected>👪 全体利用（全員で共同利用）</option></select>`
+            : `<select style="flex:2; min-width:0;" onchange="relendSelSet('email', this.value)"><option value="">-- ユーザー選択 --</option>${s.group ? opt('__GROUP__', '🟢 ' + s.group + '（グループ全体）', s.email) : ''}${users.map(u => opt(u.email, (u.name || u.email) + (u.group ? '（' + u.group + '）' : ''), s.email)).join('')}</select>`;
+        // 候補算出: 未貸出＋直近に完了サイクルあり＋訪問率 < しきい値
+        const threshold = ((ME.config && ME.config.relendThreshold) || 30) / 100;
+        const byLabel = _relendByLabel || {};
+        const cand = [];
+        (lendState.areas || []).forEach(a => {
+            if (a.user || a.group) return;              // 貸出中は対象外
+            if (!a.lastLend || !a.lastReturn) return;   // 完了した貸出サイクルが無い＝測れない
+            const pins = byLabel[a.area] || [];
+            if (!pins.length) return;                   // 区域内に登録ピンが無い＝訪問率を測れない
+            const visited = pins.filter(p => pinVisitedInPeriod_(p, a.lastLend, a.lastReturn)).length;
+            const rate = visited / pins.length;
+            if (rate < threshold) cand.push({ a, rate, visited, denom: pins.length });
+        });
+        cand.sort((x, y) => x.rate - y.rate); // 訪問率が低い順
+        let html = '<div style="font-weight:bold; margin-bottom:4px;">借りる人</div>'
+            + `<div style="display:flex; gap:6px; margin-bottom:8px;">${groupSel}${userSel}</div>`
+            + `<div style="display:flex; gap:6px; align-items:center; margin-bottom:10px;"><span style="font-size:13px; font-weight:bold;">返却期日</span><input type="date" id="relend-due" value="${lendDefaultDue()}" style="font-size:13px; padding:2px 6px;"></div>`
+            + `<div style="font-size:12px; color:#777; margin-bottom:8px;">直近の貸出期間中に訪問結果があったピンの割合が <b>${Math.round(threshold * 100)}%</b> 未満の区域です。<br>分母は<b>登録ピン数</b>（AreaListの件数ではない）＝登録が疎な区域は率が高めに出ます。再貸出すると<b>前回の貸出記録は削除</b>されます。</div>`;
+        if (!cand.length) {
+            html += '<div style="color:#888; padding:10px;">該当する区域はありません（すべてしきい値以上、または未計測）。</div>';
+        } else {
+            html += cand.map(c => {
+                const a = c.a;
+                const who = a.lastName || '（前回の利用者）'; // 返却済み区域は D/E/L列が空＝前回利用者は履歴由来の lastName（getLendData）
+                const pct = Math.round(c.rate * 1000) / 10;
+                return `<div class="lend-item"><div style="display:flex; gap:6px; align-items:center;">`
+                    + `<div style="flex:1; min-width:0;"><b style="font-size:15px;">${escHtml(a.area)}</b>　<span style="color:#C75F56; font-weight:bold; font-size:13px;">訪問率 ${pct}%</span><span style="color:#777; font-size:12px;">（${c.visited}/${c.denom}）</span></div>`
+                    + `<button class="lend-act-btn" style="${canRelend ? 'background:#8a5a9e; border-color:#8a5a9e; color:#fff;' : 'background:#b9c2c8; border-color:#b9c2c8; color:#f0f0f0; cursor:not-allowed;'}" onclick="runRelendArea(${a.id})" ${canRelend ? '' : 'disabled'}>再貸出</button>`
+                    + `</div><div style="font-size:12px; color:#555; margin-top:4px;">前回: ${escHtml(who)}（${escHtml(a.lastLend)} 〜 ${escHtml(a.lastReturn)}）</div></div>`;
+            }).join('');
+        }
+        body.innerHTML = html;
+    }
+    function runRelendArea(areaId) {
+        const t = relendTarget_();
+        if (!t) { showToast('借りる人を選んでください', true); return; }
+        const a = lendState.areas.find(x => String(x.id) === String(areaId));
+        if (!a) return;
+        const dueEl = document.getElementById('relend-due');
+        const due = dueEl && dueEl.value ? dueEl.value.replace(/-/g, '/') : '';
+        const oldWho = a.lastName || '（前回の利用者）';
+        appConfirm(`「${a.area}」を再貸出します。\n${relendWhoLabel_()}\n返却期日: ${due || '未設定'}\n\n⚠ 前回の貸出記録（${oldWho}）は削除されます（貸さなかったことになります）。`, { okLabel: '再貸出する', danger: true }).then(ok => {
+            if (!ok) return;
+            showBusy('再貸出中…');
+            apiCall('relendArea', Object.assign({ areaId: areaId, dueDate: due }, t))
+                .then(d => { lendState.users = d.users; lendState.areas = d.areas; lendState.groups = d.groups || lendState.groups; renderRelendCandidates(); showToast('再貸出しました', false); })
+                .catch(handleServerError).finally(hideBusy);
+        });
+    }
     // 「貸出中の区域」一覧を、上部の絞り込み（借りる人・地区/丁目/範囲）と期間で自動フィルタする判定。未選択の条件は素通り（=全件表示）。
     function lentAreaMatches(a) {
         const s = lendState.sel;
