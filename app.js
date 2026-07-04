@@ -2734,7 +2734,19 @@
             + `<div style="display:flex; gap:6px; align-items:center; margin-bottom:14px;"><label style="width:48px; font-size:13px; font-weight:bold;">終了</label><input type="date" id="mnt-to" value="${toVal}" style="flex:1; min-width:0;"></div>`
             + `<button class="clear-btn" style="width:100%; margin-bottom:8px;" onclick="runMaintenance('history')">🗑 この期間の履歴をクリア</button>`
             + `<button class="clear-btn" style="width:100%; background:#8a6d3b;" onclick="runMaintenance('status')">🔄 この期間の訪問ステータスをクリア</button>`
+            + `<div style="margin-top:18px; padding-top:12px; border-top:1px solid #ddd;"><div style="font-size:13px; color:#555; margin-bottom:8px;">網羅履歴（各番地の貸出サイクル）を全てクリアします。各番地の最終返却日は「前回完了した日付」として保存され、次は第1網羅から数え直します（1〜2年周期の想定）。実行前に AreaList をバックアップします。</div>`
+            + `<button class="clear-btn" style="width:100%; background:#7a4a6a;" onclick="runClearCoverage()">📋 網羅履歴をクリア</button></div>`
             + settingsSectionHtml_();
+    }
+    function runClearCoverage() {
+        appConfirm('網羅履歴（各番地の貸出サイクル）を全てクリアします。\n・各番地の最終返却日は「前回完了した日付」に保存されます。\n・貸出中の区域は対象外です。\n・実行前に AreaList をバックアップします。', { danger: true, okLabel: '次へ' }).then(ok => {
+            if (!ok) return;
+            appConfirm('この操作は元に戻せません（バックアップからの復元のみ）。本当に実行しますか？', { danger: true, okLabel: '実行する' }).then(ok2 => {
+                if (!ok2) return;
+                showBusy('クリア中…');
+                apiCall('clearCoverageAll', {}).then(() => { showToast('網羅履歴をクリアしました', false); closeAppModal(); }).catch(handleServerError).finally(hideBusy);
+            });
+        });
     }
     // メンテ画面の設定セクション（sysadmin）。運用で調整する期間・しきい値を編集して保存する（Config／saveSettings）。
     // 値は getMe が配布した ME.config を初期表示に使う（未取得なら空欄＝サーバ既定のまま）。
@@ -3370,6 +3382,69 @@
         body.innerHTML = html;
     }
     // （地区マップ表示は廃止：全体利用は地区アコーディオンの一覧表示に統一。decorateSharedMap を撤去）
+
+    /* ── 機能③: 網羅状況（第N網羅の可視化・シート出力・長押し削除。manager+） ── */
+    let coverageAreas = null;
+    function showCoverage() {
+        openAppModal('📋 網羅状況');
+        const body = document.getElementById('app-modal-body');
+        body.innerHTML = '<div style="color:#888; padding:12px;">読み込み中…</div>';
+        apiCall('getCoverageData', {}).then(d => { coverageAreas = (d && d.areas) || []; renderCoverage(); }).catch(handleServerError);
+    }
+    function coverageRowHtml(a) {
+        const cell = (c, label, cur) =>
+            `<span class="cov-cell" data-area="${a.id}"${cur ? ' data-current="1"' : ''} data-lend="${escHtml(c.lend)}" data-ret="${escHtml(c.ret || '')}" data-email="${escHtml(c.email || '')}" data-group="${escHtml(c.group || '')}" data-name="${escHtml(c.name)}" `
+            + `style="display:inline-block; background:${cur ? '#fdeaea' : '#eef4f7'}; border:1px solid ${cur ? '#e6b9b9' : '#cdd8de'}; border-radius:5px; padding:3px 7px; margin:2px 3px 2px 0; font-size:12px; vertical-align:top;">`
+            + `<b>${label}</b> ${escHtml(c.name)}<br><span style="color:${cur ? '#a33' : '#666'};">${escHtml(c.lend)}〜${cur ? '' : escHtml(c.ret)}</span></span>`;
+        const cells = a.cycles.map((c, i) => cell(c, '第' + (i + 1) + '網羅', false)).join('')
+            + (a.current ? cell(a.current, '貸出中', true) : '');
+        return `<div class="lend-item"><div style="display:flex; align-items:baseline; gap:8px; flex-wrap:wrap;"><b style="font-size:15px;">${escHtml(a.area)}</b>`
+            + (a.lastComplete ? `<span style="font-size:11px; color:#888;">前回完了: ${escHtml(a.lastComplete)}</span>` : '')
+            + `</div><div style="margin-top:4px;">${cells}</div></div>`;
+    }
+    function renderCoverage() {
+        const body = document.getElementById('app-modal-body');
+        const areas = (coverageAreas || []).filter(a => a.cycles.length || a.current);
+        let html = `<button class="clear-btn" style="width:100%; margin-bottom:10px; background:#3d6b8a;" onclick="runExportCoverageSheet()">📄 網羅シートへ出力</button>`
+            + `<div style="font-size:12px; color:#777; margin-bottom:8px;">各番地の網羅（完了した貸出サイクル）です。セルを<b>長押し</b>すると、その記録を削除できます（貸さなかったことに）。</div>`;
+        if (!areas.length) { body.innerHTML = html + '<div style="color:#888; padding:8px;">網羅の記録がある区域はまだありません。</div>'; return; }
+        const byDist = {};
+        areas.forEach(a => { const d = districtOfArea(a.area); (byDist[d] = byDist[d] || []).push(a); });
+        const dists = AREA_GRID_ORDER.filter(d => (byDist[d] || []).length).concat(Object.keys(byDist).filter(d => AREA_GRID_ORDER.indexOf(d) < 0));
+        html += dists.map(d => {
+            const rows = byDist[d] || [];
+            return `<details class="dist-acc"><summary><span class="da-name">${escHtml(d)}</span><span class="da-num">${rows.length}区域</span><span class="da-chev">▾</span></summary><div class="da-body">${rows.map(coverageRowHtml).join('')}</div></details>`;
+        }).join('');
+        body.innerHTML = html;
+        body.querySelectorAll('.cov-cell').forEach(el => attachLongPress(el, () => {}, () => onCoverageCellLong(el))); // タップは無効・長押しで削除
+    }
+    function onCoverageCellLong(el) {
+        const d = el.dataset, areaId = Number(d.area);
+        const a = (coverageAreas || []).find(x => x.id === areaId);
+        const areaName = a ? a.area : '';
+        if (d.current) { // 進行中＝「貸出中」はキャンセル(cancelLendArea)へ誘導（網羅の削除対象外）
+            appConfirm(`「${areaName}」は現在貸出中です。\nこの貸出を取り消しますか？（貸出・返却画面のキャンセルと同じ＝貸出回数に残りません）`, { okLabel: '取り消す', danger: true }).then(ok => {
+                if (!ok) return;
+                showBusy('取り消し中…');
+                apiCall('cancelLendArea', { areaId: areaId }).then(() => { showToast('貸出を取り消しました', false); showCoverage(); }).catch(handleServerError).finally(hideBusy);
+            });
+            return;
+        }
+        appConfirm(`「${areaName}」のこの貸出記録を削除します。\n${d.name}（${d.lend}〜${d.ret}）\n\n⚠「貸さなかったこと」になります（網羅から外れ、貸出回数が1つ戻ります）。`, { okLabel: '削除する', danger: true }).then(ok => {
+            if (!ok) return;
+            showBusy('削除中…');
+            apiCall('deleteLendRecord', { areaId: areaId, lend: d.lend, ret: d.ret, email: d.email, group: d.group })
+                .then(res => { coverageAreas = (res && res.areas) || []; renderCoverage(); showToast('貸出記録を削除しました', false); })
+                .catch(handleServerError).finally(hideBusy);
+        });
+    }
+    function runExportCoverageSheet() {
+        appConfirm('現在の網羅状況を「網羅」シートへ出力します（既存の網羅シートは上書き再生成されます）。', { okLabel: '出力する' }).then(ok => {
+            if (!ok) return;
+            showBusy('出力中…');
+            apiCall('exportCoverageSheet', {}).then(r => { showToast(`網羅シートを出力しました（${(r && r.areas) || 0} 区域）`, false); }).catch(handleServerError).finally(hideBusy);
+        });
+    }
 
     // ── 管理: 区域の貸出・返却 ──
     let lendState = { users: [], areas: [], groups: [], sel: { group: '', email: '', district: '', chome: '', range: '' }, period: { field: 'lend', from: '', to: '' } };
