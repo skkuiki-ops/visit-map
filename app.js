@@ -12,7 +12,7 @@
     const MY_TOKEN = 'pk.eyJ1IjoidG9ydW8xMTA0IiwiYSI6ImNtcTdlOGp2MzBhY3QycXBocno2OHQ5dmoifQ.bfkHvR5OmkacGJsDorHL5Q';
     mapboxgl.accessToken = MY_TOKEN;
     // ↓ デプロイした GAS Webアプリの URL（.../exec）に置き換える
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbze9LJbBF7tDZOWdR6AriAbz_tdN1E_qCq_5KauB5PF8JHKD8nhJ7P7vT6bBoaiS3Ur/exec";
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyMlX8Dsd3EM27WZPjAuQm94P1RogCobB9C5GadzfDDJ__SlvmqnGLKIJmzmtbiWJ6v/exec";
     // ↓ Google Cloud で発行した OAuth クライアントID（code_api.gs と同一値）
     const GOOGLE_CLIENT_ID = "273556684740-01e17ja1as1pchs4cvlfqvh67vbt51l3.apps.googleusercontent.com";
     // ↓ 地図スタイル（Mapbox Studio のスタイルURL。標準に戻す場合は 'mapbox://styles/mapbox/streets-v12'）
@@ -462,6 +462,39 @@
     // 1回目が実はサーバ側で成功していた（応答だけ届かなかった）場合、再送は書き込みをスキップして
     // 最新データだけ返るため、履歴の二重追記・二重登録にならない。
     const RETRYABLE_WRITE_ACTIONS = ['updateLocation', 'updateRoom', 'report', 'updateCoords', 'editHistory', 'addNew', 'updateBuilding', 'updateFacility', 'deleteLocation', 'clearHistory']; // GAS の DEDUPE_ACTIONS と同一に保つ
+
+    // ── 応答速度の計測（テスト期間の実測用） ──
+    // 成功した API 呼び出しごとに { 操作, 全体ms, サーバms } を localStorage に直近300件だけ蓄積する。
+    // サーバms は GAS doPost 入口〜出口（応答の serverMs）。全体ms−サーバms ≒ ネットワーク＋GAS起動の固定費。
+    // 集計はブラウザのコンソールで timingReport() を実行（操作ごとの件数・中央値・平均を表で表示）。
+    const TIMING_KEY = 'vm_timing';
+    function recordTiming_(action, totalMs, serverMs) {
+        try {
+            const arr = JSON.parse(localStorage.getItem(TIMING_KEY) || '[]');
+            arr.push({ a: action, t: Math.round(totalMs), s: (typeof serverMs === 'number') ? serverMs : null, ts: Date.now() });
+            localStorage.setItem(TIMING_KEY, JSON.stringify(arr.slice(-300)));
+        } catch (e) {} // 計測は本体動作に影響させない（quota超過等は黙って捨てる）
+    }
+    window.timingReport = function() {
+        let arr = [];
+        try { arr = JSON.parse(localStorage.getItem(TIMING_KEY) || '[]'); } catch (e) {}
+        if (!arr.length) { console.log('計測データなし（vm_timing）'); return []; }
+        const med = v => { const s = v.slice().sort((a, b) => a - b); return s[Math.floor(s.length / 2)]; };
+        const by = {};
+        arr.forEach(r => { (by[r.a] = by[r.a] || []).push(r); });
+        const rows = Object.keys(by).map(a => {
+            const g = by[a], t = g.map(r => r.t), s = g.filter(r => r.s != null).map(r => r.s);
+            return {
+                操作: a, 件数: g.length,
+                全体ms中央値: med(t), 全体ms平均: Math.round(t.reduce((x, y) => x + y, 0) / t.length),
+                サーバms中央値: s.length ? med(s) : null,
+                固定費ms目安: s.length ? med(t) - med(s) : null // ネットワーク＋GAS起動ぶん（中央値の差）
+            };
+        }).sort((x, y) => y.全体ms中央値 - x.全体ms中央値);
+        console.table(rows);
+        return rows;
+    };
+
     async function apiCall(action, params) {
         // 表示モード中は書き込み系 action を遮断（閲覧のみ。CSS でも編集 UI を無効化済みの二重防御）。
         if (overviewMode && OVERVIEW_READ_ACTIONS.indexOf(action) === -1) {
@@ -478,6 +511,7 @@
             if (attempt > 1) await new Promise(res => setTimeout(res, attempt === 2 ? 1000 : 2500));
             try {
                 const idToken = user ? await user.getIdToken() : ''; // 毎試行で取り直す（リトライ待ちの間の失効に備える）
+                const tFetch = performance.now(); // 計測: この試行の往復時間（トークン取得は含めない）
                 const r = await fetch(GAS_API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -495,6 +529,7 @@
                 // canRetry の action は全て data を返す契約なので、欠落＝異常。入口で弾いてリトライで回復を試みる。
                 if (canRetry && res.data === undefined) throw Object.assign(new Error('成功応答に data がありません（action=' + action + '）'), { transient: true });
                 if (attempt > 1) sendErrorToServer('CommRetry', action + ' が ' + attempt + ' 回目の試行で回復', 'apiCall'); // 発生頻度の観測用（ErrorLog に残す）
+                recordTiming_(action, performance.now() - tFetch, res.serverMs); // 計測: 成功した試行のみ蓄積
                 return res.data;
             } catch (err) {
                 // リトライするのは通信段階の失敗のみ: fetch のネットワーク失敗(TypeError)・
