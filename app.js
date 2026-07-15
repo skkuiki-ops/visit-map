@@ -3667,10 +3667,11 @@
 
         fitOverview(feats);
         showOverviewBar();
-        // アイコン表示は毎回「表示」状態から開始（前回の非表示を持ち越さない）
-        document.body.classList.remove('icons-hidden');
+        // アイコン(ピン)は毎回「非表示」状態から開始（枠と番地ラベルを見やすく）。番地ラベルタップ／✕／Esc で
+        // exitAreaOverview が icons-hidden を解除＝通常のアイコン表示へ戻る。下部バーのトグルで手動表示も可。
+        document.body.classList.add('icons-hidden');
         const ovIcons = document.getElementById('area-overview-icons');
-        if (ovIcons) ovIcons.textContent = 'アイコンを非表示';
+        if (ovIcons) ovIcons.textContent = tr('アイコンを表示');
         if (skipped) showToast(skipped + '件は地図に表示できませんでした', true);
     }
     // ラベルのズーム連動スケール（z16以上=等倍／16未満は広角ほど小さく・下限0.5倍）
