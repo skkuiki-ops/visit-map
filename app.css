@@ -54,18 +54,24 @@
         .area-map .chome-badge:hover circle { fill: rgba(165,165,165,0.78); }
         .area-map .chome-badge:active circle { fill: rgba(135,135,135,0.88); }
         .area-map .chome-badge text { fill: #444; font-size: 35px; font-weight: bold; text-anchor: middle; dominant-baseline: central; pointer-events: none; user-select: none; }
-        /* 全体利用：トップの「🗺 全て表示」＋地区アコーディオン */
-        /* 「🗺 全て表示」プロミネントボタン（個人=青/グループ=緑/全体=オレンジ。大きめ・全幅） */
-        .area-allbtn { display:flex; flex-direction:column; align-items:flex-start; gap:2px; width:100%; box-sizing:border-box; border:1.5px solid; border-radius:11px; padding:12px 16px; cursor:pointer; margin-bottom:12px; text-align:left; -webkit-touch-callout:none; user-select:none; touch-action:manipulation; }
-        .area-allbtn:active { transform:scale(0.99); }
-        .area-allbtn .aa-ttl { font-size:18px; font-weight:bold; }
-        .area-allbtn .aa-sub { font-size:12px; }
-        .area-allbtn.aa-personal { background:#edf0f7; border-color:#3D4E81; color:#35446F; }
-        .area-allbtn.aa-personal .aa-sub { color:#6b78a3; }
-        .area-allbtn.aa-group { background:#ecf4f0; border-color:#2F6B4F; color:#285C43; }
-        .area-allbtn.aa-group .aa-sub { color:#5f8a75; }
-        .area-allbtn.aa-whole { background:#f8f0f2; border-color:#8E3E4E; color:#7B3543; }
-        .area-allbtn.aa-whole .aa-sub { color:#a8707c; }
+        /* 区域一覧トップの「🗺 全区域マップ」バー（個人=青/グループ=緑/合同=えんじ）。
+           旧「地図上に全て表示」の全面ボタンは"ボタンと認識されにくい"ため、情報（左）＋
+           明示的な「地図を表示」ボタン（右・テーマ色の塗り）に分離（2026-07-16）。押せるのはボタンのみ */
+        .area-allbar { display:flex; align-items:center; justify-content:space-between; gap:10px; width:100%; box-sizing:border-box; border:1.5px solid; border-radius:11px; padding:10px 12px 10px 16px; margin-bottom:12px; }
+        .area-allbar .aa-info { display:flex; flex-direction:column; gap:2px; min-width:0; }
+        .area-allbar .aa-ttl { font-size:16px; font-weight:bold; }
+        .area-allbar .aa-sub { font-size:12px; }
+        .area-allbar .aa-showmap { flex-shrink:0; border:none; border-radius:9px; padding:11px 16px; font-size:15px; font-weight:bold; color:#fff; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.25); -webkit-touch-callout:none; user-select:none; touch-action:manipulation; }
+        .area-allbar .aa-showmap:active { transform:scale(0.97); }
+        .area-allbar.aa-personal { background:#edf0f7; border-color:#3D4E81; color:#35446F; }
+        .area-allbar.aa-personal .aa-sub { color:#6b78a3; }
+        .area-allbar.aa-personal .aa-showmap { background:#3D4E81; }
+        .area-allbar.aa-group { background:#ecf4f0; border-color:#2F6B4F; color:#285C43; }
+        .area-allbar.aa-group .aa-sub { color:#5f8a75; }
+        .area-allbar.aa-group .aa-showmap { background:#2F6B4F; }
+        .area-allbar.aa-whole { background:#f8f0f2; border-color:#8E3E4E; color:#7B3543; }
+        .area-allbar.aa-whole .aa-sub { color:#a8707c; }
+        .area-allbar.aa-whole .aa-showmap { background:#8E3E4E; }
         .dist-acc { border:1px solid #d6dde2; border-radius:10px; margin-bottom:8px; overflow:hidden; background:#fff; }
         .dist-acc > summary { list-style:none; cursor:pointer; display:flex; align-items:center; gap:8px; padding:11px 14px; font-size:15px; font-weight:bold; color:#356B82; background:#f3f7f9; }
         .dist-acc > summary::-webkit-details-marker { display:none; }
@@ -389,7 +395,7 @@
         .rep-row .req { color: #c0392b; margin-left: 2px; }
         .rep-row input[type="text"], .rep-row input[type="date"], .rep-row select, .rep-row textarea { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 15px; font-family: inherit; background: #fff; }
         .rep-row textarea { resize: vertical; min-height: 56px; }
-        .rep-row.rep-hl input[type="text"], .rep-row.rep-hl select, .rep-row.rep-hl textarea { background: #FFF9DD; } /* 手入力の個人情報欄（名前/性別/年代/関心/内容）は薄黄色＝新規登録フォームの主要入力欄と統一 */
+        .rep-row.rep-hl input[type="text"], .rep-row.rep-hl select, .rep-row.rep-hl textarea { background: #FFF9DD; } /* 記入・選択してほしい欄（個人情報欄＋必須の訪問結果・外国語の言語）は薄黄色＝新規登録フォームの主要入力欄と統一 */
         .lang-note { font-size: 12px; font-weight: bold; color: #6a4fa0; margin: 2px 0 4px; }
         .rep-2col { display: flex; gap: 8px; }
         .rep-2col > .rep-row { flex: 1; min-width: 0; }

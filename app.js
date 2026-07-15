@@ -69,7 +69,7 @@
         '☰ メニュー': '☰ Menú',
         '個人の区域': 'Territorio personal',
         'グループの区域': 'Territorio del grupo',
-        '全体利用の区域': 'Territorio de uso común',
+        '合同の区域': 'Territorio de uso común',
         '❓ アプリの使い方': '❓ Cómo usar la app',
         '🚪 サインアウト': '🚪 Cerrar sesión',
         '📋 情報コピー': '📋 Copiar información',
@@ -147,12 +147,12 @@
         'グループの区域': 'Territorio del grupo',
         'あなた個人への割り当てはありません。': 'No tiene territorios asignados.',
         '現在、グループへの割り当てはありません。': 'Ahora no hay territorios asignados al grupo.',
-        '現在、全体利用の区域はありません。': 'Ahora no hay territorios de uso común.',
-        '🗺 地図上に全て表示': '🗺 Ver todos en el mapa',
-        '地図に一括': 'Todos en el mapa', '貸出中 計': 'en uso:', '区域': 'territorios',
+        '現在、合同の区域はありません。': 'Ahora no hay territorios de uso común.',
+        '🗺 全区域マップ': '🗺 Mapa de todos los territorios',
+        '貸出中 計': 'en uso:', '区域': 'territorios',
         '個人の区域を全て地図上に枠表示': 'Mostrar todos los territorios personales en el mapa',
         'グループの区域を全て地図上に枠表示': 'Mostrar todos los territorios del grupo en el mapa',
-        '全体利用の区域を全て地図上に枠表示': 'Mostrar todos los territorios de uso común en el mapa',
+        '合同の区域を全て地図上に枠表示': 'Mostrar todos los territorios de uso común en el mapa',
         '貸出開始:': 'Prestado desde:', '返却期日:': 'Devolver antes de:',
         '地図を表示': 'Ver mapa', '長押しで返却': 'Mantener pulsado para devolver',
         '返却する': 'Devolver', '返却しました': 'Territorio devuelto',
@@ -1499,7 +1499,7 @@
     let areaChomeOn = localStorage.getItem('vm_areaChome') === '1'; // 地図表示中に丁目バッジを重ねるか（住所検索のみ）
     // 一覧グリッドの並び順（3列×4行で江戸川区の地図配置に近づけた）
     const AREA_GRID_ORDER = ['東松本','南小岩','東小岩','鹿骨町','鹿骨','北篠崎','新堀','西篠崎','上篠崎','春江町','谷河内','篠崎町'];
-    const SHARED_GROUP_NAME = '全体利用'; // 全体利用（共同利用）の予約グループ名。サーバの SHARED_GROUP_ と必ず一致させる
+    const SHARED_GROUP_NAME = '全体利用'; // 合同（共同利用）区域の予約グループ名。サーバの SHARED_GROUP_ と必ず一致させる。★画面表示は「合同」(2026-07-16改称)だが、シート保存値・予約語は互換のため「全体利用」のまま変えない
     function toggleAreaView() {
         areaViewMode = (areaViewMode === 'map') ? 'list' : 'map';
         localStorage.setItem('vm_areaView', areaViewMode);
@@ -3090,9 +3090,9 @@
               <div class="vmh-s"><span class="vmh-num">2</span><div><div class="vmh-act">各区域の <span class="vmh-mbtn" style="background:#5E9DB8;border-color:#5E9DB8;color:#fff;">地図を表示</span> で場所を確認</div><div class="vmh-dt">返却期日が近い／過ぎていると色（黄・赤）で分かります</div></div></div>
               <div class="vmh-s"><span class="vmh-num">3</span><div><div class="vmh-act">終わったら <span class="vmh-mbtn" style="background:#A8554E;border-color:#A8554E;color:#fff;">区域を返却</span></div><div class="vmh-dt">自分が借りた区域は自分で返せます</div></div></div>
             </div>
-            <div class="vmh-sub">全体利用の区域（みんなで使う区域）</div>
+            <div class="vmh-sub">合同の区域（みんなで使う区域）</div>
             <div class="vmh-steps"${isLend ? ' style="margin-bottom:12px;"' : ''}>
-              <div class="vmh-s"><span class="vmh-num">1</span><div><div class="vmh-act">左下メニュー → <span class="vmh-mbtn" style="background:#8E3E4E;border-color:#8E3E4E;color:#fff;">全体利用の区域</span></div><div class="vmh-dt">特定の人ではなく、全員で共同利用する区域です</div></div></div>
+              <div class="vmh-s"><span class="vmh-num">1</span><div><div class="vmh-act">左下メニュー → <span class="vmh-mbtn" style="background:#8E3E4E;border-color:#8E3E4E;color:#fff;">合同の区域</span></div><div class="vmh-dt">特定の人ではなく、全員で共同利用する区域です</div></div></div>
               <div class="vmh-s"><span class="vmh-num">2</span><div><div class="vmh-act">地区の地図 か <span class="vmh-mbtn" style="background:#eef2f4;border-color:#dfe4e8;color:#555;">☰ 一覧</span> で見られます</div><div class="vmh-dt">地区をタップすると、その地区の区域が出ます</div></div></div>
             </div>`;
         if (isLend) {
@@ -3100,9 +3100,9 @@
             <div class="vmh-sub">🗂 区域を貸し出す・返す　<span style="font-weight:normal;font-size:11px;color:#888;">※貸出係のみ</span></div>
             <div class="vmh-steps" style="margin-bottom:12px;">
               <div class="vmh-s"><span class="vmh-num">1</span><div><div class="vmh-act">左下メニュー → <span class="vmh-mbtn" style="background:#2E5090;border-color:#2E5090;color:#fff;">🗂 区域の貸出・返却</span></div></div></div>
-              <div class="vmh-s"><span class="vmh-num">2</span><div><div class="vmh-act"><b>借りる人</b> を選ぶ（グループ → ユーザー）</div><div class="vmh-dt">「全体利用（全員で共同利用）」も選べます</div></div></div>
+              <div class="vmh-s"><span class="vmh-num">2</span><div><div class="vmh-act"><b>借りる人</b> を選ぶ（グループ → ユーザー）</div><div class="vmh-dt">「合同（全員で共同利用）」も選べます</div></div></div>
               <div class="vmh-s"><span class="vmh-num">3</span><div><div class="vmh-act"><b>区域</b> を選ぶ（地区 → 丁目 → 範囲）</div><div class="vmh-dt">番地ごとに件数・状態・地図プレビューが出ます</div></div></div>
-              <div class="vmh-s"><span class="vmh-num">4</span><div><div class="vmh-act">返却期日を入れて <span class="vmh-mbtn" style="background:#5E9DB8;border-color:#5E9DB8;color:#fff;">貸出</span></div><div class="vmh-dt">他人・グループ・全体利用の区域の返却もこの画面から</div></div></div>
+              <div class="vmh-s"><span class="vmh-num">4</span><div><div class="vmh-act">返却期日を入れて <span class="vmh-mbtn" style="background:#5E9DB8;border-color:#5E9DB8;color:#fff;">貸出</span></div><div class="vmh-dt">他人・グループ・合同の区域の返却もこの画面から</div></div></div>
             </div>`;
         }
         // 進捗モニタリングは管理者(level>=2)のみ
@@ -3841,7 +3841,7 @@
             overviewAreas.personal = mine; // 「🗺 全て表示」（一括枠表示）用に保持
             const body = document.getElementById('app-modal-body');
             if (!mine.length) { body.innerHTML = `<div style="color:#888; padding:8px;">${tr('あなた個人への割り当てはありません。')}</div>`; return; }
-            let html = `<button class="area-allbtn aa-personal" onclick="enterAreaOverview('personal')" title="${tr('個人の区域を全て地図上に枠表示')}"><span class="aa-ttl">${tr('🗺 地図上に全て表示')}</span><span class="aa-sub">${tr('地図に一括')} ／ ${mine.length} ${tr('区域')}</span></button>`;
+            let html = `<div class="area-allbar aa-personal"><div class="aa-info"><span class="aa-ttl">${tr('🗺 全区域マップ')}</span><span class="aa-sub">${mine.length} ${tr('区域')}</span></div><button class="aa-showmap" onclick="enterAreaOverview('personal')" title="${tr('個人の区域を全て地図上に枠表示')}">${tr('地図を表示')}</button></div>`;
             html += distAccHtml_(mine, 'personal'); // 地区ごとのアコーディオン（全体利用と同じ見た目）
             body.innerHTML = html;
             bindReturnHoldButtons(); // 「長押しで返却」を有効化
@@ -3861,7 +3861,7 @@
             const body = document.getElementById('app-modal-body');
             if (!grp.length) { body.innerHTML = `<div style="color:#888; padding:8px;">${tr('現在、グループへの割り当てはありません。')}</div>`; return; }
             document.getElementById('app-modal-title').innerHTML = MI_ICON.group + escHtml(tr('グループの区域') + '（' + grp[0].group + '）'); // 見出しに対象グループ名を表示（アイコンつき）
-            let html = `<button class="area-allbtn aa-group" onclick="enterAreaOverview('group')" title="${tr('グループの区域を全て地図上に枠表示')}"><span class="aa-ttl">${tr('🗺 地図上に全て表示')}</span><span class="aa-sub">${tr('地図に一括')} ／ ${grp.length} ${tr('区域')}</span></button>`;
+            let html = `<div class="area-allbar aa-group"><div class="aa-info"><span class="aa-ttl">${tr('🗺 全区域マップ')}</span><span class="aa-sub">${grp.length} ${tr('区域')}</span></div><button class="aa-showmap" onclick="enterAreaOverview('group')" title="${tr('グループの区域を全て地図上に枠表示')}">${tr('地図を表示')}</button></div>`;
             html += distAccHtml_(grp, 'group'); // 地区ごとのアコーディオン（全体利用と同じ見た目）
             body.innerHTML = html;
             bindReturnHoldButtons(); // 「長押しで返却」を有効化
@@ -3883,7 +3883,7 @@
     }
     // （地図/一覧トグルは廃止：全体利用は常に一覧＝地区アコーディオン表示）
     function showSharedAreas() {
-        openAppModal('全体利用の区域', 'whole'); // アイコンは openAppModal が MI_ICON.whole を付ける
+        openAppModal('合同の区域', 'whole'); // アイコンは openAppModal が MI_ICON.whole を付ける（旧称=全体利用の区域。2026-07-16改称・保存値の予約語「全体利用」は不変）
         const render = list => {
             sharedState.areas = list || [];
             renderSharedAreas();
@@ -3897,9 +3897,9 @@
     function renderSharedAreas() {
         const body = document.getElementById('app-modal-body');
         const areas = sharedState.areas || [];
-        if (!areas.length) { body.innerHTML = `<div style="color:#888; padding:8px;">${tr('現在、全体利用の区域はありません。')}</div>`; return; }
-        // ① アコーディオン群の一番上に「🗺 地図上に全て表示」（地図に一括枠表示）
-        let html = `<button class="area-allbtn aa-whole" onclick="enterAreaOverview('whole')" title="${tr('全体利用の区域を全て地図上に枠表示')}"><span class="aa-ttl">${tr('🗺 地図上に全て表示')}</span><span class="aa-sub">${tr('地図に一括')} ／ ${tr('貸出中 計')} ${areas.length} ${tr('区域')}</span></button>`;
+        if (!areas.length) { body.innerHTML = `<div style="color:#888; padding:8px;">${tr('現在、合同の区域はありません。')}</div>`; return; }
+        // ① アコーディオン群の一番上に「🗺 全区域マップ」バー（情報＋「地図を表示」ボタン＝一括枠表示へ）
+        let html = `<div class="area-allbar aa-whole"><div class="aa-info"><span class="aa-ttl">${tr('🗺 全区域マップ')}</span><span class="aa-sub">${tr('貸出中 計')} ${areas.length} ${tr('区域')}</span></div><button class="aa-showmap" onclick="enterAreaOverview('whole')" title="${tr('合同の区域を全て地図上に枠表示')}">${tr('地図を表示')}</button></div>`;
         // ② 地区ごとのアコーディオン（個人/グループと共通の distAccHtml_。全体利用は lentTo 無し＝canReturn は level>=1 に自然退化）
         html += distAccHtml_(areas, 'shared');
         body.innerHTML = html;
@@ -4024,9 +4024,9 @@
             listAreas = chomeAreas.filter(a => { const n = banchiNum(a); return n >= rstart && n <= rstart + 19; });
         }
 
-        const groupSel = `<select style="flex:1; min-width:0;" onchange="lendSel('group', this.value)"><option value="">グループ選択</option>${groups.map(g => opt(g, g, s.group)).join('')}${opt(SHARED_GROUP_NAME, '全体利用（共同利用）', s.group)}</select>`;
+        const groupSel = `<select style="flex:1; min-width:0;" onchange="lendSel('group', this.value)"><option value="">グループ選択</option>${groups.map(g => opt(g, g, s.group)).join('')}${opt(SHARED_GROUP_NAME, '合同（共同利用）', s.group)}</select>`;
         const userSel = isShared
-            ? `<select style="flex:2; min-width:0;" disabled><option selected>全体利用（全員で共同利用）</option></select>`
+            ? `<select style="flex:2; min-width:0;" disabled><option selected>合同（全員で共同利用）</option></select>`
             : `<select style="flex:2; min-width:0;" onchange="lendSel('email', this.value)"><option value="">-- ユーザー選択 --</option>${s.group ? opt('__GROUP__', '🟢 ' + s.group + '（グループ全体）', s.email) : ''}${users.map(u => opt(u.email, (u.name || u.email) + (u.group ? '（' + u.group + '）' : ''), s.email)).join('')}</select>`;
         let html = '<div style="font-weight:bold; margin-bottom:4px;">借りる人</div>'
             + '<div style="display:flex; gap:6px; margin-bottom:10px;">'
@@ -4043,7 +4043,7 @@
             html += listAreas.slice().sort((a, b) => banchiNum(a) - banchiNum(b)).map(a => {
                 const num = noChome ? a.area : String(a.area).replace(/^.*丁目/, '');
                 const lent2 = !!(a.user || a.group);
-                const who = a.group ? (a.group === SHARED_GROUP_NAME ? '全体利用' :a.group + '（グループ）') : (a.name || uname(a.user));
+                const who = a.group ? (a.group === SHARED_GROUP_NAME ? '合同' :a.group + '（グループ）') : (a.name || uname(a.user));
                 // 機能②: 未貸出は冷却状態を判定。冷却中/停止中はバッジ＋貸出ボタン無効、manager には状態切替ボタンを出す。
                 const cool = lent2 ? null : coolingStateOf_(a);
                 const blocked = !!(cool && (cool.state === 'cooling' || cool.state === 'hold')); // 貸出不可（冷却中/停止中）
@@ -4100,7 +4100,7 @@
                 + `</div>`;
         }
         const lentRowHtml = a =>
-            `<div class="lend-row"><div class="grow"><b>${escHtml(a.area)}</b>　<span style="font-size:13px; color:#333;">${escHtml(a.group ? (a.group === SHARED_GROUP_NAME ? '全体利用' :a.group + '（グループ）') : (a.name || uname(a.user)))}</span><br>`
+            `<div class="lend-row"><div class="grow"><b>${escHtml(a.area)}</b>　<span style="font-size:13px; color:#333;">${escHtml(a.group ? (a.group === SHARED_GROUP_NAME ? '合同' :a.group + '（グループ）') : (a.name || uname(a.user)))}</span><br>`
             + `<span style="font-size:12px; color:#666;">${escHtml(a.lendDate || '-')} → <span class="${dueClass(a.dueDate)}">${escHtml(a.dueDate || '-')}</span></span></div>`
             + `<div style="display:flex; gap:4px; flex:0 0 auto;">`
             + `<button class="lend-act-btn sm" style="background:#C75F56; border-color:#C75F56; color:#fff;" onclick="doReturnArea(${a.id}, '${escHtml(a.area)}')">返却</button>`
@@ -4146,7 +4146,7 @@
         if (!isGroup && !u) { showToast('借りる人を選んでください', true); return; }
         const dueEl = document.getElementById('lend-due-' + areaId);
         const due = dueEl ? dueEl.value : '';
-        const whoLabel = isShared ? '全体利用（全員で共同利用）' : (isGroup ? `グループ「${s.group}」全体` : `${u.name || u.email} さん`);
+        const whoLabel = isShared ? '合同（全員で共同利用）' : (isGroup ? `グループ「${s.group}」全体` : `${u.name || u.email} さん`);
         appConfirm(`「${a.area}」を\n${whoLabel}に貸し出します。\n返却期日: ${due || '未設定'}`, { okLabel: '貸出する' }).then(ok => {
             if (!ok) return;
             showBusy('貸出中…');
@@ -4287,7 +4287,7 @@
     }
     function relendWhoLabel_() {
         const s = relendSel;
-        if (s.group === SHARED_GROUP_NAME) return '全体利用（全員で共同利用）に貸し出します';
+        if (s.group === SHARED_GROUP_NAME) return '合同（全員で共同利用）に貸し出します';
         if (s.email === '__GROUP__' && s.group) return `グループ「${s.group}」全体に貸し出します`;
         const u = lendState.users.find(x => x.email === s.email);
         return u ? `${u.name || u.email} さんに貸し出します` : '';
@@ -4307,9 +4307,9 @@
         const users = isShared ? [] : activeUsers.filter(u => !s.group || u.group === s.group);
         if (s.email && s.email !== '__GROUP__' && !users.some(u => u.email === s.email)) s.email = '';
         const canRelend = isShared || s.email === '__GROUP__' || !!s.email;
-        const groupSel = `<select style="flex:1; min-width:0;" onchange="relendSelSet('group', this.value)"><option value="">グループ選択</option>${groups.map(g => opt(g, g, s.group)).join('')}${opt(SHARED_GROUP_NAME, '全体利用（共同利用）', s.group)}</select>`;
+        const groupSel = `<select style="flex:1; min-width:0;" onchange="relendSelSet('group', this.value)"><option value="">グループ選択</option>${groups.map(g => opt(g, g, s.group)).join('')}${opt(SHARED_GROUP_NAME, '合同（共同利用）', s.group)}</select>`;
         const userSel = isShared
-            ? `<select style="flex:2; min-width:0;" disabled><option selected>全体利用（全員で共同利用）</option></select>`
+            ? `<select style="flex:2; min-width:0;" disabled><option selected>合同（全員で共同利用）</option></select>`
             : `<select style="flex:2; min-width:0;" onchange="relendSelSet('email', this.value)"><option value="">-- ユーザー選択 --</option>${s.group ? opt('__GROUP__', '🟢 ' + s.group + '（グループ全体）', s.email) : ''}${users.map(u => opt(u.email, (u.name || u.email) + (u.group ? '（' + u.group + '）' : ''), s.email)).join('')}</select>`;
         // 候補算出: 未貸出＋直近に完了サイクルあり＋訪問率 < しきい値
         const threshold = ((ME.config && ME.config.relendThreshold) || 30) / 100;
@@ -5484,8 +5484,8 @@
             langOptsHtml = list.map(l => `<option value="${escHtml(l)}"${l === '日本語' ? ' selected' : ''}>${escHtml(tr(l))}</option>`).join('');
             langSelAttr = ' style="background:#eee; color:#666;"'; // 拒否では言語を使うことが少ないのでグレーで控えめに
         }
-        const langRow = `<div class="rep-row"><label>${tr('言語')}${isForeign ? '<span class="req">＊</span>' : ''}</label>`
-            + `<select id="rep-language"${langSelAttr}>${langOptsHtml}</select></div>`;
+        const langRow = `<div class="rep-row${isForeign ? ' rep-hl' : ''}"><label>${tr('言語')}${isForeign ? '<span class="req">＊</span>' : ''}</label>`
+            + `<select id="rep-language"${langSelAttr}>${langOptsHtml}</select></div>`; // 外国語=必須選択なので薄黄色(rep-hl)で目立たせる／拒否=グレー控えめのまま
         // option は value=日本語（保存・判定値）を明示し、表示文字だけ翻訳する（value 省略だと表示文字が保存されてしまう）
         const jOpt = (v) => `<option value="${v}">${tr(v)}</option>`;
         const interestRow = isForeign
@@ -5493,7 +5493,7 @@
             : `<input type="hidden" id="rep-interest" value="">`;
         document.getElementById('report-form-body').innerHTML = metaHtml
             + `<div class="rep-2col"><div class="rep-row"><label>${tr('訪問日')}</label><input type="date" id="rep-visitdate" value="${todayStr}"></div>`
-            + `<div class="rep-row"><label>${tr('訪問結果')}<span class="req">＊</span></label><select id="rep-result"><option value="">${tr('選択してください')}</option>${jOpt('未訪問')}${jOpt('会えた')}${jOpt('不在')}${jOpt('投函')}</select></div></div>`
+            + `<div class="rep-row rep-hl"><label>${tr('訪問結果')}<span class="req">＊</span></label><select id="rep-result"><option value="">${tr('選択してください')}</option>${jOpt('未訪問')}${jOpt('会えた')}${jOpt('不在')}${jOpt('投函')}</select></div></div>`
             + `<div class="rep-2col"><div class="rep-row"><label>${tr('住所（町名）')}</label><input type="text" id="rep-town" value="${escHtml(parts.town)}"></div>`
             + `<div class="rep-row"><label>${tr('住所（番地）')}</label><input type="text" id="rep-banchi" value="${escHtml(parts.banchi)}"></div></div>`
             + `<div class="rep-2col"><div class="rep-row rep-hl"><label>${tr('お名前')}</label><input type="text" id="rep-name" placeholder="${tr('任意')}"></div>`
