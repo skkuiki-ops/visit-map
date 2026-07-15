@@ -12,7 +12,7 @@
     const MY_TOKEN = 'pk.eyJ1IjoidG9ydW8xMTA0IiwiYSI6ImNtcTdlOGp2MzBhY3QycXBocno2OHQ5dmoifQ.bfkHvR5OmkacGJsDorHL5Q';
     mapboxgl.accessToken = MY_TOKEN;
     // ↓ デプロイした GAS Webアプリの URL（.../exec）に置き換える
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyMlX8Dsd3EM27WZPjAuQm94P1RogCobB9C5GadzfDDJ__SlvmqnGLKIJmzmtbiWJ6v/exec";
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycby128Umcw0BTk39VAlJ9Q3xPKfPONw9dcthc3ikNBaQQ_yaljgKHeAEHTheb7yCS-nz/exec";
     // ↓ Google Cloud で発行した OAuth クライアントID（code_api.gs と同一値）
     const GOOGLE_CLIENT_ID = "273556684740-01e17ja1as1pchs4cvlfqvh67vbt51l3.apps.googleusercontent.com";
     // ↓ 地図スタイル（Mapbox Studio のスタイルURL。標準に戻す場合は 'mapbox://styles/mapbox/streets-v12'）
@@ -515,7 +515,8 @@
                 const r = await fetch(GAS_API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify(Object.assign({ action: action, idToken: idToken, requestId: requestId, userAgent: (navigator && navigator.userAgent) || '' }, params || {}))
+                    // wantRow:1 = 書き込み応答の軽量化に対応済みの印（対象actionはGASが全件でなく更新行1件を返す。旧GASは無視＝従来どおり全件）
+                    body: JSON.stringify(Object.assign({ action: action, idToken: idToken, requestId: requestId, wantRow: 1, userAgent: (navigator && navigator.userAgent) || '' }, params || {}))
                 });
                 if (!r.ok) throw Object.assign(new Error('HTTP ' + r.status), { transient: true }); // GAS側の一時的な5xx等
                 const text = await r.text();
@@ -705,11 +706,13 @@
         const it = currentData.find(d => d.rowNumber === rowNumber);
         return (it && it.ID != null && it.ID !== '') ? it.ID : undefined;
     }
-    // 応答(latest=全件・最新行番号)を使う reconcile/インプレース更新の前段ガード。
+    // 応答(latest=全件 or 更新行1件)を使う reconcile/インプレース更新の前段ガード。
     // 送信時の rowNumber の行が、期待した ID と食い違う＝別ユーザーの削除で行がずれている。
-    // そのときは半端な stale を残さず全再同期する（応答は全件なので renderMarkers で正しく戻る）。
+    // そのときは半端な stale を残さず全再同期する（全件応答なら応答で、単一行応答なら getData を取り直して）。
     // ずれ無し（通常系）は false を返し、呼び出し側は従来どおり1行だけインプレース更新する。
+    // 単一行応答（書き込み応答の軽量化・wantRow:1）は、ここで currentData への取り込みまで済ませる。
     function shiftGuard_(rowNumber, latest) {
+        if (latest && !Array.isArray(latest) && typeof latest === 'object') return !mergeLatestRow_(latest); // 単一行応答
         const cur = currentData.find(d => d.rowNumber === rowNumber);
         const id = cur ? cur.ID : null;
         if (id == null || !Array.isArray(latest)) return false; // ID未知（旧データ等）→従来動作
@@ -717,6 +720,25 @@
         if (atRow && atRow.ID === id) return false; // 行ずれなし
         renderMarkers(latest); // 行ずれ検知 → 全件を最新へ再同期（別世帯の混入を防ぐ）
         return true;
+    }
+    // 単一行応答を currentData の該当行へ取り込む（成功=true）。ID優先で照合し、行ずれ
+    // （サーバが解決した行番号と手元の行番号の不一致）や手元に無いピンは、別世帯への混入を防ぐため
+    // 取り込まずに全件を取り直して同期する（false＝呼び出し側は以降のインプレース更新を中止）。
+    function mergeLatestRow_(latest) {
+        const i = (latest.rowNumber == null) ? -1
+            : (latest.ID != null && latest.ID !== '')
+                ? currentData.findIndex(d => d.ID === latest.ID)
+                : currentData.findIndex(d => d.rowNumber === latest.rowNumber);
+        if (i >= 0 && currentData[i].rowNumber === latest.rowNumber) { currentData[i] = latest; return true; }
+        resyncFromServer_(); // 単一行応答からは全件を復元できないため取り直す
+        return false;
+    }
+    // 全件の取り直し（裏で1回だけ・多重発火防止）。失敗は握りつぶし＝次の getData 系操作で回復する。
+    let _resyncing = false;
+    function resyncFromServer_() {
+        if (_resyncing) return;
+        _resyncing = true;
+        apiCall('getData', {}).then(renderMarkers).catch(() => {}).finally(() => { _resyncing = false; });
     }
 
     // 集合住宅ピンの色（構成属性で見分ける／落ち着いたトーン）
@@ -2062,7 +2084,12 @@
                 if (!ok) { renderMarkers(currentData); return; } // キャンセル → 元の位置へ戻す
                 showBusy('移動中…');
                 apiCall('updateCoords', { rowNumber: rowNumber, lat: ll.lat, lng: ll.lng, id: pinIdOf(rowNumber) })
-                    .then(latest => { showToast('移動しました', false); renderMarkers(latest); })
+                    .then(latest => {
+                        showToast('移動しました', false);
+                        if (Array.isArray(latest)) { renderMarkers(latest); return; } // 全件応答（旧GAS互換）
+                        if (mergeLatestRow_(latest)) renderMarkers(currentData); // 単一行応答: 取り込んで再描画（移動はマーカー再配置が必要）
+                        // 取り込み失敗（行ずれ）は mergeLatestRow_ が全件を取り直して renderMarkers 済み
+                    })
                     .catch(err => { handleServerError(err); renderMarkers(currentData); })
                     .finally(hideBusy);
             });
@@ -5155,7 +5182,8 @@
     // 集合住宅は refreshShugaPopup、戸建ては applyKodateChange に委譲して挙動を統一する。
     function applyInPlace(rowNumber, latest) {
         if (shiftGuard_(rowNumber, latest)) return; // 行ずれは全再同期で処理（別世帯の混入防止）
-        const item = (latest || []).find(d => d.rowNumber === rowNumber);
+        if (!Array.isArray(latest)) latest = currentData; // 単一行応答は shiftGuard_ 内で取り込み済み → 全件経路に正規化
+        const item = latest.find(d => d.rowNumber === rowNumber);
         if (item && item.種別 === '集合住宅') refreshShugaPopup(rowNumber, latest);
         else if (item && item.種別 === '施設') refreshFacilityPopup(rowNumber, latest);
         else applyKodateChange(rowNumber)(latest);
@@ -5237,6 +5265,7 @@
     // 全件置換にしないのは、別の行で飛んでいる楽観更新を巻き戻さないため。
     function reconcileKodate(rowNumber, source) {
         if (shiftGuard_(rowNumber, source)) return; // 行ずれは全再同期で処理（別世帯の混入防止）
+        if (!Array.isArray(source)) source = currentData; // 単一行応答は shiftGuard_ 内で取り込み済み → 全件経路に正規化
         const i = currentData.findIndex(d => d.rowNumber === rowNumber);
         const src = source ? source.find(d => d.rowNumber === rowNumber) : null;
         if (i >= 0 && src) { currentData[i] = src; applyKodateChange(rowNumber)(currentData); }
@@ -5301,6 +5330,7 @@
     // 該当建物行を source の同じ行で差し替えてから再描画する（他行の楽観更新を壊さない）。
     function reconcileShugaRoom(buildingRow, roomNum, source) {
         if (shiftGuard_(buildingRow, source)) return; // 行ずれは全再同期で処理（別世帯の混入防止）
+        if (!Array.isArray(source)) source = currentData; // 単一行応答は shiftGuard_ 内で取り込み済み → 全件経路に正規化
         const i = currentData.findIndex(d => d.rowNumber === buildingRow);
         const src = source ? source.find(d => d.rowNumber === buildingRow) : null;
         if (i >= 0 && src) currentData[i] = src;
