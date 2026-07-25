@@ -120,6 +120,7 @@
         '🏢 集合住宅を新規登録': '🏢 Registrar edificio nuevo',
         '🏛 施設を新規登録': '🏛 Registrar lugar nuevo', '🏛 施設登録': '🏛 Registrar lugar',
         '例：ハイツ小岩': 'Ej.: Heights Koiwa', '例：小岩図書館': 'Ej.: Biblioteca Koiwa',
+        '建物名無し': 'Sin nombre de edificio', '(名称なし)': '(sin nombre)',
         'タップで番地を赤枠表示': 'Toque para marcar el bloque en rojo',
         'Googleマップでこの地点を開く': 'Abrir este punto en Google Maps',
         '判定中…': 'Calculando…', '（住所判定不可）': '(dirección no determinable)', '（住所未指定）': '(sin dirección)',
@@ -217,12 +218,16 @@
         '施設の種類を選んでください': 'Elija el tipo de lugar',
         '編集対象が見つかりません': 'No se encontró el objeto a editar',
         '担当区域外には戸建てを登録できません': 'No se pueden registrar casas fuera de su territorio',
+        '訪問地域の外には登録できません': 'No se puede registrar fuera del área de visitas',
+        '訪問地域の外には移動できません': 'No se puede mover fuera del área de visitas',
         '表示モード中は編集できません': 'No se puede editar en modo de vista',
         '現在地をオフにしました': 'Ubicación actual desactivada',
         'このピンをここへ移動しますか？': '¿Mover este pin aquí?', '移動する': 'Mover', '移動しました': 'Pin movido',
         '移動先に既にピンがあるため移動をキャンセルしました': 'Movimiento cancelado: ya hay un pin en ese punto',
         '指で動かして移動 → 離して確定': 'Arrastre con el dedo y suelte para confirmar',
         '枠線と住所表示を消しますか？': '¿Quitar el marco y la dirección?', '消す': 'Quitar',
+        'には訪問記録があります。部屋を外しても記録は消えず、再び有効にすると復活します。保存しますか？': ' tiene registros de visita. Si quita el cuarto, el registro no se borra y volverá si se reactiva. ¿Guardar?',
+        '外して保存': 'Quitar y guardar',
         '該当の場所が見つかりませんでした': 'No se encontró el lugar',
         '住所検索に失敗しました': 'Falló la búsqueda de dirección',
         'リンクの住所が見つかりませんでした': 'No se encontró la dirección del enlace',
@@ -1072,6 +1077,8 @@
        マンションは縦長で細く見えるため、ピンに対する占有率を大きめにしてバランスを取る。 */
     const ICON_APART = '<svg viewBox="0 0 24 24" style="width:58%;height:58%;fill:currentColor;display:block;" aria-hidden="true"><path fill-rule="evenodd" d="M1.5 4.5 h21 v2.5 h-21 Z M3 7 h18 v14 h-18 Z M5.6 9.3 h3.2 v3 h-3.2 Z M15.2 9.3 h3.2 v3 h-3.2 Z M5.6 14.8 h3.2 v3 h-3.2 Z M15.2 14.8 h3.2 v3 h-3.2 Z M10.4 15 h3.2 v6 h-3.2 Z"/></svg>';
     const ICON_MANSION = '<svg viewBox="0 0 24 24" style="width:76%;height:76%;fill:currentColor;display:block;" aria-hidden="true"><path fill-rule="evenodd" d="M9 1.5 h6 v2.5 h-6 Z M5 4 h14 v17 h-14 Z M7 6 h2.2 v2.2 H7 Z M10.9 6 h2.2 v2.2 h-2.2 Z M14.8 6 h2.2 v2.2 h-2.2 Z M7 9.4 h2.2 v2.2 H7 Z M10.9 9.4 h2.2 v2.2 h-2.2 Z M14.8 9.4 h2.2 v2.2 h-2.2 Z M7 12.8 h2.2 v2.2 H7 Z M10.9 12.8 h2.2 v2.2 h-2.2 Z M14.8 12.8 h2.2 v2.2 h-2.2 Z M7 16.2 h2.2 v2.2 H7 Z M14.8 16.2 h2.2 v2.2 h-2.2 Z M10.7 16.4 h2.6 v4.6 h-2.6 Z"/></svg>';
+    // 建物名無しの小規模集合住宅用：低層1〜2階の小さな建物（窓2つ＋玄関）。専有率48%でアパート(58%)より一回り小さく見せる
+    const ICON_SMALL_BLDG = '<svg viewBox="0 0 24 24" style="width:48%;height:48%;fill:currentColor;display:block;" aria-hidden="true"><path fill-rule="evenodd" d="M2 6 h20 v2 h-20 Z M4 8 h16 v13 h-16 Z M6.5 10.5 h3 v3 h-3 Z M14.5 10.5 h3 v3 h-3 Z M10.5 15 h3 v6 h-3 Z"/></svg>';
 
     /* ── 属性・訪問結果の選択UI（ネイティブselectの代替・ボタン式） ──
        視認性向上のため選択肢を最初からボタンで並べ、現在値を凡例と同系色でハイライトする。
@@ -1228,6 +1235,11 @@
         const label = addrWithoutGo(deriveAddress(lng, lat) || '');
         if (!label) return true; // 番地が判定できないときは許可（表示制限と同じフェイルオープン＝取りこぼし防止）
         return visibleAreaSet.has(label);
+    }
+    // 座標が訪問地域（blocks.geojson＋address_points.json がカバーする範囲）の内側か。種別・ロールを問わず新規登録／ピン移動の可否に使う。
+    function withinVisitRegion(lng, lat) {
+        if (!addrPoints || !addrPoints.length) return true; // 住所データ未読込・取得失敗時はフェイルオープン（既存の動作継続方針と同じ）
+        return !!deriveAddress(lng, lat);
     }
     // item（currentData の1件）が現在のユーザーに見えてよいか。pinAreaAllowed と同じ判定を item ベースで行う（?pin ディープリンクのバイパス防止用）。
     function itemAreaAllowed_(item) {
@@ -2080,6 +2092,11 @@
                 showToast('移動先に既にピンがあるため移動をキャンセルしました', true);
                 return;
             }
+            if (!withinVisitRegion(ll.lng, ll.lat)) {
+                renderMarkers(currentData); // 元の位置へ戻す
+                showToast('訪問地域の外には移動できません', true);
+                return;
+            }
             appConfirm('このピンをここへ移動しますか？', { okLabel: '移動する' }).then(ok => {
                 if (!ok) { renderMarkers(currentData); return; } // キャンセル → 元の位置へ戻す
                 showBusy('移動中…');
@@ -2277,6 +2294,11 @@
     // 新規登録フォーム生成
     function handleMapClickOrTap(lngLat, forcedType) {
         if (overviewMode) return; // 表示モード中は新規登録不可（閲覧・区域選択のみ）
+        // 訪問地域の外（他の区・県）への新規登録は種別・ロールを問わず不可
+        if (!withinVisitRegion(parseFloat(lngLat.lng), parseFloat(lngLat.lat))) {
+            showToast('訪問地域の外には登録できません', true);
+            return;
+        }
         // 担当区域外への戸建て登録は不可（lender以下のみ。集合住宅・施設は全員可＝既存の表示制限と同じ区域判定）。
         if (forcedType === '戸建て' && !newKodateAreaAllowed(parseFloat(lngLat.lng), parseFloat(lngLat.lat))) {
             showToast('担当区域外には戸建てを登録できません', true);
@@ -2317,7 +2339,7 @@
             formHtml += `
                 <div class="building-title">${tr('🏢 集合住宅を新規登録')}</div>
                 ${newAddrRowHtml()}
-                <div class="form-group"><label>${tr('建物名')}</label><input type="text" id="new-name" placeholder="${tr('例：ハイツ小岩')}" style="background:#FFF9DD;"></div>
+                <div class="form-group"><label style="display:flex; align-items:center; justify-content:space-between;">${tr('建物名')}<span style="display:flex; align-items:center; gap:4px; font-weight:normal; font-size:11px;"><input type="checkbox" id="new-noname" style="width:auto;" onchange="toggleNoNameBuilding(this)"> ${tr('建物名無し')}</span></label><input type="text" id="new-name" placeholder="${tr('例：ハイツ小岩')}" style="background:#FFF9DD;"></div>
                 <div class="form-row" style="display:flex; gap:4px;">
                     <div class="form-group" style="flex:1;"><label>${tr('階数')}</label>
                         <select id="new-floors" class="numlist" size="5" onchange="generateSetupGrid()" style="background:#FFF9DD;">${Array.from({length:30},(_,i)=>i+1).map(v=>`<option value="${v}" ${v===2?'selected':''}>${v}F</option>`).join('')}</select>
@@ -2381,7 +2403,7 @@
             + encodeURIComponent(mapboxgl.accessToken);
         fetch(url).then(r => r.json()).then(d => {
             const el = document.getElementById('new-name');
-            if (!el || el.value) return; // フォームが閉じた／入力済みなら何もしない
+            if (!el || el.value || el.disabled) return; // フォームが閉じた／入力済み／建物名無しなら何もしない
             let best = null;
             ((d && d.features) || []).forEach(f => {
                 const p = f.properties || {};
@@ -2446,6 +2468,20 @@
         if (which === 'hide' && h && h.checked && a) a.checked = false;
         if (which === 'abc' && a && a.checked && h) h.checked = false;
         renderRoomGrid();
+    }
+
+    // 建物名無しチェックボックス切替：建物名入力欄の有効/無効・クリア・グレーアウトを反映
+    function toggleNoNameBuilding(cb) {
+        const nameEl = document.getElementById('new-name');
+        if (!nameEl) return;
+        if (cb.checked) {
+            nameEl.value = '';
+            nameEl.disabled = true;
+            nameEl.style.background = '#E9E9E9';
+        } else {
+            nameEl.disabled = false;
+            nameEl.style.background = '#FFF9DD';
+        }
     }
 
     // 部屋マーク（個人宅/会社）の保存形式 ⇔ {部屋番号:'p'|'c'} 変換。
@@ -2597,8 +2633,10 @@
     function submitNewLocation(lat, lng, type) {
         let name = '';
         if (type === '集合住宅') {
-            name = document.getElementById('new-name').value;
-            if (!name) { appAlert('建物名を入力してください'); return; }
+            const noNameCb = document.getElementById('new-noname');
+            const noName = !!(noNameCb && noNameCb.checked);
+            name = noName ? '' : document.getElementById('new-name').value;
+            if (!name && !noName) { appAlert('建物名を入力してください'); return; }
         }
 
         let data = { type: type, name: name, lat: parseFloat(lat), lng: parseFloat(lng), memo: document.getElementById('new-memo').value, attribute: '不明', address: newPinAddress };
@@ -3503,7 +3541,7 @@
             const lx = side === 'L' ? 4 + cwid : DW - 4 - cwid, ly = top + 14;
             ovD += `<line x1="${bx.toFixed(1)}" y1="${by.toFixed(1)}" x2="${lx.toFixed(1)}" y2="${ly.toFixed(1)}" stroke="#000" stroke-width="1"/>`;
             cardsHtml += `<div class="print-card" style="top:${top}px; ${side === 'L' ? 'left:4px;' : 'right:4px;'}">`
-                + `<div class="print-card-h">${num}. ${escHtml(d['建物名 / 世帯名'] || '')}</div>`
+                + `<div class="print-card-h">${num}. ${escHtml(d['建物名 / 世帯名']) || tr('(名称なし)')}</div>`
                 + printRoomGrid(d) + `</div>`;
         });
         ovD += `</svg>`;
@@ -4587,7 +4625,8 @@
                 // 戸数が12以下はアパート(低層SVG)、13以上はマンション(高層SVG)。白シルエットで背景色(構成属性)が生きる
                 const units = parseInt(firstItem.総戸数) || (firstItem.有効部屋リスト ? String(firstItem.有効部屋リスト).split(',').filter(s => s !== '').length : 0);
                 isSmallShuga = units <= 12;
-                markerEl.innerHTML = units > 12 ? ICON_MANSION : ICON_APART;
+                const bNameForIcon = String(firstItem['建物名 / 世帯名'] || '').trim();
+                markerEl.innerHTML = bNameForIcon === '' ? ICON_SMALL_BLDG : (units > 12 ? ICON_MANSION : ICON_APART);
                 // 背景＝構成属性（ファミリー/シングル等）で色分け
                 markerEl.style.background = shugaColor(firstItem.属性);
                 // 薄黄(ファミリー/混在)背景では白シルエットが見えないため、濃い黄土色に切り替える
@@ -4873,7 +4912,7 @@
         }
 
         return `
-            <div class="building-title">${escHtml(first['建物名 / 世帯名'])}</div>
+            <div class="building-title">${escHtml(first['建物名 / 世帯名']) || tr('(名称なし)')}</div>
             ${addrRowHtml(first)}
             <div style="font-size:11px; color:#aaa; margin-bottom:4px;">
                 <span style="color:${shugaInfoColor('lock', getAutolock(first))};">${tr('オートロック')}: ${escHtml(tr(getAutolock(first)))}</span> ｜ <span style="color:${shugaInfoColor('attr', first.属性)};">${tr('構成')}: ${escHtml(tr(first.属性 || '不明'))}</span> ｜ <span style="color:${shugaInfoColor('mgr', first.管理人)};">${tr('管理人')}: ${escHtml(tr(first.管理人 || '不明'))}</span>
@@ -4923,7 +4962,7 @@
 
         const html = `
             <div class="building-title">${tr('✏️ 建物情報を編集')}</div>
-            <div class="form-group"><label>${tr('建物名')}</label><input type="text" id="new-name" value="${escHtml(item['建物名 / 世帯名'] || '')}" style="background:#FFF9DD;"></div>
+            <div class="form-group"><label style="display:flex; align-items:center; justify-content:space-between;">${tr('建物名')}<span style="display:flex; align-items:center; gap:4px; font-weight:normal; font-size:11px;"><input type="checkbox" id="new-noname" style="width:auto;" onchange="toggleNoNameBuilding(this)" ${!item['建物名 / 世帯名'] ? 'checked' : ''}> ${tr('建物名無し')}</span></label><input type="text" id="new-name" value="${escHtml(item['建物名 / 世帯名'] || '')}" ${!item['建物名 / 世帯名'] ? 'disabled' : ''} style="background:${!item['建物名 / 世帯名'] ? '#E9E9E9' : '#FFF9DD'};"></div>
             <div class="form-row" style="display:flex; gap:4px;">
                 <div class="form-group" style="flex:1;"><label>${tr('階数')}</label>
                     <select id="new-floors" class="numlist" size="5" onchange="renderRoomGrid()" style="background:#FFF9DD;">${floorOpts}</select>
@@ -4962,8 +5001,10 @@
 
     // 集合住宅の編集内容を保存
     function saveShugaEdit(rowNumber, btn) {
-        const name = document.getElementById('new-name').value;
-        if (!name) { appAlert('建物名を入力してください'); return; }
+        const noNameCb = document.getElementById('new-noname');
+        const noName = !!(noNameCb && noNameCb.checked);
+        const name = noName ? '' : document.getElementById('new-name').value;
+        if (!name && !noName) { appAlert('建物名を入力してください'); return; }
         const { floors, maxRoom } = getGridDims();
         // 現在のグリッド範囲内の選択のみを有効として保存
         const valid = gridActiveRooms.filter(rn => Math.floor(rn / 100) <= floors && (rn % 100) <= maxRoom).sort((a, b) => a - b);
@@ -4986,15 +5027,42 @@
             personalRooms: encodeRoomMarks(gridRoomMark, valid)
         };
 
-        btn.disabled = true; btn.innerText = tr('保存中...');
-        showBusy('更新中…');
-        apiCall('updateBuilding', { data: data }).then((latest) => {
-            showToast('建物情報を更新しました', false);
-            renderMarkers(latest);
-        }).catch((err) => {
-            btn.disabled = false; btn.innerText = tr('更新を保存');
-            handleServerError(err);
-        }).finally(hideBusy);
+        const doSave = () => {
+            btn.disabled = true; btn.innerText = tr('保存中...');
+            showBusy('更新中…');
+            apiCall('updateBuilding', { data: data }).then((latest) => {
+                showToast('建物情報を更新しました', false);
+                renderMarkers(latest);
+            }).catch((err) => {
+                btn.disabled = false; btn.innerText = tr('更新を保存');
+                handleServerError(err);
+            }).finally(hideBusy);
+        };
+
+        // 記録（S列現在値／Q列履歴）を持つ部屋を外すときは確認する。
+        // 記録自体はS/Q列に温存され、再び有効にすると復活する仕様（管理人の温存と同じ思想）のため、
+        // 無警告のまま保存すると「記録が消えた／別の部屋の記録が復活した」と誤解されうる。
+        const item = currentData.find(d => d.rowNumber === rowNumber);
+        if (item) {
+            const oldValid = String(item.有効部屋リスト || '').split(',').map(s => parseInt(s)).filter(n => !isNaN(n));
+            const validSet = new Set(valid);
+            const removed = oldValid.filter(rn => !validSet.has(rn));
+            let historyArr = [];
+            try { historyArr = JSON.parse(item.履歴データ || '[]') || []; } catch (e) { historyArr = []; }
+            const hasRecord = (rn) => {
+                if (roomStatusOf(item, rn)) return true;
+                const prefix = roomTag(rn) + ': ';
+                return historyArr.some(h => String((h && h.status) || '').indexOf(prefix) === 0);
+            };
+            const withRecord = removed.filter(hasRecord).sort((a, b) => a - b);
+            if (withRecord.length > 0) {
+                const roomsText = withRecord.map(rn => tr(roomTag(rn))).join('・');
+                const msg = roomsText + tr('には訪問記録があります。部屋を外しても記録は消えず、再び有効にすると復活します。保存しますか？');
+                appConfirm(msg, { okLabel: '外して保存' }).then(ok => { if (ok) doSave(); });
+                return;
+            }
+        }
+        doSave();
     }
 
     // 編集をキャンセルして詳細表示に戻す（更新しない）
