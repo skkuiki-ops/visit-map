@@ -2392,14 +2392,14 @@
     }
 
     /* ── 建物名の自動入力（試験的）：タップ地点の最寄りPOI名を Mapbox Tilequery API で取得する ──
-       地図タイルのPOIデータ（mapbox-streets-v8）を座標で照会し、15m以内で最も近い「名前を持つ」
+       地図タイルのPOIデータ（mapbox-streets-v8）を座標で照会し、7.5m以内で最も近い「名前を持つ」
        地物の名前（日本語優先）を建物名欄へ事前入力する。
        ・取得できない／該当なしの場合は何もしない（従来どおり空欄で手入力）
        ・利用者がすでに入力を始めていたら上書きしない
        ・日本の住宅地ではPOI収録が疎らなため、アパート名は取れないことも多い（精度は実地確認） */
     function prefillNearestBuildingName(lng, lat) {
         const url = 'https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/tilequery/'
-            + lng + ',' + lat + '.json?radius=15&limit=10&layers=poi_label&access_token='
+            + lng + ',' + lat + '.json?radius=7.5&limit=10&layers=poi_label&access_token='
             + encodeURIComponent(mapboxgl.accessToken);
         fetch(url).then(r => r.json()).then(d => {
             const el = document.getElementById('new-name');
