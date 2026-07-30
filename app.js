@@ -2396,6 +2396,12 @@
             const el = document.getElementById('new-addr-text');
             if (el && !el._goBound) { el._goBound = true; attachLongPress(el, () => outlineNewAddr(), () => {}); }
         });
+        // 吹き出し右上の✕（Mapbox標準の closeButton）で閉じた時も仮ピンを地図に残さない。
+        // ※ null化を先に行ってから remove() する（remove()→popupのcloseイベント再発火→このハンドラの再入を、
+        //   activeNewMarker を先に null にすることで打ち切るため。remove→null の順だと無限再帰になる）。
+        popup.on('close', () => {
+            if (activeNewMarker) { const m = activeNewMarker; activeNewMarker = null; m.remove(); }
+        });
         activeNewMarker = new mapboxgl.Marker({ color: forcedType === '戸建て' ? '#E0A93C' : '#C75F56' })
             .setLngLat([lngVal, latVal])
             .setPopup(popup)
