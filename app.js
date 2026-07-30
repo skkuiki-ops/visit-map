@@ -112,6 +112,7 @@
         '緑=有効。不要な部屋をタップで外す': 'Verde = existe. Toque para quitar las que no existen',
         '緑=部屋あり（初期は全選択）。無い部屋をタップで外す': 'Verde = hay habitación (todas al inicio). Toque para quitar las que no hay',
         'オートロック': 'Auto-lock', '構成': 'Composición', '構成属性': 'Composición', '管理人': 'Encargado',
+        '立禁': 'Prohibido', '立禁表記': 'Aviso de prohibido el paso',
         '🚪 部屋をタップして操作してください': '🚪 Toque una habitación para operar',
         '部屋': 'Habitación', // 部屋番号不明モードの操作欄タイトル（roomFullLabel）
         '部屋の履歴:': 'Historial de la hab.:',
@@ -139,7 +140,7 @@
         // アイコンフィルタの枠見出し・注記
         '種別': 'Tipo', '戸建て：訪問結果': 'Casa: resultado', '戸建て：属性': 'Casa: atributo',
         '集合住宅：構成属性': 'Edificio: composición', '集合住宅：オートロック': 'Edificio: auto-lock',
-        '集合住宅：管理人': 'Edificio: encargado',
+        '集合住宅：管理人': 'Edificio: encargado', '集合住宅：立禁表記': 'Edificio: aviso de prohibido el paso',
         'チェックした条件すべてに当てはまるピンだけ表示します（別の枠どうしは「かつ」／同じ枠内はどれか・未選択＝全部表示）。フィルタ利用中はズームによる自動非表示は行いません。':
             'Se muestran solo los pines que cumplen todas las condiciones marcadas (entre secciones = «y»; dentro de una sección = cualquiera; sin marcar = todo). Con el filtro activo no se ocultan iconos al alejar el zoom.'
     });
@@ -774,6 +775,12 @@
         { v: 'なし', label: 'なし', bg: '#E5E5E5', fg: '#444444', bd: '#9aa0a6' }, // 薄いグレー
         { v: 'あり', label: 'あり', bg: '#D6EAD9', fg: '#2E5E33', bd: '#2E5E33' }  // 薄い緑／枠＝深い緑
     ];
+    // 立禁表記: あり= SHUGA_LOCK_OPTS_ のあり(薄赤/深赤)と同色 ／ なし= SHUGA_MGR_OPTS_ のなし(薄グレー)と同色
+    const SHUGA_NOENTRY_OPTS_ = [
+        { v: '不明', label: '不明', bg: '#E2E2E2', fg: '#444444', bd: '#9aa0a6' },
+        { v: 'なし', label: 'なし', bg: '#E5E5E5', fg: '#444444', bd: '#9aa0a6' },
+        { v: 'あり', label: 'あり', bg: '#F3D9D5', fg: '#7a342c', bd: '#7a342c' }
+    ];
     // hidden input(id) に値を保持し、ボタンのタップで値と見た目を切り替える（保存は従来どおり id.value を読む）。
     //  kind='single' … あり/なし の排他。選択中をもう一度タップで解除＝不明（未選択）。
     //  kind='compose'… ファミリー/シングルを独立トグル。両方オン＝「混在」、両方オフ＝不明。
@@ -809,10 +816,11 @@
             ? (onVals.length >= 2 ? '混在' : (onVals[0] || '不明'))
             : (onVals[0] || '不明');
     }
-    // 集合住宅 詳細の上部情報行（オートロック/構成/管理人）の文字色（値ごと。深い色）。
+    // 集合住宅 詳細の上部情報行（オートロック/構成/管理人/立禁表記）の文字色（値ごと。深い色）。
     //  オートロック: あり→赤 / なし・不明→グレー
     //  構成:        シングル→青 / ファミリー・混在→黄 / 不明→グレー
     //  管理人:      あり→緑 / なし・不明→グレー
+    //  立禁表記:    あり→赤 / なし・不明→グレー
     function shugaInfoColor(field, v) {
         v = v || '不明';
         const GRAY = '#555555';
@@ -822,6 +830,7 @@
             if (v === 'ファミリー' || v === '混在') return '#8a7117';            // 深い黄
             return GRAY;                                                          // 不明
         }
+        if (field === 'noEntry') return (v === 'あり') ? '#7a342c' : GRAY;        // 立禁表記 あり=深い赤
         return (v === 'あり') ? '#2E5E33' : GRAY;                                 // 管理人 あり=深い緑
     }
 
@@ -899,6 +908,11 @@
             { v: 'なし', label: 'なし', color: '#E5E5E5' },
             { v: '不明', label: '不明', color: '#E5E5E5' }
         ] },
+        { key: '立禁表記', title: '集合住宅：立禁表記', opts: [
+            { v: 'あり', label: 'あり', color: '#F3D9D5' },
+            { v: 'なし', label: 'なし', color: '#E5E5E5' },
+            { v: '不明', label: '不明', color: '#E2E2E2' }
+        ] },
         { key: '施設種類', title: '施設の種類', opts: FACILITY_TYPES.map(t => ({ v: t.v, label: t.v, icon: t.icon })) }
     ];
     const iconFilter = {}; ICON_FILTER_SECTIONS.forEach(s => { iconFilter[s.key] = new Set(); });
@@ -914,7 +928,7 @@
     // 各属性枠が対象とする種別（種別枠は全種別のゲート）。「欲しい種別」の推定に使う。
     const ICON_FILTER_SECTION_TYPE = {
         '訪問結果': '戸建て', '戸建て属性': '戸建て',
-        '構成': '集合住宅', 'オートロック': '集合住宅', '管理人': '集合住宅',
+        '構成': '集合住宅', 'オートロック': '集合住宅', '管理人': '集合住宅', '立禁表記': '集合住宅',
         '施設種類': '施設'
     };
     // フィルタ利用中、このピンを表示するか（＝かつ/AND 条件）。
@@ -943,6 +957,7 @@
             if (iconFilter['構成'].size > 0 && !iconFilter['構成'].has(item.属性 || '不明')) return false;
             if (iconFilter['オートロック'].size > 0 && !iconFilter['オートロック'].has(getAutolock(item))) return false;
             if (iconFilter['管理人'].size > 0 && !iconFilter['管理人'].has(item.管理人 || '不明')) return false;
+            if (iconFilter['立禁表記'].size > 0 && !iconFilter['立禁表記'].has(item.立禁表記 || '不明')) return false;
         } else if (t === '施設') {
             if (iconFilter['施設種類'].size > 0) {
                 const okFac = iconFilter['施設種類'].has(item.属性)
@@ -1079,6 +1094,8 @@
     const ICON_MANSION = '<svg viewBox="0 0 24 24" style="width:76%;height:76%;fill:currentColor;display:block;" aria-hidden="true"><path fill-rule="evenodd" d="M9 1.5 h6 v2.5 h-6 Z M5 4 h14 v17 h-14 Z M7 6 h2.2 v2.2 H7 Z M10.9 6 h2.2 v2.2 h-2.2 Z M14.8 6 h2.2 v2.2 h-2.2 Z M7 9.4 h2.2 v2.2 H7 Z M10.9 9.4 h2.2 v2.2 h-2.2 Z M14.8 9.4 h2.2 v2.2 h-2.2 Z M7 12.8 h2.2 v2.2 H7 Z M10.9 12.8 h2.2 v2.2 h-2.2 Z M14.8 12.8 h2.2 v2.2 h-2.2 Z M7 16.2 h2.2 v2.2 H7 Z M14.8 16.2 h2.2 v2.2 h-2.2 Z M10.7 16.4 h2.6 v4.6 h-2.6 Z"/></svg>';
     // 建物名無しの小規模集合住宅用：低層1〜2階の小さな建物（窓2つ＋玄関）。専有率48%でアパート(58%)より一回り小さく見せる
     const ICON_SMALL_BLDG = '<svg viewBox="0 0 24 24" style="width:48%;height:48%;fill:currentColor;display:block;" aria-hidden="true"><path fill-rule="evenodd" d="M2 6 h20 v2 h-20 Z M4 8 h16 v13 h-16 Z M6.5 10.5 h3 v3 h-3 Z M14.5 10.5 h3 v3 h-3 Z M10.5 15 h3 v6 h-3 Z"/></svg>';
+    // 立禁表記バッジ：白丸＋赤リング＋黒の歩行者＋赤斜線。集合住宅マーカーの右上に重ねる（.tachikin-badge）
+    const TACHIKIN_BADGE_SVG = '<svg viewBox="12.6 -0.6 523.4 523.4" xmlns="http://www.w3.org/2000/svg"><circle cx="274.3" cy="261.1" r="258.7" fill="#fff"/><path d="M258.0 287.5C235.2 281.3 226.1 330.1 217.5 347.0C208.9 363.9 209.0 380.2 206.5 389.0C204.0 397.8 203.5 396.3 202.5 400.0C201.5 403.7 201.3 408.0 200.5 411.0C199.7 414.0 198.0 416.2 197.5 418.0C197.0 419.8 197.8 420.7 197.5 422.0C197.2 423.3 195.8 423.8 195.5 426.0C195.2 428.2 195.0 432.5 195.5 435.0C196.0 437.5 196.4 438.9 198.5 441.0C200.6 443.1 204.8 446.4 208.0 447.5C211.2 448.6 214.8 448.6 218.0 447.5C221.2 446.4 225.4 442.9 227.5 441.0C229.6 439.1 230.0 437.3 230.5 436.0C231.0 434.7 229.0 437.8 230.5 433.0C232.0 428.2 238.0 411.8 239.5 407.0C241.0 402.2 238.2 408.3 239.5 404.0C240.8 399.7 245.5 387.5 247.5 381.0C249.5 374.5 244.9 375.6 251.5 365.0C258.1 354.4 280.8 325.2 287.0 317.5C293.2 309.8 286.2 310.4 288.5 319.0C290.8 327.6 291.2 349.2 300.5 369.0C309.8 388.8 336.2 425.6 344.5 438.0C352.8 450.4 347.8 442.1 350.0 443.5C352.2 444.9 355.5 446.2 358.0 446.5C360.5 446.8 362.8 446.2 365.0 445.5C367.2 444.8 369.1 444.2 371.0 442.5C372.9 440.8 375.4 436.9 376.5 435.0C377.6 433.1 377.5 433.2 377.5 431.0C377.5 428.8 380.3 429.8 376.5 422.0C372.7 414.2 374.2 406.4 354.5 384.0C334.8 361.6 280.8 293.7 258.0 287.5ZM273.0 149.5C268.3 150.5 263.6 153.1 260.0 155.5C256.4 157.9 253.8 160.9 251.5 164.0C249.2 167.1 247.8 170.0 246.5 174.0C245.2 178.0 244.3 185.0 243.5 188.0C242.7 191.0 241.8 190.7 241.5 192.0C241.2 193.3 226.9 180.8 241.5 196.0C256.1 211.2 314.3 270.8 329.0 283.5C343.7 296.2 329.6 274.1 329.5 272.0C329.4 269.9 328.7 272.3 328.5 271.0C328.3 269.7 328.7 265.3 328.5 264.0C328.3 262.7 327.7 264.2 327.5 263.0C327.3 261.8 327.8 259.2 327.5 257.0C327.2 254.8 325.8 252.3 325.5 250.0C325.2 247.7 325.8 245.3 325.5 243.0C325.2 240.7 324.5 242.2 323.5 236.0C322.5 229.8 319.9 211.1 319.5 206.0C319.1 200.9 317.4 203.8 321.0 205.5C324.6 207.2 336.9 213.9 341.0 216.5C345.1 219.1 344.4 219.6 345.5 221.0C346.6 222.4 346.7 222.3 347.5 225.0C348.3 227.7 349.7 234.5 350.5 237.0C351.3 239.5 350.2 233.5 352.5 240.0C354.8 246.5 361.1 269.1 364.5 276.0C367.9 282.9 370.6 280.6 373.0 281.5C375.4 282.4 377.2 281.8 379.0 281.5C380.8 281.2 382.2 280.9 384.0 279.5C385.8 278.1 388.4 275.2 389.5 273.0C390.6 270.8 392.8 275.0 390.5 266.0C388.2 257.0 378.0 227.3 375.5 219.0C373.0 210.7 376.2 218.5 375.5 216.0C374.8 213.5 372.7 206.8 371.5 204.0C370.3 201.2 370.1 200.9 368.5 199.0C366.9 197.1 365.2 194.8 362.0 192.5C358.8 190.2 359.5 192.0 349.0 185.5C338.5 179.0 309.2 159.5 299.0 153.5C288.8 147.5 292.3 150.2 288.0 149.5C283.7 148.8 277.7 148.5 273.0 149.5ZM253.0 83.5C248.5 84.5 244.6 86.6 241.0 89.5C237.4 92.4 233.6 97.2 231.5 101.0C229.4 104.8 228.8 108.3 228.5 112.0C228.2 115.7 228.2 119.0 229.5 123.0C230.8 127.0 233.8 132.6 236.5 136.0C239.2 139.4 242.9 141.8 246.0 143.5C249.1 145.2 251.7 146.0 255.0 146.5C258.3 147.0 262.2 147.3 266.0 146.5C269.8 145.7 275.1 143.1 278.0 141.5C280.9 139.9 281.8 138.9 283.5 137.0C285.2 135.1 287.2 132.3 288.5 130.0C289.8 127.7 291.0 125.0 291.5 123.0C292.0 121.0 291.3 119.0 291.5 118.0C291.7 117.0 292.5 118.8 292.5 117.0C292.5 115.2 292.0 109.7 291.5 107.0C291.0 104.3 290.5 103.0 289.5 101.0C288.5 99.0 287.6 97.2 285.5 95.0C283.4 92.8 279.9 89.4 277.0 87.5C274.1 85.6 272.0 84.2 268.0 83.5C264.0 82.8 257.5 82.5 253.0 83.5ZM209.0 240.5C202.9 243.8 180.8 255.9 174.5 260.0C168.2 264.1 172.2 263.3 171.5 265.0C170.8 266.7 170.2 267.8 170.5 270.0C170.8 272.2 172.6 276.2 173.5 278.0C174.4 279.8 175.1 279.8 176.0 280.5C176.9 281.2 177.7 282.0 179.0 282.5C180.3 283.0 182.2 283.5 184.0 283.5C185.8 283.5 183.0 285.8 190.0 282.5C197.0 279.2 219.2 267.2 226.0 263.5C232.8 259.8 233.0 263.8 230.5 260.0C228.0 256.2 214.6 243.8 211.0 240.5C207.4 237.2 215.1 237.2 209.0 240.5Z" fill="#030303" fill-rule="evenodd"/><line x1="440.6" y1="432.6" x2="102.7" y2="94.7" stroke="#d60605" stroke-width="43.8"/><circle cx="274.3" cy="261.1" r="234.1" fill="none" stroke="#d60605" stroke-width="49.1"/></svg>';
 
     /* ── 属性・訪問結果の選択UI（ネイティブselectの代替・ボタン式） ──
        視認性向上のため選択肢を最初からボタンで並べ、現在値を凡例と同系色でハイライトする。
@@ -2363,6 +2380,7 @@
                 <div class="inline-group"><label>${tr('オートロック')}</label>${coloredButtonsHtml('new-lock', SHUGA_LOCK_OPTS_, '不明', 'single')}</div>
                 <div class="inline-group"><label>${tr('構成属性')}</label>${coloredButtonsHtml('new-attribute', SHUGA_ATTR_OPTS_, '不明', 'compose')}</div>
                 <div class="inline-group detail-only"><label>${tr('管理人')}</label>${coloredButtonsHtml('new-manager', SHUGA_MGR_OPTS_, '不明', 'single')}</div>
+                <div class="inline-group detail-only"><label>${tr('立禁表記')}</label>${coloredButtonsHtml('new-noentry', SHUGA_NOENTRY_OPTS_, '不明', 'single')}</div>
                 <div class="form-group memo-empty"><label>${tr('メモ')}</label><input type="text" id="new-memo"></div>
                 <button class="submit-btn" id="reg-btn" onclick="submitNewLocation(${latVal}, ${lngVal}, '集合住宅')">${tr('登録')}</button>
                 <div class="detail-only" style="text-align:right; margin-top:6px;"><button type="button" onclick="switchToFacilityForm(${latVal}, ${lngVal})" style="width:34%; padding:8px 0; background:#5B7C99; color:#fff; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer;">${tr('🏛 施設登録')}</button></div>
@@ -2661,6 +2679,7 @@
             data.manager = document.getElementById('new-manager').value;
             data.attribute = document.getElementById('new-attribute').value;
             data.lock = document.getElementById('new-lock').value;
+            data.noTrespass = document.getElementById('new-noentry').value;
             const rnMode = curRoomNumMode();
             data.roomNumDisplay = rnMode;        // ''通常 / '1'不明 / '2'ABC
             data.hideRoomNum = (rnMode === '1'); // 旧GAS互換（不明のみ）
@@ -3031,6 +3050,14 @@
               <span class="vmh-chip vmh-sh" style="background:#8C8C8C;">${mb('#fff')}</span>不明
             </div>
             <div class="vmh-ssnote">※ マークの色 ＝ 建物の構成</div>
+            <div class="vmh-mk" style="margin-top:8px;">
+              <div class="vmh-i vmh-full"><span class="vmh-chip vmh-sh" style="background:#8C8C8C;border:3px solid #A8554E;">${mb('#fff')}</span>赤枠 ＝ オートロックあり</div>
+              <div class="vmh-i vmh-full"><span class="vmh-chip" style="background:#fff;">${TACHIKIN_BADGE_SVG}</span>右上のこのマーク ＝ 立入禁止の表記がある建物</div>
+            </div>
+            <div class="vmh-sub">── 施設 ──</div>
+            <div class="vmh-mk">
+              <div class="vmh-i vmh-full"><span class="vmh-chip vmh-ko vmh-em">🏪</span><span class="vmh-chip vmh-ko vmh-em">🏥</span>絵文字だけのマーク ＝ 目印の施設（訪問はしません）</div>
+            </div>
         </div></details>`;
         // 戸建ての新規登録
         html += `<details class="vmh-sec" open><summary class="vmh-h">🏠 戸建て</summary><div class="vmh-in">
@@ -3052,7 +3079,7 @@
             <div class="vmh-pop">
               <div class="vmh-pttl">ハイツ小岩</div>
               <div class="vmh-prow" style="margin:-2px 0 4px;">🏠 <span>東小岩2丁目5番</span></div>
-              <div class="vmh-psub">管理人: なし ｜ 構成: ファミリー ｜ オートロック: なし</div>
+              <div class="vmh-psub">オートロック: なし ｜ 構成: ファミリー ｜ 管理人: なし</div>
               <table class="vmh-gt"><tbody>
                 <tr><td class="vmh-fl">3F</td><td style="background:#E6F1F4;">301</td><td style="background:#F2C892;color:#5b3b00;">302</td><td style="background:#CBE2CC;color:#2E5E33;">303</td></tr>
                 <tr><td class="vmh-fl">2F</td><td class="vmh-sel" style="background:#CBE3F0;color:#0d3c55;">201</td><td style="background:#A8554E;color:#fff;">☆</td><td style="background:#E6F1F4;">203</td></tr>
@@ -3304,6 +3331,7 @@
     function aggregateProgress(areaList) {
         const blank = () => ({ kodatePin: 0, kodateDone: 0, room: 0, roomDone: 0, vacant: 0, refuse: 0, pin: 0, kensu: 0 });
         const tree = {};
+        let excludedTachikin = 0; // 立禁表記ありの集合住宅（集計除外）の棟数。renderProgress の注記用に progState へ渡す
         const bucket = (district, chomeKey) => {
             if (!tree[district]) tree[district] = { chomes: {}, total: blank() };
             if (!tree[district].chomes[chomeKey]) tree[district].chomes[chomeKey] = blank();
@@ -3313,28 +3341,32 @@
             const lng = parseFloat(item.経度), lat = parseFloat(item.緯度);
             if (isNaN(lng) || isNaN(lat) || lng === 0 || lat === 0) return; // 地図描画と同じ条件で不正座標を除外
             if (item.種別 === '施設') return; // 施設は目印で訪問対象でないため進捗集計から除外
+            const isTachikinBuilding = item.種別 === '集合住宅' && (item.立禁表記 || '不明') === 'あり';
+            if (isTachikinBuilding) excludedTachikin++; // 立禁表記ありはピン基準の分子には数えるが、部屋（訪問母数）の集計だけ除外
             const addr = (item.住所 && item.住所 !== '-' && String(item.住所).trim() !== '') ? addrWithoutGo(item.住所) : (deriveAddress(lng, lat) || '');
             let district = '（住所未設定）', chomeKey = '（住所未設定）';
             const m = String(addr).match(/^(.+?)(\d+丁目)\d+番$/);
             if (m) { district = m[1]; chomeKey = m[1] + m[2]; }
             else if (addr) { district = addr; chomeKey = addr; } // 丁目なし地区（鹿骨町 等）
             const st = bucket(district, chomeKey);
-            st.pin += 1; // ピン基準の分子＝登録ピン数（1行=1ピン。戸建ても集合住宅も棟1つで1ピン）
+            st.pin += 1; // ピン基準の分子＝登録ピン数（1行=1ピン。戸建ても集合住宅も棟1つで1ピン。立禁棟も含む）
             if (item.種別 === '集合住宅') {
-                const validSet = {};
-                let rooms = 0;
-                String(item.有効部屋リスト || '').split(',').forEach(s => { const k = String(s).trim(); if (k !== '') { validSet[k] = true; rooms++; } });
-                let map = {};
-                try { map = JSON.parse(item.部屋ステータス || '{}') || {}; } catch (e) { map = {}; }
-                let roomsDone = 0;
-                Object.keys(map).forEach(k => {
-                    if (!validSet[k]) return; // 有効部屋リストにある部屋だけ集計（建物編集で外れた部屋のS列残骸は無視＝率が100%超になるのを防ぐ）
-                    const v = String(map[k] || '');
-                    if (isVisitResult_(v)) roomsDone++;
-                    else if (v.indexOf('空き家') >= 0) st.vacant++;
-                    else if (v.indexOf('訪問拒否') >= 0) st.refuse++;
-                });
-                st.room += rooms; st.roomDone += roomsDone; // 集合は「部屋」を母数にする（棟は数えない＝戸建てピンと二重計上しない）
+                if (!isTachikinBuilding) { // 立禁表記ありは部屋（訪問母数）の集計から除外。ピンは既に加算済みのままにする
+                    const validSet = {};
+                    let rooms = 0;
+                    String(item.有効部屋リスト || '').split(',').forEach(s => { const k = String(s).trim(); if (k !== '') { validSet[k] = true; rooms++; } });
+                    let map = {};
+                    try { map = JSON.parse(item.部屋ステータス || '{}') || {}; } catch (e) { map = {}; }
+                    let roomsDone = 0;
+                    Object.keys(map).forEach(k => {
+                        if (!validSet[k]) return; // 有効部屋リストにある部屋だけ集計（建物編集で外れた部屋のS列残骸は無視＝率が100%超になるのを防ぐ）
+                        const v = String(map[k] || '');
+                        if (isVisitResult_(v)) roomsDone++;
+                        else if (v.indexOf('空き家') >= 0) st.vacant++;
+                        else if (v.indexOf('訪問拒否') >= 0) st.refuse++;
+                    });
+                    st.room += rooms; st.roomDone += roomsDone; // 集合は「部屋」を母数にする（棟は数えない＝戸建てピンと二重計上しない）
+                }
             } else {
                 st.kodatePin += 1;
                 const a = String(item.属性 || '');
@@ -3361,6 +3393,7 @@
                 tot.kodatePin += s.kodatePin; tot.kodateDone += s.kodateDone; tot.room += s.room; tot.roomDone += s.roomDone; tot.vacant += s.vacant; tot.refuse += s.refuse; tot.pin += s.pin; tot.kensu += s.kensu;
             });
         });
+        progState.excludedTachikin = excludedTachikin; // renderProgress の除外棟数注記用
         return tree;
     }
     function sortProg_(arr) {
@@ -3430,6 +3463,9 @@
                 });
             }
         });
+        if (progState.excludedTachikin > 0) {
+            html += `<div style="font-size:11px; color:#888; margin-top:8px;">※ 立禁表記ありの集合住宅 ${progState.excludedTachikin}棟 は訪問母数（部屋数）から除外</div>`;
+        }
         body.innerHTML = html;
     }
 
@@ -3540,8 +3576,9 @@
             nextTop[side] = top + chgt + 8;
             const lx = side === 'L' ? 4 + cwid : DW - 4 - cwid, ly = top + 14;
             ovD += `<line x1="${bx.toFixed(1)}" y1="${by.toFixed(1)}" x2="${lx.toFixed(1)}" y2="${ly.toFixed(1)}" stroke="#000" stroke-width="1"/>`;
+            const tachikinMark = (d.立禁表記 === 'あり') ? ` <span style="font-weight:bold; border:1px solid #000; padding:0 3px;">立禁</span>` : '';
             cardsHtml += `<div class="print-card" style="top:${top}px; ${side === 'L' ? 'left:4px;' : 'right:4px;'}">`
-                + `<div class="print-card-h">${num}. ${escHtml(d['建物名 / 世帯名']) || tr('(名称なし)')}</div>`
+                + `<div class="print-card-h">${num}. ${escHtml(d['建物名 / 世帯名']) || tr('(名称なし)')}${tachikinMark}</div>`
                 + printRoomGrid(d) + `</div>`;
         });
         ovD += `</svg>`;
@@ -4644,6 +4681,13 @@
                 markerEl.style.color = (firstItem.属性 === 'ファミリー' || firstItem.属性 === '混在') ? '#8a7117' : '#fff';
                 // 枠＝オートロックありのみ赤枠。なし・不明は枠なし
                 markerEl.style.border = (getAutolock(firstItem) === 'あり') ? '3px solid #A8554E' : 'none';
+                // 立禁表記=あり のときだけ右上にバッジ（innerHTML代入の後に追加＝上書きされないよう順序に注意）
+                if ((firstItem.立禁表記 || '不明') === 'あり') {
+                    const tachikinBadge = document.createElement('div');
+                    tachikinBadge.className = 'tachikin-badge';
+                    tachikinBadge.innerHTML = TACHIKIN_BADGE_SVG;
+                    markerEl.appendChild(tachikinBadge);
+                }
                 popupHtml += createShugaViewHtml(items);
             } else if (firstItem.種別 === '施設') {
                 markerEl.className += ' marker-facility';
@@ -4926,7 +4970,7 @@
             <div class="building-title">${escHtml(first['建物名 / 世帯名']) || tr('(名称なし)')}</div>
             ${addrRowHtml(first)}
             <div style="font-size:11px; color:#aaa; margin-bottom:4px;">
-                <span style="color:${shugaInfoColor('lock', getAutolock(first))};">${tr('オートロック')}: ${escHtml(tr(getAutolock(first)))}</span> ｜ <span style="color:${shugaInfoColor('attr', first.属性)};">${tr('構成')}: ${escHtml(tr(first.属性 || '不明'))}</span> ｜ <span style="color:${shugaInfoColor('mgr', first.管理人)};">${tr('管理人')}: ${escHtml(tr(first.管理人 || '不明'))}</span>
+                <span style="color:${shugaInfoColor('lock', getAutolock(first))};">${tr('オートロック')}: ${escHtml(tr(getAutolock(first)))}</span> ｜ <span style="color:${shugaInfoColor('attr', first.属性)};">${tr('構成')}: ${escHtml(tr(first.属性 || '不明'))}</span> ｜ <span style="color:${shugaInfoColor('mgr', first.管理人)};">${tr('管理人')}: ${escHtml(tr(first.管理人 || '不明'))}</span>${first.立禁表記 === 'あり' ? ` ｜ <span style="color:${shugaInfoColor('noEntry', first.立禁表記)};">${tr('立禁')}: ${escHtml(tr(first.立禁表記))}</span>` : ''}
             </div>
             ${gridHtml}
             ${mgrHtml}
@@ -4964,6 +5008,7 @@
         gridRoomMark = parseRoomMarks(item.個人宅);
 
         const lock = getAutolock(item);
+        const noEntry = item.立禁表記 || '不明';
         const memoText = cleanMemo(item);
 
         const opt = (v, label, cur) => `<option value="${v}" ${String(cur) === String(v) ? 'selected' : ''}>${label}</option>`;
@@ -4995,6 +5040,7 @@
             <label style="font-size:11px; font-weight:bold;">${tr('緑=有効。不要な部屋をタップで外す')}</label>
             <div id="setup-grid-container" style="max-height:120px; overflow:auto; margin-bottom:8px;"></div>
             <div class="inline-group"><label>${tr('オートロック')}</label>${coloredButtonsHtml('new-lock', SHUGA_LOCK_OPTS_, lock, 'single')}</div>
+            <div class="inline-group"><label>${tr('立禁表記')}</label>${coloredButtonsHtml('new-noentry', SHUGA_NOENTRY_OPTS_, noEntry, 'single')}</div>
             <div class="inline-group"><label>${tr('構成属性')}</label>${coloredButtonsHtml('new-attribute', SHUGA_ATTR_OPTS_, item.属性, 'compose')}</div>
             <div class="inline-group"><label>${tr('管理人')}</label>${coloredButtonsHtml('new-manager', SHUGA_MGR_OPTS_, item.管理人, 'single')}</div>
             <div class="form-group"><label>${tr('メモ')}</label><input type="text" id="new-memo" value="${escHtml(memoText)}"></div>
@@ -5032,6 +5078,7 @@
             manager: document.getElementById('new-manager').value,
             attribute: document.getElementById('new-attribute').value,
             lock: document.getElementById('new-lock').value,
+            noTrespass: document.getElementById('new-noentry').value,
             memo: document.getElementById('new-memo').value,
             roomNumDisplay: rnMode,            // ''通常 / '1'不明 / '2'ABC
             hideRoomNum: (rnMode === '1'),     // 旧GAS互換（不明のみ）

@@ -134,6 +134,9 @@
         .custom-marker::before { content: ''; position: absolute; inset: -8px; }
         .marker-kodedate { width: 24px; height: 24px; font-size: 13px; border: 2.5px solid #222; }
         .marker-shuga { width: 28px; height: 28px; font-size: 16px; background: #8C8C8C; border: 2px solid white; border-radius: 6px; }
+        /* 立禁表記バッジ（右上に重ねる）。.custom-marker は Mapbox が position:absolute を付与するため、
+           ここでは追加のposition指定は不要＝子要素はそれを基点に絶対配置される。%指定でapplyZoomScaleのズーム連動に追随。 */
+        .tachikin-badge { position: absolute; top: -13%; right: -13%; width: 62%; height: 62%; pointer-events: none; filter: drop-shadow(0 1px 1px rgba(0,0,0,.35)); }
         /* 戸建ての「訪問拒否(拒)」「外国語(外)」は外枠を☆形にする（塗り＝属性色／白文字） */
         .marker-star { border: none !important; border-radius: 0 !important; box-shadow: none !important; background: transparent;
             clip-path: polygon(50% 2%, 61% 35%, 96% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 4% 35%, 39% 35%);
