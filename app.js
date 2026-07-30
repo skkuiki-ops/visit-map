@@ -4009,6 +4009,17 @@
         });
     }
 
+    // 貸出: サイトのQRコード（案内用）。apiCall不使用のため busy/toast なし。
+    function showSiteQr() {
+        openAppModal('📱 サイトのQRコード');
+        document.getElementById('app-modal-body').innerHTML = `
+            <div style="text-align:center; padding:8px;">
+                <div style="font-size:13px; color:#555; margin-bottom:12px;">スマホのカメラで読み取ると、このアプリのサイトが開きます</div>
+                <img src="qr-site.png" alt="サイトのQRコード" style="width:260px; max-width:70vw; margin:8px 0;">
+                <div style="font-size:13px; color:#555; word-break:break-all; margin-top:12px;">https://skkuiki-ops.github.io/visit-map/</div>
+            </div>`;
+    }
+
     // ── 管理: 区域の貸出・返却 ──
     let lendState = { users: [], areas: [], groups: [], sel: { group: '', email: '', district: '', chome: '', range: '' }, period: { field: 'lend', from: '', to: '' } };
     function showLendScreen() {
