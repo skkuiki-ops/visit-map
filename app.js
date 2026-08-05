@@ -4617,6 +4617,203 @@
         });
     }
 
+    // ── sysadmin専用: 地点データ一覧（TargetListを最終更新日時の新しい順で見る） ──
+    // 表示専用（renderMarkersは呼ばない）。取得したデータはローカル(tlvState)に保持し、地図の currentData/マーカーには触れない
+    //（⟳ 再貸出候補 showRelendCandidates と同じ思想＝currentData と currentMarkers の対応を崩さない）。
+    let tlvState = { data: [], filter: { q: '', type: '', status: '', from: '', to: '' }, limit: 200 };
+    function showTargetListView() {
+        openAppModal('📄 地点データ一覧');
+        showBusy('読み込み中…');
+        apiCall('getData', {}).then(data => {
+            tlvState.data = Array.isArray(data) ? data : [];
+            tlvState.filter = { q: '', type: '', status: '', from: '', to: '' };
+            tlvState.limit = 200;
+            renderTargetListView();
+        }).catch(handleServerError).finally(hideBusy);
+    }
+    // 名称：集合住宅=建物名、戸建て=住所（空なら「住所未設定」）、施設=建物名＋属性
+    function tlvName_(item) {
+        if (item.種別 === '戸建て') { const a = String(item.住所 || '').trim(); return a || '住所未設定'; }
+        if (item.種別 === '施設') { const n = String(item['建物名 / 世帯名'] || ''); const attr = item.属性 ? '（' + item.属性 + '）' : ''; return n + attr; }
+        return item['建物名 / 世帯名'] || '(名称なし)';
+    }
+    function tlvFilteredSorted_() {
+        const f = tlvState.filter, q = (f.q || '').trim().toLowerCase();
+        const list = tlvState.data.filter(item => {
+            if (f.type && item.種別 !== f.type) return false;
+            if (f.status && String(item.最新ステータス || '') !== f.status) return false;
+            const dpart = String(item.最終更新日時 || '').slice(0, 10).replace(/\//g, '-'); // 'yyyy/MM/dd HH:mm' → 'yyyy-MM-dd'
+            if (f.from && (!dpart || dpart < f.from)) return false;
+            if (f.to && (!dpart || dpart > f.to)) return false;
+            if (q) {
+                const hay = (String(item['建物名 / 世帯名'] || '') + ' ' + String(item.住所 || '') + ' ' + String(item.最終更新者 || '')).toLowerCase();
+                if (hay.indexOf(q) < 0) return false;
+            }
+            return true;
+        });
+        // M列(最終更新日時)の降順。空文字は常に他の日時より小さいため自然に末尾へ回る
+        list.sort((a, b) => {
+            const av = String(a.最終更新日時 || ''), bv = String(b.最終更新日時 || '');
+            return av === bv ? 0 : (av < bv ? 1 : -1);
+        });
+        return list;
+    }
+    function tlvRowHtml_(item) {
+        const dt = String(item.最終更新日時 || '');
+        return '<div class="tlv-row">'
+            + '<div class="tlv-row1"><span class="tlv-dt">' + escHtml(dt || '—') + '</span><span class="tlv-type">' + escHtml(item.種別 || '') + '</span></div>'
+            + '<div class="tlv-row2">' + escHtml(tlvName_(item)) + '</div>'
+            + '<div class="tlv-row3"><span class="tlv-status">' + escHtml(item.最新ステータス || '（未訪問）') + '</span><span class="tlv-by">' + escHtml(item.最終更新者 || '') + '</span>'
+            + '<button class="choice-btn" style="background:#eef3f6; padding:3px 8px; font-size:11px;" onclick="tlvOpenOnMap_(\'' + escHtml(String(item.ID)) + '\')">🗺 地図</button></div>'
+            + '</div>';
+    }
+    // 一覧モーダルを閉じ、既存の ?pin=ID ディープリンク処理（openPinDeepLink）でそのピンへ寄って吹き出しを開く
+    function tlvOpenOnMap_(id) {
+        closeAppModal();
+        openPinDeepLink(id);
+    }
+    function renderTargetListView() {
+        const body = document.getElementById('app-modal-body');
+        const f = tlvState.filter;
+        const statuses = Array.from(new Set(tlvState.data.map(d => String(d.最新ステータス || '')).filter(Boolean))).sort();
+        const typeOpt = v => '<option value="' + v + '" ' + (f.type === v ? 'selected' : '') + '>' + v + '</option>';
+        let html = '<div class="tlv-filter">'
+            + '<input id="tlv-q" placeholder="🔍 建物名／住所／更新者 で検索" value="' + escHtml(f.q) + '" oninput="tlvState.filter.q=this.value; applyTlvFilter();">'
+            + '<select id="tlv-type" onchange="tlvState.filter.type=this.value; applyTlvFilter();"><option value="">種別すべて</option>' + typeOpt('戸建て') + typeOpt('集合住宅') + typeOpt('施設') + '</select>'
+            + '<select id="tlv-status" onchange="tlvState.filter.status=this.value; applyTlvFilter();"><option value="">ステータスすべて</option>' + statuses.map(s => '<option value="' + escHtml(s) + '" ' + (f.status === s ? 'selected' : '') + '>' + escHtml(s) + '</option>').join('') + '</select>'
+            + '<span style="display:flex; gap:4px; align-items:center; font-size:12px; color:#666;">更新日<input type="date" id="tlv-from" value="' + escHtml(f.from) + '" style="width:132px;" onchange="tlvState.filter.from=this.value; applyTlvFilter();">〜<input type="date" id="tlv-to" value="' + escHtml(f.to) + '" style="width:132px;" onchange="tlvState.filter.to=this.value; applyTlvFilter();"></span>'
+            + '<span id="tlv-count"></span>'
+            + '</div>'
+            + '<div id="tlv-rows"></div>'
+            + '<div id="tlv-more-wrap" style="text-align:center; margin-top:10px;"></div>';
+        body.innerHTML = html;
+        applyTlvFilter();
+    }
+    // フィルタ変更時はフィルタバー（入力欄）自体は再描画せず、行部分だけ差し替える（入力のフォーカスを保つ）
+    function applyTlvFilter() {
+        const list = tlvFilteredSorted_();
+        const shown = list.slice(0, tlvState.limit);
+        const rowsEl = document.getElementById('tlv-rows');
+        if (rowsEl) rowsEl.innerHTML = shown.map(tlvRowHtml_).join('') || '<div style="color:#888; padding:12px;">該当する地点がありません</div>';
+        const c = document.getElementById('tlv-count');
+        if (c) c.textContent = shown.length + ' / ' + list.length + ' 件';
+        const moreWrap = document.getElementById('tlv-more-wrap');
+        if (moreWrap) moreWrap.innerHTML = (list.length > shown.length)
+            ? '<button class="choice-btn" onclick="tlvState.limit += 200; applyTlvFilter();">さらに表示（+200）</button>'
+            : '';
+    }
+
+    // ── sysadmin専用: 利用状況（UserListベース。最終利用日時・貸出中区域を横断表示） ──
+    let usgState = { users: [], areas: [], filter: { q: '', group: '', role: '', status: '', lend: '' } };
+    function showUsageStatus() {
+        openAppModal('📊 利用状況');
+        showBusy('読み込み中…');
+        Promise.all([apiCall('getUsers', {}), apiCall('getLendData', {})]).then(([users, lend]) => {
+            usgState.users = users || [];
+            usgState.areas = (lend && lend.areas) || [];
+            usgState.filter = { q: '', group: '', role: '', status: '', lend: '' };
+            renderUsageStatus();
+        }).catch(handleServerError).finally(hideBusy);
+    }
+    // ユーザーの貸出中区域：個人貸出=メール一致、グループ貸出=所属グループと貸出グループが一致
+    function usgAreasFor_(user) {
+        const email = String(user.email || '').trim().toLowerCase();
+        const group = String(user.group || '').trim();
+        const out = [];
+        usgState.areas.forEach(a => {
+            if (a.user && a.user === email) out.push({ area: a.area, group: false });
+            else if (group && a.group && a.group === group) out.push({ area: a.area, group: true });
+        });
+        return out;
+    }
+    function usgRoleLabel_(role) {
+        return { user: '一般', lender: '貸出係', manager: '管理者', sysadmin: 'システム管理者' }[role] || role || '';
+    }
+    // 並び順: ①lastUsedあり→新しい順 ②lastUsedなし・貸出中区域あり ③両方なし（②③はグループ→漢字名順）
+    function usgSorted_() {
+        const list = usgState.users.map(u => {
+            const areas = usgAreasFor_(u);
+            return { u: u, areas: areas, hasLast: !!String(u.lastUsed || '').trim(), hasLend: areas.length > 0 };
+        });
+        const gcmp = (a, b) => {
+            const ga = String(a.u.group || ''), gb = String(b.u.group || '');
+            if (ga !== gb) return ga < gb ? -1 : 1;
+            const na = String(a.u.name || ''), nb = String(b.u.name || '');
+            return na < nb ? -1 : (na > nb ? 1 : 0);
+        };
+        const g1 = list.filter(x => x.hasLast).sort((a, b) => {
+            const av = String(a.u.lastUsed || ''), bv = String(b.u.lastUsed || '');
+            return av === bv ? 0 : (av < bv ? 1 : -1);
+        });
+        const g2 = list.filter(x => !x.hasLast && x.hasLend).sort(gcmp);
+        const g3 = list.filter(x => !x.hasLast && !x.hasLend).sort(gcmp);
+        return g1.concat(g2, g3);
+    }
+    function usgFilteredSorted_() {
+        const f = usgState.filter, q = (f.q || '').trim().toLowerCase();
+        return usgSorted_().filter(x => {
+            const u = x.u;
+            if (q) {
+                const hay = (String(u.email || '') + ' ' + String(u.name || '')).toLowerCase();
+                if (hay.indexOf(q) < 0) return false;
+            }
+            if (f.group && String(u.group || '').trim() !== f.group) return false;
+            if (f.role && u.role !== f.role) return false;
+            if (f.status === 'active' && u.active === false) return false;
+            if (f.status === 'inactive' && u.active !== false) return false;
+            if (f.lend === 'yes' && !x.hasLend) return false;
+            if (f.lend === 'no' && x.hasLend) return false;
+            return true;
+        });
+    }
+    // モーダルを閉じ、区域一覧と同じ enterAreaFromList で地図へ（住所検索と同じ表示・区域一覧に戻るバーは出さない仕様と統一）
+    function usgOpenArea_(area) {
+        closeAppModal();
+        enterAreaFromList(area);
+    }
+    function usgRowHtml_(x) {
+        const u = x.u, inactive = (u.active === false);
+        const last = String(u.lastUsed || '').trim();
+        const areasHtml = x.areas.length
+            ? x.areas.map(a => '<span class="usg-chip">' + escHtml(a.area) + (a.group ? '（グループ）' : '') + '<button class="choice-btn" style="background:#eef3f6; padding:2px 7px; font-size:10px;" onclick="usgOpenArea_(\'' + escHtml(a.area) + '\')">🗺 地図</button></span>').join('')
+            : '<span class="usg-none">—</span>';
+        return '<div class="user-row usg-row' + (inactive ? ' ua-inactive' : '') + '">'
+            + '<div class="ua-row1"><span class="usg-name" style="font-weight:bold;">' + escHtml(u.name || '（名前未設定）') + '</span><span class="usg-email" style="color:#666; font-size:12px;">' + escHtml(u.email || '') + '</span></div>'
+            + '<div class="ua-row2">'
+            + '<span class="usg-badge" style="' + groupStyleStr(u.group) + '">' + escHtml(u.group || '（グループなし）') + '</span>'
+            + '<span class="usg-badge" style="' + roleStyleStr(u.role) + '">' + usgRoleLabel_(u.role) + '</span>'
+            + '<span class="usg-badge' + (inactive ? ' usg-badge-inactive' : '') + '">' + (inactive ? '無効' : '有効') + '</span>'
+            + '</div>'
+            + '<div class="usg-row3">' + (last ? escHtml(last) : '利用記録なし') + '</div>'
+            + '<div class="usg-row4">' + areasHtml + '</div>'
+            + '</div>';
+    }
+    // フィルタバー自体は再描画せず、行部分だけ差し替える（applyTlvFilter/applyUserFilter と同じ思想）
+    function applyUsgFilter() {
+        const list = usgFilteredSorted_();
+        const rowsEl = document.getElementById('usg-rows');
+        if (rowsEl) rowsEl.innerHTML = list.map(usgRowHtml_).join('') || '<div style="color:#888; padding:12px;">該当する利用者がいません</div>';
+        const c = document.getElementById('usg-count');
+        if (c) c.textContent = list.length + ' / ' + usgState.users.length + ' 件';
+    }
+    function renderUsageStatus() {
+        const body = document.getElementById('app-modal-body');
+        const f = usgState.filter;
+        const groups = Array.from(new Set(usgState.users.map(u => String(u.group || '').trim()).filter(Boolean))).sort();
+        const gOpt = groups.map(g => '<option value="' + escHtml(g) + '" ' + (f.group === g ? 'selected' : '') + '>' + escHtml(g) + '</option>').join('');
+        let html = '<div class="usg-filter">'
+            + '<input id="usg-q" placeholder="🔍 メール／名前 で検索" value="' + escHtml(f.q) + '" oninput="usgState.filter.q=this.value; applyUsgFilter();">'
+            + '<select id="usg-group" style="' + groupStyleStr(f.group) + '" onchange="usgState.filter.group=this.value; applyUsgFilter();"><option value="">グループ選択</option>' + gOpt + '</select>'
+            + '<select id="usg-role" style="' + roleStyleStr(f.role) + '" onchange="usgState.filter.role=this.value; applyUsgFilter();"><option value="">権限選択</option><option value="user" ' + (f.role === 'user' ? 'selected' : '') + '>一般</option><option value="lender" ' + (f.role === 'lender' ? 'selected' : '') + '>貸出係</option><option value="manager" ' + (f.role === 'manager' ? 'selected' : '') + '>管理者</option><option value="sysadmin" ' + (f.role === 'sysadmin' ? 'selected' : '') + '>システム管理者</option></select>'
+            + '<select id="usg-status" onchange="usgState.filter.status=this.value; applyUsgFilter();"><option value="">有効・無効</option><option value="active" ' + (f.status === 'active' ? 'selected' : '') + '>有効</option><option value="inactive" ' + (f.status === 'inactive' ? 'selected' : '') + '>無効</option></select>'
+            + '<select id="usg-lend" onchange="usgState.filter.lend=this.value; applyUsgFilter();"><option value="">貸出すべて</option><option value="yes" ' + (f.lend === 'yes' ? 'selected' : '') + '>貸出中あり</option><option value="no" ' + (f.lend === 'no' ? 'selected' : '') + '>貸出なし</option></select>'
+            + '<span id="usg-count"></span>'
+            + '</div>'
+            + '<div id="usg-rows"></div>';
+        body.innerHTML = html;
+        applyUsgFilter();
+    }
+
     // ✨ 最重要: スプレッドシートから読み込んだ瞬間に「絶対数値化」する描画処理
     function renderMarkers(data) {
         // 非配列（想定外の応答・通信の乱れで undefined 等）は、地図を白紙にせず現状のピンを保持し、赤エラーも出さない（不安を煽らない）。

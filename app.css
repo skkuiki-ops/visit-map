@@ -427,6 +427,18 @@
         .ua-filter { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; align-items: center; }
         .ua-filter #ua-filter-q { flex: 2; min-width: 130px; }
         #ua-filter-count { font-size: 12px; color: #666; white-space: nowrap; }
+        /* ── sysadmin専用: 地点データ一覧・利用状況 ── */
+        .tlv-filter, .usg-filter { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; align-items: center; }
+        .tlv-filter input, .usg-filter input { flex: 2; min-width: 130px; }
+        #tlv-count, #usg-count { font-size: 12px; color: #666; white-space: nowrap; }
+        .tlv-row { display: flex; flex-direction: column; gap: 4px; border: 1px solid #c4ccd3; border-radius: 8px; padding: 8px 10px; margin-bottom: 6px; background: #fff; }
+        .tlv-row1, .tlv-row3 { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; color: #666; }
+        .tlv-row2 { font-size: 14px; font-weight: bold; }
+        .usg-row3, .usg-row4 { font-size: 12px; color: #555; margin-top: 2px; }
+        .usg-chip { display: inline-flex; align-items: center; gap: 5px; background: #eef4f8; border-radius: 14px; padding: 3px 4px 3px 10px; font-size: 12px; margin: 2px 4px 2px 0; }
+        .usg-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-right: 6px; background: #EEF1F3; color: #4B5560; }
+        .usg-badge-inactive { background: #F3E3E1; color: #8a2f22; }
+        .usg-none { color: #999; font-size: 12px; }
         .due-over { color: #C75F56; font-weight: bold; } /* 返却期日超過 */
         .due-soon { color: #B0763C; font-weight: bold; } /* 期日まで2週間以内（落ち着いたアンバー） */
         #lend-preview-back { position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%); z-index: 9999; background: #34495e; color: #fff; border: none; border-radius: 20px; padding: 11px 20px; font-size: 15px; font-weight: bold; box-shadow: 0 2px 8px rgba(0,0,0,0.35); cursor: pointer; }
