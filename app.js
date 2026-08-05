@@ -4618,8 +4618,8 @@
     }
 
     // ── sysadmin専用: 地点データ一覧（TargetListを最終更新日時の新しい順で見る） ──
-    // 表示専用（renderMarkersは呼ばない）。取得したデータはローカル(tlvState)に保持し、地図の currentData/マーカーには触れない
-    //（⟳ 再貸出候補 showRelendCandidates と同じ思想＝currentData と currentMarkers の対応を崩さない）。
+    // 一覧はローカル(tlvState)に保持し、地図側（currentData/currentMarkers）の同期は「🗺 地図」実行時に行う
+    // （開いただけで renderMarkers すると、開いていた吹き出し＝入力途中のメモ等を無警告で壊すため。tlvOpenOnMap_ 参照）。
     let tlvState = { data: [], filter: { q: '', type: '', status: '', from: '', to: '' }, limit: 200 };
     function showTargetListView() {
         openAppModal('📄 地点データ一覧');
@@ -4641,7 +4641,20 @@
         const f = tlvState.filter, q = (f.q || '').trim().toLowerCase();
         const list = tlvState.data.filter(item => {
             if (f.type && item.種別 !== f.type) return false;
-            if (f.status && String(item.最新ステータス || '') !== f.status) return false;
+            // ステータス絞り込み: 施設は訪問対象外なので指定時は常に除外。
+            // 戸建ては完全一致（「（未訪問）」選択時はK列が空の戸建て）。
+            // 集合住宅はK列が「101号室: 不在(1回目)」等の部屋別文字列のため部分一致（indexOf）で判定する。
+            if (f.status) {
+                if (item.種別 === '施設') return false;
+                const st = String(item.最新ステータス || '');
+                if (item.種別 === '集合住宅') {
+                    if (f.status === '（未訪問）') { if (st !== '') return false; }
+                    else if (st.indexOf(f.status) < 0) return false;
+                } else { // 戸建て（種別が空・想定外の値も renderMarkers と同じく戸建て扱い）
+                    if (f.status === '（未訪問）') { if (st !== '') return false; }
+                    else if (st !== f.status) return false;
+                }
+            }
             const dpart = String(item.最終更新日時 || '').slice(0, 10).replace(/\//g, '-'); // 'yyyy/MM/dd HH:mm' → 'yyyy-MM-dd'
             if (f.from && (!dpart || dpart < f.from)) return false;
             if (f.to && (!dpart || dpart > f.to)) return false;
@@ -4658,24 +4671,35 @@
         });
         return list;
     }
+    // ステータス表示: 施設は訪問対象外なので「—」。戸建ては空=「（未訪問）」。集合住宅は空=「—」・値ありは生値のまま。
+    function tlvStatusDisp_(item) {
+        if (item.種別 === '施設') return '—';
+        const st = String(item.最新ステータス || '');
+        if (item.種別 === '戸建て') return st || '（未訪問）';
+        return st || '—'; // 集合住宅
+    }
     function tlvRowHtml_(item) {
         const dt = String(item.最終更新日時 || '');
         return '<div class="tlv-row">'
             + '<div class="tlv-row1"><span class="tlv-dt">' + escHtml(dt || '—') + '</span><span class="tlv-type">' + escHtml(item.種別 || '') + '</span></div>'
             + '<div class="tlv-row2">' + escHtml(tlvName_(item)) + '</div>'
-            + '<div class="tlv-row3"><span class="tlv-status">' + escHtml(item.最新ステータス || '（未訪問）') + '</span><span class="tlv-by">' + escHtml(item.最終更新者 || '') + '</span>'
+            + '<div class="tlv-row3"><span class="tlv-status">' + escHtml(tlvStatusDisp_(item)) + '</span><span class="tlv-by">' + escHtml(item.最終更新者 || '') + '</span>'
             + '<button class="choice-btn" style="background:#eef3f6; padding:3px 8px; font-size:11px;" onclick="tlvOpenOnMap_(\'' + escHtml(String(item.ID)) + '\')">🗺 地図</button></div>'
             + '</div>';
     }
-    // 一覧モーダルを閉じ、既存の ?pin=ID ディープリンク処理（openPinDeepLink）でそのピンへ寄って吹き出しを開く
+    // 一覧モーダルを閉じ、一覧と同世代のデータで地図側を同期してから、既存の ?pin=ID ディープリンク処理
+    // （openPinDeepLink）でそのピンへ寄って吹き出しを開く。renderMarkers はここ（ピンへ飛ぶ操作が確定した時点）
+    // でだけ呼ぶ＝一覧を開いただけでは吹き出しを壊さず、飛ぶときに他の吹き出しが閉じるのは別ピンをタップした時と同等。
     function tlvOpenOnMap_(id) {
         closeAppModal();
+        renderMarkers(tlvState.data);
         openPinDeepLink(id);
     }
     function renderTargetListView() {
         const body = document.getElementById('app-modal-body');
         const f = tlvState.filter;
-        const statuses = Array.from(new Set(tlvState.data.map(d => String(d.最新ステータス || '')).filter(Boolean))).sort();
+        // フィルタ選択肢は戸建てのK列値のみ（集合住宅の部屋番号付き値は選択肢に出さない。判定は部分一致で拾う）＋「（未訪問）」。
+        const statuses = Array.from(new Set(tlvState.data.filter(d => d.種別 === '戸建て').map(d => String(d.最新ステータス || '')).filter(Boolean))).sort().concat(['（未訪問）']);
         const typeOpt = v => '<option value="' + v + '" ' + (f.type === v ? 'selected' : '') + '>' + v + '</option>';
         let html = '<div class="tlv-filter">'
             + '<input id="tlv-q" placeholder="🔍 建物名／住所／更新者 で検索" value="' + escHtml(f.q) + '" oninput="tlvState.filter.q=this.value; applyTlvFilter();">'
@@ -4741,9 +4765,16 @@
             const na = String(a.u.name || ''), nb = String(b.u.name || '');
             return na < nb ? -1 : (na > nb ? 1 : 0);
         };
+        // lastUsedは '2026/8/9 (土) 10:00' 形式（ゼロ埋めなし・曜日入り）で文字列比較が壊れるため、
+        // parseHistTimeLoose_ で Date化して数値降順にする（解釈不能=NaNは末尾へ）。表示は元の文字列のまま。
         const g1 = list.filter(x => x.hasLast).sort((a, b) => {
-            const av = String(a.u.lastUsed || ''), bv = String(b.u.lastUsed || '');
-            return av === bv ? 0 : (av < bv ? 1 : -1);
+            const ad = parseHistTimeLoose_(a.u.lastUsed), bd = parseHistTimeLoose_(b.u.lastUsed);
+            const at = ad ? ad.getTime() : NaN, bt = bd ? bd.getTime() : NaN;
+            const aBad = isNaN(at), bBad = isNaN(bt);
+            if (aBad && bBad) return 0;
+            if (aBad) return 1;
+            if (bBad) return -1;
+            return bt - at;
         });
         const g2 = list.filter(x => !x.hasLast && x.hasLend).sort(gcmp);
         const g3 = list.filter(x => !x.hasLast && !x.hasLend).sort(gcmp);
