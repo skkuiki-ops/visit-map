@@ -3005,14 +3005,14 @@
         if (p.classList.contains('show') && !p.contains(e.target) && e.target !== b) { p.classList.remove('show'); suppressMapTapUntil = Date.now() + 600; }
     });
 
-    function openAppModal(title, theme) {
+    function openAppModal(title, theme, wide) {
         const tEl = document.getElementById('app-modal-title');
         // 区域系（personal/group/whole）はテーマ色の見出しに白シルエットの自作アイコンを付ける（メニューと統一）。それ以外は従来どおりテキストのみ。
         if (theme && MI_ICON[theme]) tEl.innerHTML = MI_ICON[theme] + escHtml(tr(title));
         else tEl.textContent = tr(title);
         document.getElementById('app-modal-body').innerHTML = `<div style="color:#888; padding:8px;">${tr('読み込み中…')}</div>`;
-        // カードのテーマ配色（personal=青/group=緑/whole=オレンジ）。無指定は既定（白）。
-        document.getElementById('app-modal-card').className = theme ? ('app-modal-theme-' + theme) : '';
+        // カードのテーマ配色（personal=青/group=緑/whole=オレンジ）。無指定は既定（白）。wide=管理メニュー系のPC幅拡大（modal-wide）。className を毎回フルで組み立てるので、旧画面のクラスを引きずらない。
+        document.getElementById('app-modal-card').className = (theme ? ('app-modal-theme-' + theme) : '') + (wide ? ' modal-wide' : '');
         document.getElementById('app-modal').style.display = 'flex';
         var hfs = document.getElementById('help-fs-header'); if (hfs) hfs.remove(); // ヘルプの文字サイズボタンを他モーダルに残さない
     }
@@ -3233,7 +3233,7 @@
     // ── 割り当て区域（自分に貸出中の一覧。タップでその区域を表示） ──
     // 管理: メンテナンス（指定期間の訪問結果・履歴をクリア。属性・住所・個人宅・建物情報は保持）
     function showMaintenance() {
-        openAppModal('🧹 メンテナンス');
+        openAppModal('🧹 メンテナンス', null, true);
         const body = document.getElementById('app-modal-body');
         const pad = n => String(n).padStart(2, '0');
         const td = new Date(), ps = new Date(); ps.setMonth(ps.getMonth() - 6);
@@ -3412,7 +3412,7 @@
     function expandAllProg() { const tree = progState.tree || aggregateProgress(progState.areas); Object.keys(tree).forEach(d => { progState.open[d] = true; }); renderProgress(); }
     function collapseAllProg() { progState.open = {}; renderProgress(); }
     function showProgress() {
-        openAppModal('📈 進捗モニタリング');
+        openAppModal('📈 進捗モニタリング', null, true);
         const body = document.getElementById('app-modal-body');
         if (!addrPoints) { body.innerHTML = '<div style="color:#888; padding:8px;">住所データを読み込み中です。少し待ってから開き直してください。</div>'; return; }
         showBusy('読み込み中…');
@@ -3992,7 +3992,7 @@
     /* ── 機能③: 網羅状況（第N網羅の可視化・シート出力・長押し削除。manager+） ── */
     let coverageAreas = null;
     function showCoverage() {
-        openAppModal('📋 網羅状況');
+        openAppModal('📋 網羅状況', null, true);
         const body = document.getElementById('app-modal-body');
         body.innerHTML = '<div style="color:#888; padding:12px;">読み込み中…</div>';
         apiCall('getCoverageData', {}).then(d => { coverageAreas = (d && d.areas) || []; renderCoverage(); }).catch(handleServerError);
@@ -4361,7 +4361,7 @@
     }
     let _relendByLabel = null; // 再貸出候補用の「番地ラベル→戸建てピン」（履歴つき最新データから算出・グローバル currentData は汚さない）
     function showRelendCandidates() {
-        openAppModal('⟳ 再貸出候補');
+        openAppModal('⟳ 再貸出候補', null, true);
         const body = document.getElementById('app-modal-body');
         body.innerHTML = '<div style="color:#888; padding:12px;">読み込み中…</div>';
         // 訪問率の判定に履歴が要る → getData を確実に取り直す（キャッシュ先行だと履歴が欠ける）。貸出データも取得。
@@ -4521,7 +4521,7 @@
     const GROUP_PALETTE = ['background:#E6F1FB; color:#0C447C;', 'background:#E1F5EE; color:#085041;', 'background:#FAECE7; color:#712B13;', 'background:#FBEAF0; color:#72243E;', 'background:#EAF3DE; color:#27500A;', 'background:#FAEEDA; color:#633806;', 'background:#EEEDFE; color:#3C3489;', 'background:#F1EFE8; color:#444441;'];
     const groupStyleStr = name => { name = String(name || '').trim(); if (!name) return ''; let h = 0; for (let k = 0; k < name.length; k++) h = (h * 31 + name.charCodeAt(k)) >>> 0; return GROUP_PALETTE[h % GROUP_PALETTE.length]; };
     function showUserAdmin() {
-        openAppModal('👥 ユーザー管理');
+        openAppModal('👥 ユーザー管理', null, true);
         showBusy('読み込み中…');
         apiCall('getUsers', {}).then(list => {
             userAdminState = (list || []).map(u => ({ email: u.email, name: u.name, role: u.role, group: u.group, active: u.active !== false }));
@@ -4617,19 +4617,29 @@
         });
     }
 
-    // ── sysadmin専用: 地点データ一覧（TargetListを最終更新日時の新しい順で見る） ──
+    // ── sysadmin専用: 区域操作履歴（TargetListを最終更新日時の新しい順で見る） ──
     // 一覧はローカル(tlvState)に保持し、地図側（currentData/currentMarkers）の同期は「🗺 地図」実行時に行う
     // （開いただけで renderMarkers すると、開いていた吹き出し＝入力途中のメモ等を無警告で壊すため。tlvOpenOnMap_ 参照）。
-    let tlvState = { data: [], filter: { q: '', type: '', status: '', from: '', to: '' }, limit: 200 };
+    let tlvState = { data: [], nameByEmail: {}, filter: { q: '', type: '', status: '', from: '', to: '' }, limit: 200 };
     function showTargetListView() {
-        openAppModal('📄 地点データ一覧');
+        openAppModal('📄 区域操作履歴', null, true);
         showBusy('読み込み中…');
-        apiCall('getData', {}).then(data => {
+        Promise.all([apiCall('getData', {}), apiCall('getUsers', {}).catch(() => [])]).then(([data, users]) => {
             tlvState.data = Array.isArray(data) ? data : [];
+            const map = {};
+            (Array.isArray(users) ? users : []).forEach(u => { const em = String(u.email || '').trim().toLowerCase(); if (em) map[em] = u.name || ''; });
+            tlvState.nameByEmail = map;
             tlvState.filter = { q: '', type: '', status: '', from: '', to: '' };
             tlvState.limit = 200;
             renderTargetListView();
         }).catch(handleServerError).finally(hideBusy);
+    }
+    // 最終更新者のメールから漢字名を引く。未登録・不一致は「—」
+    function tlvUpdatedByName_(item) {
+        const em = String(item.最終更新者 || '').trim().toLowerCase();
+        if (!em) return '—';
+        const name = tlvState.nameByEmail[em];
+        return name ? name : '—';
     }
     // 名称：集合住宅=建物名、戸建て=住所（空なら「住所未設定」）、施設=建物名＋属性
     function tlvName_(item) {
@@ -4678,13 +4688,21 @@
         if (item.種別 === '戸建て') return st || '（未訪問）';
         return st || '—'; // 集合住宅
     }
+    // 1行目=日時/場所/操作、2行目=名前/メアド/種類/地図（PC表形式では列: 日時|場所|操作|名前|メール|種類|地図 の順でDOMを揃えてある）
     function tlvRowHtml_(item) {
         const dt = String(item.最終更新日時 || '');
         return '<div class="tlv-row">'
-            + '<div class="tlv-row1"><span class="tlv-dt">' + escHtml(dt || '—') + '</span><span class="tlv-type">' + escHtml(item.種別 || '') + '</span></div>'
-            + '<div class="tlv-row2">' + escHtml(tlvName_(item)) + '</div>'
-            + '<div class="tlv-row3"><span class="tlv-status">' + escHtml(tlvStatusDisp_(item)) + '</span><span class="tlv-by">' + escHtml(item.最終更新者 || '') + '</span>'
-            + '<button class="choice-btn" style="background:#eef3f6; padding:3px 8px; font-size:11px;" onclick="tlvOpenOnMap_(\'' + escHtml(String(item.ID)) + '\')">🗺 地図</button></div>'
+            + '<div class="tlv-row1">'
+            + '<span class="tlv-c tlv-c-dt">' + escHtml(dt || '—') + '</span>'
+            + '<span class="tlv-c tlv-c-place">' + escHtml(tlvName_(item)) + '</span>'
+            + '<span class="tlv-c tlv-c-status">' + escHtml(tlvStatusDisp_(item)) + '</span>'
+            + '</div>'
+            + '<div class="tlv-row2">'
+            + '<span class="tlv-c tlv-c-name">' + escHtml(tlvUpdatedByName_(item)) + '</span>'
+            + '<span class="tlv-c tlv-c-email">' + escHtml(item.最終更新者 || '—') + '</span>'
+            + '<span class="tlv-c tlv-c-type">' + escHtml(item.種別 || '') + '</span>'
+            + '<button class="choice-btn tlv-c tlv-c-map" style="background:#eef3f6; padding:1px 8px; font-size:11px;" onclick="tlvOpenOnMap_(\'' + escHtml(String(item.ID)) + '\')">🗺 地図</button>'
+            + '</div>'
             + '</div>';
     }
     // 一覧モーダルを閉じ、一覧と同世代のデータで地図側を同期してから、既存の ?pin=ID ディープリンク処理
@@ -4708,6 +4726,7 @@
             + '<span style="display:flex; gap:4px; align-items:center; font-size:12px; color:#666;">更新日<input type="date" id="tlv-from" value="' + escHtml(f.from) + '" style="width:132px;" onchange="tlvState.filter.from=this.value; applyTlvFilter();">〜<input type="date" id="tlv-to" value="' + escHtml(f.to) + '" style="width:132px;" onchange="tlvState.filter.to=this.value; applyTlvFilter();"></span>'
             + '<span id="tlv-count"></span>'
             + '</div>'
+            + '<div class="tlv-head-row"><span>日時</span><span>場所</span><span>操作</span><span>名前</span><span>メール</span><span>種類</span><span>地図</span></div>'
             + '<div id="tlv-rows"></div>'
             + '<div id="tlv-more-wrap" style="text-align:center; margin-top:10px;"></div>';
         body.innerHTML = html;
@@ -4730,7 +4749,7 @@
     // ── sysadmin専用: 利用状況（UserListベース。最終利用日時・貸出中区域を横断表示） ──
     let usgState = { users: [], areas: [], filter: { q: '', group: '', role: '', status: '', lend: '' } };
     function showUsageStatus() {
-        openAppModal('📊 利用状況');
+        openAppModal('📊 利用状況', null, true);
         showBusy('読み込み中…');
         Promise.all([apiCall('getUsers', {}), apiCall('getLendData', {})]).then(([users, lend]) => {
             usgState.users = users || [];
@@ -4739,14 +4758,12 @@
             renderUsageStatus();
         }).catch(handleServerError).finally(hideBusy);
     }
-    // ユーザーの貸出中区域：個人貸出=メール一致、グループ貸出=所属グループと貸出グループが一致
+    // ユーザーの貸出中区域：個人貸出（メール一致）のみ。グループ貸出は対象外（利用状況は個人区域のみ表示する仕様）
     function usgAreasFor_(user) {
         const email = String(user.email || '').trim().toLowerCase();
-        const group = String(user.group || '').trim();
         const out = [];
         usgState.areas.forEach(a => {
-            if (a.user && a.user === email) out.push({ area: a.area, group: false });
-            else if (group && a.group && a.group === group) out.push({ area: a.area, group: true });
+            if (a.user && a.user === email) out.push({ area: a.area });
         });
         return out;
     }
@@ -4806,7 +4823,7 @@
         const u = x.u, inactive = (u.active === false);
         const last = String(u.lastUsed || '').trim();
         const areasHtml = x.areas.length
-            ? x.areas.map(a => '<span class="usg-chip">' + escHtml(a.area) + (a.group ? '（グループ）' : '') + '<button class="choice-btn" style="background:#eef3f6; padding:2px 7px; font-size:10px;" onclick="usgOpenArea_(\'' + escHtml(a.area) + '\')">🗺 地図</button></span>').join('')
+            ? x.areas.map(a => '<span class="usg-chip">' + escHtml(a.area) + '<button class="choice-btn" style="background:#eef3f6; padding:2px 7px; font-size:10px;" onclick="usgOpenArea_(\'' + escHtml(a.area) + '\')">🗺 地図</button></span>').join('')
             : '<span class="usg-none">—</span>';
         return '<div class="user-row usg-row' + (inactive ? ' ua-inactive' : '') + '">'
             + '<div class="ua-row1"><span class="usg-name" style="font-weight:bold;">' + escHtml(u.name || '（名前未設定）') + '</span><span class="usg-email" style="color:#666; font-size:12px;">' + escHtml(u.email || '') + '</span></div>'
@@ -4840,6 +4857,7 @@
             + '<select id="usg-lend" onchange="usgState.filter.lend=this.value; applyUsgFilter();"><option value="">貸出すべて</option><option value="yes" ' + (f.lend === 'yes' ? 'selected' : '') + '>貸出中あり</option><option value="no" ' + (f.lend === 'no' ? 'selected' : '') + '>貸出なし</option></select>'
             + '<span id="usg-count"></span>'
             + '</div>'
+            + '<div class="usg-head-row"><span>名前</span><span>メール</span><span>グループ</span><span>権限</span><span>状態</span><span>最終利用日時</span><span>貸出中区域</span></div>'
             + '<div id="usg-rows"></div>';
         body.innerHTML = html;
         applyUsgFilter();
