@@ -476,9 +476,9 @@
     // ── 区域オーバービュー（個人=青/グループ=緑/全体利用=オレンジ で利用可能区域を一括枠表示） ──
     //   表示中は地図の新規登録・移動・編集を抑止し（このフラグ＋CSS）、閲覧と区域選択のみ可能にする。
     let overviewMode = false;            // 表示モード中か（新規登録/移動/書き込みを抑止するフラグ）
-    let overviewBucket = null;           // 'personal' | 'group' | 'whole'
+    let overviewBucket = null;           // 'personal' | 'group' | 'whole' | 'usg'
     let overviewLabelMarkers = [];       // 枠内の丁目/番地ラベル（HTMLマーカー）
-    let overviewAreas = { personal: [], group: [], whole: [] }; // 各バケットの区域一覧（メニュー描画時に格納）
+    let overviewAreas = { personal: [], group: [], whole: [], usg: [] }; // 各バケットの区域一覧（メニュー描画時に格納。usg=利用状況の詳細展開「全区域マップ」用）
     // 全体図の番地ラベルをタップして区域表示に入った直後だけ出す「区域選択に戻る」ボタン（60秒で自動消滅）。
     let areaReturnOverviewBucket = null; // タップ元の bucket（ボタン押下で同じ全体図へ戻すため）
     let areaReturnOverviewLabel = null;  // タップ元の区域ラベル（戻り先カメラを「直前区域の少し広め」にするため）
@@ -3975,7 +3975,8 @@
     const OVERVIEW_COLORS = {
         personal: { line: '#3D4E81', fill: '#8E9CCF' }, // インディゴ（メニュー・モーダル見出しと統一）
         group:    { line: '#2F6B4F', fill: '#7FBFA0' }, // 深緑
-        whole:    { line: '#8E3E4E', fill: '#D08A97' }  // えんじ
+        whole:    { line: '#8E3E4E', fill: '#D08A97' }, // えんじ
+        usg:      { line: '#8a5a9e', fill: '#C9A8DB' }  // 紫（利用状況の詳細展開「全区域マップ」用。既存3色と衝突しない配色）
     };
     // 区域ラベル「○○N丁目M番」→ ポリゴン(blocks.geojson)＋代表点。address_points.json でオフライン照合（ジオコーディング不要）。
     function resolveAreaFeature(areaLabel) {
@@ -5175,6 +5176,7 @@
 
     // ── sysadmin専用: 利用状況（UserListベース。最終利用日時・貸出中区域を横断表示） ──
     let usgState = { users: [], areas: [], filter: { q: '', group: '', role: '', status: '', lend: '' } };
+    let usgExpandedEmail = null; // 詳細展開中のユーザー（1人限定。フィルタ再適用や再オープンで消えてよい仕様）
     function showUsageStatus() {
         openAppModal('📊 利用状況', null, true);
         showBusy('読み込み中…');
@@ -5182,17 +5184,33 @@
             usgState.users = users || [];
             usgState.areas = (lend && lend.areas) || [];
             usgState.filter = { q: '', group: '', role: '', status: '', lend: '' };
+            usgExpandedEmail = null;
             renderUsageStatus();
         }).catch(handleServerError).finally(hideBusy);
+    }
+    // 名前タップで詳細展開を開閉（1人限定＝複数同時展開はしない）。行部分の再描画は applyUsgFilter に乗せる（他の再描画と同じ経路）。
+    function usgToggleDetail(email) {
+        usgExpandedEmail = (usgExpandedEmail === email) ? null : email;
+        applyUsgFilter();
     }
     // ユーザーの貸出中区域：個人貸出（メール一致）のみ。グループ貸出は対象外（利用状況は個人区域のみ表示する仕様）
     function usgAreasFor_(user) {
         const email = String(user.email || '').trim().toLowerCase();
         const out = [];
         usgState.areas.forEach(a => {
-            if (a.user && a.user === email) out.push({ area: a.area });
+            if (a.user && a.user === email) out.push({ area: a.area, lendDate: a.lendDate, dueDate: a.dueDate });
         });
         return out;
+    }
+    // 詳細展開の「🗺 全区域マップ」：その人の貸出中区域を全部まとめて枠表示する（enterAreaOverview の bucket を1つ追加して流用。
+    // 既存3bucket=personal/group/wholeのロジックには一切触れない＝overviewAreas.usg にセットするだけの最小拡張）。
+    function usgShowOverview_(email) {
+        const u = usgState.users.find(x => String(x.email || '').trim().toLowerCase() === email);
+        if (!u) return;
+        const areas = usgAreasFor_(u);
+        if (!areas.length) return;
+        overviewAreas.usg = areas;
+        enterAreaOverview('usg');
     }
     function usgRoleLabel_(role) {
         return { user: '一般', lender: '貸出係', manager: '管理者', sysadmin: 'システム管理者' }[role] || role || '';
@@ -5246,14 +5264,53 @@
         closeAppModal();
         enterAreaFromList(area);
     }
+    // 詳細パネル（名前タップで展開）。grid の外＝行 <div class="user-row usg-row"> の直後にきょうだい要素として差し込む
+    // 全幅div（.usg-detail は .user-row.usg-row 自身のグリッド定義に含まれないため、PC表形式のグリッド列がずれない）。
+    function usgDetailHtml_(x) {
+        const u = x.u, areas = x.areas;
+        const last = String(u.lastUsed || '').trim();
+        const email = String(u.email || '').trim().toLowerCase();
+        const footHtml = '<div class="usg-detail-foot">最終利用日時: ' + (last ? escHtml(last) : '利用記録なし') + '　／　貸出中 ' + areas.length + ' 区域</div>';
+        if (!areas.length) {
+            return '<div class="usg-detail"><div style="color:#888; margin-bottom:6px;">貸出中の区域はありません</div>' + footHtml + '</div>';
+        }
+        // 区域の進捗＝区域内の戸建てピンのうち、貸出期間(lend〜現在)内に訪問結果の履歴があるピンの割合（再貸出候補と同じ関数・同じ区域判定を流用）。
+        // currentData が空（未ロード）なら pins.length=0 となり shlPctTxt_/progBar_ が自然に「—」/空バーを返す（追加の分岐なし）。
+        const byLabel = kodatePinsByLabel_(currentData);
+        const rows = areas.map(a => {
+            const pins = byLabel[a.area] || [];
+            const total = pins.length;
+            const visited = pins.filter(p => pinVisitedInPeriod_(p, a.lendDate, null)).length; // toStr省略＝現在時刻まで（履歴に未来日は無い前提）
+            return { a: a, visited: visited, total: total };
+        });
+        const sumVisited = rows.reduce((s, r) => s + r.visited, 0);
+        const sumTotal = rows.reduce((s, r) => s + r.total, 0);
+        const cards = rows.map(r => {
+            const a = r.a, pct = fmtPct_(r.visited, r.total);
+            return '<div class="usg-detail-area">'
+                + '<div style="font-weight:bold; font-size:14px;">' + escHtml(a.area) + '</div>'
+                + '<div style="color:#666; font-size:12px; margin:2px 0;">貸出開始: ' + escHtml(a.lendDate || '-') + ' → 返却期日: <span class="' + dueClass(a.dueDate) + '">' + escHtml(a.dueDate || '-') + '</span>' + daysLeftLabel(a.dueDate) + '</div>'
+                + '<div style="display:flex; align-items:center; gap:8px; margin:4px 0;"><span style="font-size:12px; color:#555;">' + r.visited + '/' + r.total + '（' + shlPctTxt_(r.visited, r.total) + '）</span><div style="flex:1;">' + progBar_(pct) + '</div></div>'
+                + '<button class="choice-btn" style="background:#eef3f6; padding:5px 8px; font-size:12px;" onclick="usgOpenArea_(\'' + escHtml(a.area) + '\')">地図を表示</button>'
+                + '</div>';
+        }).join('');
+        return '<div class="usg-detail">'
+            + '<div class="area-allbar aa-usg"><div class="aa-info"><span class="aa-ttl">🗺 全区域マップ</span><span class="aa-sub">' + areas.length + ' 区域</span></div><button class="aa-showmap" onclick="usgShowOverview_(\'' + escHtml(email) + '\')">地図を表示</button></div>'
+            + '<div class="usg-detail-total"><span style="font-weight:bold; font-size:13px;">合計進捗</span> <span style="font-size:13px;">' + sumVisited + '/' + sumTotal + '（' + shlPctTxt_(sumVisited, sumTotal) + '）</span><div>' + progBar_(fmtPct_(sumVisited, sumTotal)) + '</div></div>'
+            + cards
+            + footHtml
+            + '</div>';
+    }
     function usgRowHtml_(x) {
         const u = x.u, inactive = (u.active === false);
         const last = String(u.lastUsed || '').trim();
+        const email = String(u.email || '').trim().toLowerCase();
+        const expanded = (usgExpandedEmail === email);
         const areasHtml = x.areas.length
             ? x.areas.map(a => '<span class="usg-chip">' + escHtml(a.area) + '<span class="usg-maplink" onclick="usgOpenArea_(\'' + escHtml(a.area) + '\')" title="' + tr('地図で開く') + '">🗺</span></span>').join('')
             : '<span class="usg-none">—</span>';
-        return '<div class="user-row usg-row' + (inactive ? ' ua-inactive' : '') + '">'
-            + '<div class="ua-row1"><span class="usg-name" style="font-weight:bold;">' + escHtml(u.name || '（名前未設定）') + '</span><span class="usg-email" style="color:#666; font-size:12px;">' + escHtml(u.email || '') + '</span></div>'
+        const row = '<div class="user-row usg-row' + (inactive ? ' ua-inactive' : '') + '">'
+            + '<div class="ua-row1"><span class="usg-name" style="font-weight:bold; cursor:pointer;" onclick="usgToggleDetail(\'' + escHtml(email) + '\')">' + (expanded ? '▾ ' : '▸ ') + escHtml(u.name || '（名前未設定）') + '</span><span class="usg-email" style="color:#666; font-size:12px;">' + escHtml(u.email || '') + '</span></div>'
             + '<div class="ua-row2">'
             + '<span class="usg-badge" style="' + groupStyleStr(u.group) + '">' + escHtml(u.group || '（グループなし）') + '</span>'
             + '<span class="usg-badge" style="' + roleStyleStr(u.role) + '">' + usgRoleLabel_(u.role) + '</span>'
@@ -5262,6 +5319,7 @@
             + '<div class="usg-row3">' + (last ? escHtml(last) : '利用記録なし') + '</div>'
             + '<div class="usg-row4">' + areasHtml + '</div>'
             + '</div>';
+        return row + (expanded ? usgDetailHtml_(x) : '');
     }
     // フィルタバー自体は再描画せず、行部分だけ差し替える（applyTlvFilter/applyUserFilter と同じ思想）
     function applyUsgFilter() {
