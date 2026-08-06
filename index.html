@@ -73,7 +73,7 @@
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-    <link rel="stylesheet" href="app.css?v=20260806m">
+    <link rel="stylesheet" href="app.css?v=20260806p">
 </head>
 <body>
 
@@ -107,8 +107,12 @@
     <button class="menu-item cat-personal" onclick="closeMenu(); showPersonalAreas();"><span class="mi-slot" data-mi="personal"></span>個人の区域</button>
     <button class="menu-item cat-group" onclick="closeMenu(); showGroupAreas();"><span class="mi-slot" data-mi="group"></span>グループの区域</button>
     <button class="menu-item cat-whole" onclick="closeMenu(); showSharedAreas();"><span class="mi-slot" data-mi="whole"></span>合同の区域</button>
-    <button id="menu-shugalist" class="menu-item cat-shuga" onclick="closeMenu(); showShugaList();">🏢 集合住宅一覧(中規模～)</button>
     <button class="menu-item cat-help" onclick="closeMenu(); showHelp();">❓ アプリの使い方</button>
+    <!-- 分析メニューはアコーディオン（基本閉じ・全員に表示）。集合住宅一覧(小規模除く)を格納 -->
+    <details class="menu-acc acc-analysis">
+        <summary class="menu-section sec-analysis">分析メニュー<span class="ms-chev">▾</span></summary>
+        <button id="menu-shugalist" class="menu-item item-analysis" onclick="closeMenu(); showShugaList();">🏢 集合住宅一覧(小規模除く)</button>
+    </details>
     <!-- 貸出/管理メニューはアコーディオン（基本閉じ）。権限（role-lend/role-manage）が無いと details ごと非表示 -->
     <details class="menu-acc acc-lend">
         <summary class="menu-section sec-lend">貸出メニュー<span class="ms-chev">▾</span></summary>
@@ -164,7 +168,7 @@
 <!-- （区域一覧に戻るバーは廃止：番地を表示したら住所選択遷移と同じ＝下部バーなし） -->
 <!-- 全体図の番地ラベルをタップして区域表示に入った直後だけ表示。タップで同じ全体図に戻る。60秒で自動消滅 -->
 <button id="area-return-overview" style="display:none;" onclick="returnToAreaOverview()">↩ 区域選択に戻る</button>
-<!-- 集合住宅一覧(中規模～)の🗺で地図へ移動した直後だけ表示。タップで一覧へ（開閉状態を保持して復元）。60秒で自動消滅 -->
+<!-- 集合住宅一覧(小規模除く)の🗺で地図へ移動した直後だけ表示。タップで一覧へ（開閉状態を保持して復元）。60秒で自動消滅 -->
 <button id="shl-return-btn" style="display:none;" onclick="returnToShugaList()">↩ 集合住宅一覧に戻る</button>
 <!-- 区域オーバービュー（個人/グループ/全体利用の「全て表示」）中の操作バー。枠内ラベルで区域を選ぶか、✕で表示を終了 -->
 <div id="area-overview-bar" style="display:none;">
@@ -205,7 +209,7 @@
     </div>
 </div>
 
-<script src="app.js?v=20260806m"></script>
+<script src="app.js?v=20260806p"></script>
 
 </body>
 </html>

@@ -71,6 +71,7 @@
         'グループの区域': 'Territorio del grupo',
         '合同の区域': 'Territorio de uso común',
         '❓ アプリの使い方': '❓ Cómo usar la app',
+        '分析メニュー': 'Menú de análisis',
         '🚪 サインアウト': '🚪 Cerrar sesión',
         '📋 情報コピー': '📋 Copiar información',
         '報告フォーム': 'Formulario de informe',
@@ -199,9 +200,9 @@
         'ベンガル語': 'Bengalí', 'シンハラ語': 'Cingalés', 'タイ語': 'Tailandés', 'ロシア語': 'Ruso',
         'アラビア語': 'Árabe', 'モンゴル語': 'Mongol', '手話': 'Lengua de señas'
     });
-    // ── 集合住宅一覧(中規模～)（メニュー・地区/丁目サマリー・建物行） ──
+    // ── 集合住宅一覧(小規模除く)（メニュー・地区/丁目サマリー・建物行） ──
     Object.assign(I18N_ES, {
-        '🏢 集合住宅一覧(中規模～)': '🏢 Lista de edificios (mediano o más)',
+        '🏢 集合住宅一覧(小規模除く)': '🏢 Lista de edificios (sin pequeños)',
         '建物': 'Edificios', '部屋数': 'N.º de habitaciones', '立禁除く': 'sin prohibido',
         '（住所未設定）': '(sin dirección)',
         '対象の集合住宅がありません': 'No hay edificios que cumplan la condición',
@@ -247,7 +248,8 @@
         '通信が不安定です。もう一度お試しください': 'Conexión inestable. Inténtelo de nuevo',
         '住所データを読み込み中です。少し待ってから開いてください。': 'Cargando datos de direcciones. Espere un momento.',
         '表示できる区域がありません': 'No hay territorios para mostrar',
-        '地図に表示できる区域がありませんでした': 'No hay territorios para mostrar en el mapa'
+        '地図に表示できる区域がありませんでした': 'No hay territorios para mostrar en el mapa',
+        'サインアウトしますか？': '¿Cerrar sesión?', 'サインアウトする': 'Cerrar sesión'
     });
     // ── 可変部分を含む文言（前方一致・数値・名称を保って置換） ──
     I18N_ES_RX.push(
@@ -265,7 +267,8 @@
         [/^(.+) の丁目を選択$/, '$1 — elija el chōme'],
         [/^(\d+)丁目$/, 'Chōme $1'],
         [/^(.+?)(\d+)丁目 の番地を選択$/, '$1 $2 — elija el banchi'],
-        [/^同じ地点に (\d+) 世帯$/, '$1 viviendas en este punto']
+        [/^同じ地点に (\d+) 世帯$/, '$1 viviendas en este punto'],
+        [/^(.+) でログインしています。\nサインアウトしますか？$/, 'Ha iniciado sesión como $1.\n¿Cerrar sesión?']
     );
     function applyStaticI18n() {
         if (UI_LANG !== 'es') return; // 既定HTMLが日本語なので ja は何もしない
@@ -292,6 +295,7 @@
         setBtnText('.menu-item.cat-group');
         setBtnText('.menu-item.cat-whole');
         setText('.menu-item.cat-help');
+        setBtnText('.menu-acc.acc-analysis > summary.sec-analysis'); // 分析メニュー見出し（子にms-chevを持つのでsetBtnTextでテキストノードのみ差し替え。貸出/管理メニューの見出しは仕様どおり日本語固定）
         const so = document.querySelector('#menu-panel > .menu-item:last-child'); // 🚪 サインアウト
         if (so) so.textContent = tr('🚪 サインアウト');
         setText('#info-copy-head span');
@@ -431,8 +435,15 @@
     // ※ GISの handleCredential / scheduleTokenRefresh / refreshTokenOnResume（prompt() によるトークン更新と
     //   復帰時更新）は廃止した。Firebase が refresh token で無音自動更新するため不要＝これが再認証頻発の解消。
 
-    // サインアウト：Firebase からサインアウトし、ログイン画面へ戻す
+    // サインアウト：確認ダイアログでOKされたら実行（現在ログイン中のメールアドレスを表示）
     function signOut() {
+        const email = ME.email || (fbAuth.currentUser && fbAuth.currentUser.email) || '';
+        const msg = email ? (email + ' でログインしています。\nサインアウトしますか？') : 'サインアウトしますか？';
+        appConfirm(msg, { okLabel: 'サインアウトする' }).then(ok => { if (ok) doSignOut(); });
+    }
+
+    // サインアウト実処理：Firebase からサインアウトし、ログイン画面へ戻す
+    function doSignOut() {
         appEntered = false;
         try { localStorage.removeItem(DATA_CACHE_KEY); } catch (e) {} // データキャッシュ掃除（別アカウントに前データが見えるのを防ぐ）
         currentMarkers.forEach(function (m) { m.remove(); });
@@ -3436,8 +3447,10 @@
     function barColor_(r) { return r < 25 ? '#C75F56' : r < 50 ? '#D98E5A' : r < 70 ? '#E2C36A' : r < 85 ? '#9BC27E' : '#5E9DB8'; }
     function fmtPct_(done, total) { return total ? Math.round(done / total * 1000) / 10 : 0; }
     function fmtNum_(n) { return (n == null || n === '') ? n : String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); } // 1234 → 1,234
-    // 集合住宅一覧(中規模～)専用: 部屋数の%表示（訪問済み/有効・小数1桁）。分母0は「—」（fmtPct_は他画面で0%表示に使うため流用しない）
+    // 集合住宅一覧(小規模除く)専用: 部屋数の%表示（訪問済み/有効・小数1桁）。分母0は「—」（fmtPct_は他画面で0%表示に使うため流用しない）
     function shlPctTxt_(done, total) { return total ? fmtPct_(done, total).toFixed(1) + '%' : '—'; }
+    // 集合住宅一覧(小規模除く)専用: 部屋数のバー（進捗モニタリングのprogBar_と同じ構造・配色。分母0は空トラックのみ表示）
+    function shlBar_(done, total) { const r = fmtPct_(done, total); return `<div class="shl-bar">${total ? `<span style="width:${Math.min(100, r)}%; background:${barColor_(r)};"></span>` : ''}</div>`; }
     function progBar_(r) { return `<div class="prog-bar"><span style="width:${Math.min(100, r)}%; background:${barColor_(r)};"></span></div>`; }
     // currentData を 地区→丁目 に集計する
     function aggregateProgress(areaList) {
@@ -3582,7 +3595,7 @@
         body.innerHTML = html;
     }
 
-    // ── 全員向け: 集合住宅一覧(中規模～)。地区→丁目→建物 の階層で currentData をその場集計（apiCallなし・シートには書かない）。
+    // ── 全員向け: 集合住宅一覧(小規模除く)。地区→丁目→建物 の階層で currentData をその場集計（apiCallなし・シートには書かない）。
     //    進捗モニタリング(aggregateProgress)と同じ「住所→district/chomeKeyの正規表現」の流儀を踏襲する。
     const SHL_UNSET_DISTRICT = '（住所未設定）'; // 住所が判定できない建物のグループ名（末尾に表示）
     // openKeys: 🗺で地図へ抜ける直前に開いていた地区/丁目アコーディオンのキー集合（{key:true}）。再表示(renderShugaList)で復元する。
@@ -3599,11 +3612,11 @@
     }
     function showShugaList() {
         hideShlReturnButton(); // 一覧を開き直す＝前回の「集合住宅一覧に戻る」は無効なので即クリーンアップ
-        openAppModal('🏢 集合住宅一覧(中規模～)', 'shuga', true); // wide=true: PCは表形式のため横幅を拡大（modal-wide。紫テーマと併用）
+        openAppModal('🏢 集合住宅一覧(小規模除く)', 'shuga', true); // wide=true: PCは表形式のため横幅を拡大（modal-wide。紫テーマと併用）
         shlState.tree = aggregateShugaList_();
         renderShugaList();
     }
-    // currentData から 種別=集合住宅 かつ 戸数(units)>SHUGA_SMALL_MAX（中規模以上）のみを対象に集計する
+    // currentData から 種別=集合住宅 かつ 戸数(units)>SHUGA_SMALL_MAX（小規模除く＝13戸以上）のみを対象に集計する
     function aggregateShugaList_() {
         const blankBucket = () => ({ N: 0, M: 0, a: 0, b: 0, c: 0, d: 0, buildings: [] }); // N/M=建物数(全/立禁除く)、a/b・c/d=部屋数(訪問済/有効・全/立禁除く)
         const blankTotal = () => ({ N: 0, M: 0, a: 0, b: 0, c: 0, d: 0 });
@@ -3616,7 +3629,7 @@
         (currentData || []).forEach(item => {
             if (item.種別 !== '集合住宅') return;
             const units = parseInt(item.総戸数) || (item.有効部屋リスト ? String(item.有効部屋リスト).split(',').filter(s => s !== '').length : 0);
-            if (units <= SHUGA_SMALL_MAX) return; // 中規模未満（小規模）は対象外
+            if (units <= SHUGA_SMALL_MAX) return; // 小規模（SHUGA_SMALL_MAX戸以下）は対象外
             const lng = parseFloat(item.経度), lat = parseFloat(item.緯度);
             if (isNaN(lng) || isNaN(lat) || lng === 0 || lat === 0) return; // 地図描画と同じ条件で不正座標を除外（🗺リンクが機能しないため）
             const rawAddr = (item.住所 && item.住所 !== '-' && String(item.住所).trim() !== '') ? item.住所 : (deriveAddress(lng, lat) || ''); // 号込みの生住所（建物行の短縮表示に使う）
@@ -3665,6 +3678,7 @@
     function shlSummaryHtml_(s) {
         return `<span class="shl-sum-inline">`
             + `<div class="shl-sum-l">${tr('建物')} ${fmtNum_(s.N)} ・ ${tr('部屋')} ${fmtNum_(s.a)}/${fmtNum_(s.b)}（${shlPctTxt_(s.a, s.b)}）</div>`
+            + shlBar_(s.a, s.b)
             + `<div class="shl-sum-l shl-sum-l2">${tr('立禁除く')} ${fmtNum_(s.M)} ・ ${fmtNum_(s.c)}/${fmtNum_(s.d)}（${shlPctTxt_(s.c, s.d)}）</div>`
             + `</span>`;
     }
@@ -3674,6 +3688,7 @@
             + `<span class="shl-allbar-label">${tr('全体')}</span>`
             + `<div class="shl-allbar-info">`
             + `<div class="shl-allbar-l1">${tr('建物')} ${fmtNum_(tot.N)} ・ ${tr('部屋')} ${fmtNum_(tot.a)}/${fmtNum_(tot.b)}（${shlPctTxt_(tot.a, tot.b)}）</div>`
+            + shlBar_(tot.a, tot.b)
             + `<div class="shl-allbar-l2">${tr('立禁除く')} ${fmtNum_(tot.M)} ・ ${fmtNum_(tot.c)}/${fmtNum_(tot.d)}（${shlPctTxt_(tot.c, tot.d)}）</div>`
             + `</div></div>`;
     }
@@ -5275,8 +5290,8 @@
         applyUsgFilter();
     }
 
-    // 集合住宅の「小規模」判定の閾値（この戸数以下が小規模＝アパート型アイコン／広域で先に隠す対象。超は中規模以上＝マンション型アイコン）。
-    // マーカー描画(isSmallShuga)と「集合住宅一覧(中規模～)」画面(showShugaList)の対象判定で共有する。
+    // 集合住宅の「小規模」判定の閾値（この戸数以下が小規模＝アパート型アイコン／広域で先に隠す対象。超は小規模除く＝マンション型アイコン）。
+    // マーカー描画(isSmallShuga)と「集合住宅一覧(小規模除く)」画面(showShugaList)の対象判定で共有する。
     const SHUGA_SMALL_MAX = 12;
 
     // ✨ 最重要: スプレッドシートから読み込んだ瞬間に「絶対数値化」する描画処理

@@ -90,7 +90,7 @@
         .mnt-acc.mnt-clear > summary { background:#9E5A4A; }     /* 期間指定クリア＝テラコッタ */
         .mnt-acc.mnt-coverage > summary { background:#7A4A6A; }  /* 網羅履歴クリア＝紫（実行ボタンと同系） */
         .mnt-acc.mnt-settings > summary { background:#3D6B8A; }  /* 運用設定＝青（保存ボタンと同系） */
-        /* 集合住宅一覧(中規模～)：地区/丁目の見出しバー色（紫系・洗練）＋サマリーを見出し行の右側へ（.shl-acc に閉じる。他のdist-accには影響しない） */
+        /* 集合住宅一覧(小規模除く)：地区/丁目の見出しバー色（紫系・洗練）＋サマリーを見出し行の右側へ（.shl-acc に閉じる。他のdist-accには影響しない） */
         /* 丁目（既定）: 淡紫 */
         .dist-acc.shl-acc > summary { background:#F5EDF7; color:#5B2E70; }
         .dist-acc.shl-acc[open] > summary { border-bottom-color:#E7D8EE; }
@@ -119,6 +119,10 @@
         .shl-allbar-info { display:flex; flex-direction:column; gap:2px; min-width:0; }
         .shl-allbar-l1 { font-size:14px; font-weight:bold; }
         .shl-allbar-l2 { font-size:11px; color:#8a5a9c; }
+        /* 部屋の進捗バー（.shl-sum-inline / .shl-allbar 共通。進捗モニタリングの.prog-barと同じ高さ・角丸・塗り方を踏襲し、
+           トラック色のみ半透明白にして紫系の見出し背景（#F5EDF7/#DCC2E8）と喧嘩しないようにした。分母0は空トラックのみ表示） */
+        .shl-bar { height:9px; border-radius:5px; background:rgba(255,255,255,0.6); overflow:hidden; margin-top:3px; }
+        .shl-bar > span { display:block; height:100%; border-radius:5px; }
         /* 移動後の地域名ラベル（画面上部・常時表示・タップで枠/表示を消去） */
         #area-label { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 9999; background: rgba(44,62,80,0.92); color: #fff; font-weight: bold; font-size: 14px; padding: 8px 16px; border-radius: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); max-width: 92%; text-align: center; cursor: pointer; -webkit-touch-callout: none; user-select: none; touch-action: manipulation; }
         body.text-md #area-label { font-size: 16px; padding: 9px 18px; } /* 右下「文字 中」設定を上部番地ラベルにも反映（従来はfont-sizeの上書きが無く枠だけ変化していた） */
@@ -252,12 +256,11 @@
         .menu-item.cat-group:active { background: #275C43; }
         .menu-item.cat-whole { background: #8E3E4E; color: #fff; }
         .menu-item.cat-whole:active { background: #7B3543; }
-        .menu-item.cat-shuga { background: #7A3E8E; color: #fff; } /* 集合住宅一覧＝紫（他3カードと並ぶ第4カード） */
-        .menu-item.cat-shuga:active { background: #68347A; }
         .menu-item.cat-help { background: #fbf2e0; border-left: 3px solid #D9A441; }
         .mi-ico { width: 21px; height: 21px; vertical-align: -5px; margin-right: 7px; } /* 区域カテゴリの自作SVGアイコン（白シルエット。メニュー3ボタン・モーダルのテーマ見出しで共用） */
         /* 貸出/管理メニューのアコーディオン（基本閉じ）。権限（貸出=lender+／管理=manager+）が無いと details ごと非表示 */
         .menu-acc { display: none; }
+        .menu-acc.acc-analysis { display: block; } /* 分析メニューは権限に関係なく全員に表示 */
         body.role-lend .menu-acc.acc-lend { display: block; }
         body.role-manage .menu-acc.acc-manage { display: block; }
         .menu-acc > summary { list-style: none; cursor: pointer; display: flex; align-items: center; font-size: 11px; font-weight: bold; padding: 10px 12px 6px; border-top: 1px solid #e1e6e9; margin-top: 4px; -webkit-touch-callout: none; user-select: none; }
@@ -266,6 +269,9 @@
         .menu-acc[open] > summary .ms-chev { transform: rotate(180deg); }
         .menu-acc > summary.sec-lend { color: #8A6D3B; }
         .menu-acc > summary.sec-manage { color: #4A6B84; }
+        .menu-acc > summary.sec-analysis { color: #7A3E8E; }
+        /* 分析メニューの項目＝紫系の淡地+左帯（need-lend/need-manageと同じ「淡地+帯」トーン。役割に関係なく常時表示） */
+        .menu-item.item-analysis { background: #f7f2f9; border-left: 3px solid #9C6FAE; }
         .menu-section { font-size: 11px; font-weight: bold; } /* 見出し共通（summary として使用） */
         /* 印刷用表示（貸出係+・PC/タブレット。詳細地図1枚・向きは枠比で自動切替・白黒・大きめ文字。年配者向け） */
         @media (max-width: 768px) { body.role-lend .menu-item.pc-only { display: none; } } /* スマホでは出さない */
@@ -520,10 +526,12 @@
             .lend-item:not(.cov-item) > div:last-child { flex: 1 1 auto; white-space: nowrap; }
             .lend-item:not(.cov-item) .li-badge { display: inline; margin-bottom: 0; margin-right: 8px; }
             .lend-row .lr-dates { display: inline; margin-top: 0; margin-left: 8px; }
-            /* 集合住宅一覧(中規模～)：建物名|住所|部屋数|AL|構成属性|立禁|地図 の7列グリッド。スマホ用(.shl-bldg-meta等)は隠し、PC専用列(.shl-c-*)を表示 */
-            .shl-head-row { display: grid; font-size: 12px; font-weight: bold; color: #555; padding: 4px 10px; border-bottom: 2px solid #c4ccd3; margin-bottom: 4px; grid-template-columns: 1fr 72px 150px 44px 90px 52px 40px; }
-            .shl-bldg-row { display: grid; grid-template-columns: 1fr 72px 150px 44px 90px 52px 40px; gap: 8px; align-items: center; }
-            .shl-bldg-meta, .shl-addr { display: none; } /* スマホ用の統合メタ表示・名前併記の小住所はPCでは列に分離するため隠す */
+            /* 集合住宅一覧(小規模除く)：建物名|住所|部屋数|AL|構成属性|立禁|地図 の7列グリッド。スマホ用(.shl-bldg-name等)は隠し、PC専用列(.shl-c-*)を表示。
+               見出し行(.shl-head-row)と建物行(.shl-bldg-row)は grid-template-columns/gap/padding を共通化して縦の列位置を一致させる */
+            .shl-head-row, .shl-bldg-row { display: grid; grid-template-columns: 1fr 72px 150px 44px 90px 52px 40px; gap: 8px; padding: 4px 10px; }
+            .shl-head-row { font-size: 12px; font-weight: bold; color: #555; border-bottom: 2px solid #c4ccd3; margin-bottom: 4px; }
+            .shl-bldg-row { align-items: center; }
+            .shl-bldg-name, .shl-bldg-meta, .shl-addr { display: none; } /* スマホ用の建物名+併記住所・統合メタ表示はPCでは列に分離するため隠す（隠し漏れると grid アイテムが8個になり1列ずれる） */
             .shl-c { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
             .shl-c-rooms { font-size: 12px; color: #555; }
         }
