@@ -436,6 +436,7 @@
         ME = { email: '', name: '', group: '', level: 0 };
         closeAreaNav();
         exitAreaOverview(); // 区域オーバービュー表示中なら解除（枠・ラベル・モードを片付ける）
+        hideAreaReturnOverviewButton(); // 「区域選択に戻る」も片付ける（タイマー破棄）
         clearBanchiBox();
         didAutoGeolocate = false; // 次回サインイン時にまた現在地へ寄せる
         document.getElementById('area-label').style.display = 'none';
@@ -456,6 +457,9 @@
     let overviewBucket = null;           // 'personal' | 'group' | 'whole'
     let overviewLabelMarkers = [];       // 枠内の丁目/番地ラベル（HTMLマーカー）
     let overviewAreas = { personal: [], group: [], whole: [] }; // 各バケットの区域一覧（メニュー描画時に格納）
+    // 全体図の番地ラベルをタップして区域表示に入った直後だけ出す「区域選択に戻る」ボタン（60秒で自動消滅）。
+    let areaReturnOverviewBucket = null; // タップ元の bucket（ボタン押下で同じ全体図へ戻すため）
+    let areaReturnOverviewTimer = null;  // 自動消滅タイマーID（多重起動防止のため毎回クリアしてから張り直す）
     // 表示モード中に許可する読み取り専用 action。これ以外（＝書き込み）は apiCall でブロックする。
     const OVERVIEW_READ_ACTIONS = ['getMyAreas', 'getSharedAreas', 'getData', 'getLendData', 'getMe', 'getUsers'];
 
@@ -1443,18 +1447,18 @@
     // 各 path のクリックで selectArea('district', 地区名) を呼ぶ＝既存の丁目/番地ロジックをそのまま利用。
     const AREA_MAP_SVG = `<div class="area-map"><svg viewBox="0 0 905 1060" role="group" aria-label="地区マップ">
       <g>
-        <path class="dist" data-name="東小岩" onclick="selectArea('district','東小岩')" d="M 451,5 L 272,162 L 380,472 L 460,360 L 524,333 L 454,160 L 451,106 L 506,33 Z"/>
-        <path class="dist" data-name="南小岩" onclick="selectArea('district','南小岩')" d="M 244,187 L 81,347 L 113,404 L 319,501 L 343,579 L 361,538 Z"/>
-        <path class="dist" data-name="北篠崎" onclick="selectArea('district','北篠崎')" d="M 528,347 L 468,374 L 391,487 L 472,552 L 621,487 Z"/>
-        <path class="dist" data-name="東松本" onclick="selectArea('district','東松本')" d="M 57,360 L 37,394 L 114,667 L 142,660 L 133,623 L 154,618 L 148,586 L 126,593 L 122,589 L 111,542 L 131,535 L 123,505 L 296,567 L 290,510 L 92,424 Z"/>
-        <path class="dist" data-name="鹿骨町" onclick="selectArea('district','鹿骨町')" d="M 211,543 L 146,557 L 158,610 L 160,623 L 228,605 Z"/>
-        <path class="dist" data-name="西篠崎" onclick="selectArea('district','西篠崎')" d="M 391,514 L 466,735 L 470,733 L 571,734 L 533,633 Z"/>
-        <path class="dist" data-name="鹿骨" onclick="selectArea('district','鹿骨')" d="M 221,555 L 247,649 L 117,680 L 164,876 L 351,873 L 465,961 L 491,962 L 373,578 L 356,601 Z"/>
-        <path class="dist" data-name="上篠崎" onclick="selectArea('district','上篠崎')" d="M 656,548 L 523,606 L 558,636 L 601,743 L 610,752 L 469,749 L 499,854 L 701,806 L 695,732 L 719,732 L 724,712 L 791,719 Z"/>
-        <path class="dist" data-name="篠崎町" onclick="selectArea('district','篠崎町')" d="M 803,743 L 737,738 L 734,765 L 707,764 L 711,846 L 508,877 L 553,1033 L 771,963 L 732,859 L 808,842 L 865,816 Z"/>
-        <path class="dist" data-name="新堀" onclick="selectArea('district','新堀')" d="M 162,889 L 196,1019 L 319,1026 L 314,976 L 392,934 L 327,890 Z"/>
-        <path class="dist" data-name="春江町" onclick="selectArea('district','春江町')" d="M 405,945 L 385,953 L 362,964 L 346,970 L 339,974 L 324,980 L 332,1021 L 334,1027 L 392,1030 Z"/>
-        <path class="dist" data-name="谷河内" onclick="selectArea('district','谷河内')" d="M 420,952 L 402,1033 L 519,1040 L 504,987 L 479,988 Z"/>
+        <path class="dist" data-name="東小岩" onclick="distTapDistrict('東小岩')" d="M 451,5 L 272,162 L 380,472 L 460,360 L 524,333 L 454,160 L 451,106 L 506,33 Z"/>
+        <path class="dist" data-name="南小岩" onclick="distTapDistrict('南小岩')" d="M 244,187 L 81,347 L 113,404 L 319,501 L 343,579 L 361,538 Z"/>
+        <path class="dist" data-name="北篠崎" onclick="distTapDistrict('北篠崎')" d="M 528,347 L 468,374 L 391,487 L 472,552 L 621,487 Z"/>
+        <path class="dist" data-name="東松本" onclick="distTapDistrict('東松本')" d="M 57,360 L 37,394 L 114,667 L 142,660 L 133,623 L 154,618 L 148,586 L 126,593 L 122,589 L 111,542 L 131,535 L 123,505 L 296,567 L 290,510 L 92,424 Z"/>
+        <path class="dist" data-name="鹿骨町" onclick="distTapDistrict('鹿骨町')" d="M 211,543 L 146,557 L 158,610 L 160,623 L 228,605 Z"/>
+        <path class="dist" data-name="西篠崎" onclick="distTapDistrict('西篠崎')" d="M 391,514 L 466,735 L 470,733 L 571,734 L 533,633 Z"/>
+        <path class="dist" data-name="鹿骨" onclick="distTapDistrict('鹿骨')" d="M 221,555 L 247,649 L 117,680 L 164,876 L 351,873 L 465,961 L 491,962 L 373,578 L 356,601 Z"/>
+        <path class="dist" data-name="上篠崎" onclick="distTapDistrict('上篠崎')" d="M 656,548 L 523,606 L 558,636 L 601,743 L 610,752 L 469,749 L 499,854 L 701,806 L 695,732 L 719,732 L 724,712 L 791,719 Z"/>
+        <path class="dist" data-name="篠崎町" onclick="distTapDistrict('篠崎町')" d="M 803,743 L 737,738 L 734,765 L 707,764 L 711,846 L 508,877 L 553,1033 L 771,963 L 732,859 L 808,842 L 865,816 Z"/>
+        <path class="dist" data-name="新堀" onclick="distTapDistrict('新堀')" d="M 162,889 L 196,1019 L 319,1026 L 314,976 L 392,934 L 327,890 Z"/>
+        <path class="dist" data-name="春江町" onclick="distTapDistrict('春江町')" d="M 405,945 L 385,953 L 362,964 L 346,970 L 339,974 L 324,980 L 332,1021 L 334,1027 L 392,1030 Z"/>
+        <path class="dist" data-name="谷河内" onclick="distTapDistrict('谷河内')" d="M 420,952 L 402,1033 L 519,1040 L 504,987 L 479,988 Z"/>
       </g>
       <g>
         <text class="lbl" data-name="東小岩" x="399" y="229">東小岩</text>
@@ -1508,12 +1512,21 @@
                     const base = AREA_LBL_POS[d] || [452, 530];
                     pos = [base[0] + (idx - (keys.length - 1) / 2) * 48, base[1] + 44];
                 }
+                // chome-hit は見た目の丸(r=30)より一回り広い当たり領域（透明・app.cssで非表示）。○の少し外を押しても反応するように。
                 s += '<g class="chome-badge" onclick="pickChomeOnMap(\'' + d + '\',' + c + ')">'
+                   + '<circle class="chome-hit" cx="' + pos[0] + '" cy="' + pos[1] + '" r="42"/>'
                    + '<circle cx="' + pos[0] + '" cy="' + pos[1] + '" r="30"/>'
                    + '<text x="' + pos[0] + '" y="' + pos[1] + '">' + c + '</text></g>';
             });
         });
         return s + '</g>';
+    }
+    // 地区ポリゴンのタップ。丸数字バッジ表示中(丁目トグルON・住所検索モード)かつその地区に丁目があるときは、
+    // ポリゴン部分の誤タップで遷移しないよう無視する（丸数字が無い地区＝鹿骨町は従来どおりポリゴンタップで遷移）。
+    function distTapDistrict(d) {
+        const showChome = !areaPickCallback && areaChomeOn;
+        if (showChome && AREA_DATA[d]) return;
+        selectArea('district', d);
     }
     // 丁目バッジのタップ：その地区・丁目を確定して既存の「番地を選択」ステップへ。selectArea は変更しない（共用ロジック保護）。
     function pickChomeOnMap(d, c) {
@@ -3225,6 +3238,7 @@
     }
     // 区域ラベルを地図に表示（「○○N丁目M番」は赤枠つき、丁目なし地区は移動のみ）
     function showAssignedArea(area) {
+        hideAreaReturnOverviewButton(); // 別の区域表示に入り直す＝呼び出し元(pickOverviewArea)が必要なら直後に改めて表示する
         const m = String(area).match(/^(.+?)(\d+)丁目(\d+)番$/);
         if (m) geocodeAndFly(ADDR_PREFIX + m[1] + m[2] + '-' + m[3], 18, true, area);
         else geocodeAndFly(ADDR_PREFIX + area, 16, false, area);
@@ -3703,6 +3717,7 @@
         if (!addrPoints) { showToast('住所データを読み込み中です。少し待ってから開いてください。', true); return; }
         const areas = overviewBucketAreas(bucket);
         if (!areas.length) { showToast('表示できる区域がありません', true); return; }
+        hideAreaReturnOverviewButton(); // 別の全体図へ入り直す＝前回の「区域選択に戻る」は無効なので即クリーンアップ
         closeAppModal();              // 一覧モーダルを閉じてから地図へ
         clearBanchiBox();             // 既存の赤枠を消す
         document.getElementById('area-label').style.display = 'none'; // 上部の住所ラベルも消す
@@ -3802,9 +3817,11 @@
     }
     // 枠内ラベルタップ：その区域を赤枠＋通常利用へ（既存 enterAreaFromList を流用）。
     function pickOverviewArea(label) {
+        const bucket = overviewBucket;            // exitAreaOverview で null に戻る前に保持（同じ全体図へ戻るため）
         exitAreaOverview();                       // 表示モード解除（枠・ラベル除去、編集ロック解除）
         suppressMapTapUntil = Date.now() + 1200;  // 抜けた直後の貫通タップ抑止
-        enterAreaFromList(label);                 // 赤枠＋上部ラベル＋?area=
+        enterAreaFromList(label);                 // 赤枠＋上部ラベル＋?area=（内部の showAssignedArea が一旦ボタンを隠す）
+        showAreaReturnOverviewButton(bucket);      // 全体図ラベル経由のときだけ「区域選択に戻る」を表示（60秒で自動消滅）
     }
     // 表示モード終了：枠・薄塗り・ラベルを消して通常地図へ戻す（赤枠 banchi-box には触らない）。
     function exitAreaOverview() {
@@ -3826,6 +3843,30 @@
     function hideOverviewBar() {
         const bar = document.getElementById('area-overview-bar');
         if (bar) bar.style.display = 'none';
+    }
+    // 「区域選択に戻る」ボタン：全体図のラベルをタップして区域表示に入った直後だけ表示し、60秒で自動消滅する（pickOverviewArea から呼ぶ）。
+    function showAreaReturnOverviewButton(bucket) {
+        clearAreaReturnOverviewTimer(); // 多重起動防止（前回分のタイマーを必ず破棄してから張り直す）
+        areaReturnOverviewBucket = bucket;
+        const btn = document.getElementById('area-return-overview');
+        if (btn) btn.style.display = '';
+        areaReturnOverviewTimer = setTimeout(hideAreaReturnOverviewButton, 60000);
+    }
+    // ボタン押下時・サインアウト時・別の全体図/区域表示に入り直した時に呼ぶ（即時クリーンアップ）。
+    function hideAreaReturnOverviewButton() {
+        clearAreaReturnOverviewTimer();
+        areaReturnOverviewBucket = null;
+        const btn = document.getElementById('area-return-overview');
+        if (btn) btn.style.display = 'none';
+    }
+    function clearAreaReturnOverviewTimer() {
+        if (areaReturnOverviewTimer) { clearTimeout(areaReturnOverviewTimer); areaReturnOverviewTimer = null; }
+    }
+    // ボタンタップ：保持しておいた bucket で同じ種類の全体図へ戻る。
+    function returnToAreaOverview() {
+        const bucket = areaReturnOverviewBucket;
+        hideAreaReturnOverviewButton();
+        if (bucket) enterAreaOverview(bucket);
     }
     // オーバービューの「アイコンを非表示/表示」トグル（ピン＝全マーカーをCSSで一括非表示）。オーバービューを抜けると自動で戻る。
     function toggleOverviewIcons() {
@@ -4004,7 +4045,8 @@
             + `<b>${label}</b> ${escHtml(c.name)}<br><span style="color:${cur ? '#a33' : '#666'};">${escHtml(c.lend)}〜${cur ? '' : escHtml(c.ret)}</span></span>`;
         const cells = a.cycles.map((c, i) => cell(c, '第' + (i + 1) + '網羅', false)).join('')
             + (a.current ? cell(a.current, '貸出中', true) : '');
-        return `<div class="lend-item"><div style="display:flex; align-items:baseline; gap:8px; flex-wrap:wrap;"><b style="font-size:15px;">${escHtml(a.area)}</b>`
+        // cov-item: 網羅状況は貸出・返却/再貸出候補と違い可変個数のセルが折り返す一覧なので、PC1行化(lend-item)の対象から除外する
+        return `<div class="lend-item cov-item"><div style="display:flex; align-items:baseline; gap:8px; flex-wrap:wrap;"><b style="font-size:15px;">${escHtml(a.area)}</b>`
             + (a.lastComplete ? `<span style="font-size:11px; color:#888;">前回完了: ${escHtml(a.lastComplete)}</span>` : '')
             + `</div><div style="margin-top:4px;">${cells}</div></div>`;
     }
@@ -4066,7 +4108,7 @@
     // ── 管理: 区域の貸出・返却 ──
     let lendState = { users: [], areas: [], groups: [], sel: { group: '', email: '', district: '', chome: '', range: '' }, period: { field: 'lend', from: '', to: '' } };
     function showLendScreen() {
-        openAppModal('🗂 区域の貸出・返却');
+        openAppModal('🗂 区域の貸出・返却', null, true);
         showBusy('読み込み中…');
         apiCall('getLendData', {}).then(d => {
             lendState.users = d.users || [];
@@ -4121,15 +4163,24 @@
         const userSel = isShared
             ? `<select style="flex:2; min-width:0;" disabled><option selected>合同（全員で共同利用）</option></select>`
             : `<select style="flex:2; min-width:0;" onchange="lendSel('email', this.value)"><option value="">-- ユーザー選択 --</option>${s.group ? opt('__GROUP__', '🟢 ' + s.group + '（グループ全体）', s.email) : ''}${users.map(u => opt(u.email, (u.name || u.email) + (u.group ? '（' + u.group + '）' : ''), s.email)).join('')}</select>`;
-        let html = '<div style="font-weight:bold; margin-bottom:4px;">借りる人</div>'
+        // 範囲の左右送り（◀▶）。丁目未選択/丁目なし地区では出さない（範囲セレクトが無効な状態と同条件）。
+        const showRangeNav = !noChome && s.chome && ranges.length > 0;
+        const rangeIdx = showRangeNav ? ranges.indexOf(parseInt(s.range) || ranges[0]) : -1;
+        const rangeNavBtn = (dir, enabled, label) =>
+            `<button class="lend-act-btn sm" style="padding:6px 9px; ${enabled ? '' : 'background:#e8ecee; color:#aaa; cursor:not-allowed;'}" ${enabled ? `onclick="lendSel('range', ${ranges[rangeIdx + dir]})"` : 'disabled'}>${label}</button>`;
+        let html = '<div class="lend-sticky-head">'
+            + '<div style="font-weight:bold; margin-bottom:4px;">借りる人</div>'
             + '<div style="display:flex; gap:6px; margin-bottom:10px;">'
             + groupSel + userSel
             + '</div>'
             + '<div style="font-weight:bold; margin-bottom:4px;">区域（地区・丁目・範囲を選ぶ）</div>'
-            + '<div style="display:flex; gap:6px; margin-bottom:8px;">'
+            + '<div style="display:flex; gap:6px; margin-bottom:8px; align-items:center;">'
             + `<select style="flex:1; min-width:0;" onchange="lendSel('district', this.value)"><option value="">地区</option>${Object.keys(AREA_DATA).map(d => opt(d, d, s.district)).join('')}</select>`
             + `<select style="flex:1; min-width:0;" onchange="lendSel('chome', this.value)" ${(!s.district || noChome) ? 'disabled' : ''}><option value="">丁目</option>${chomes.map(c => opt(c, c + '丁目', s.chome)).join('')}</select>`
+            + (showRangeNav ? rangeNavBtn(-1, rangeIdx > 0, '◀') : '')
             + `<select style="flex:1.4; min-width:0;" onchange="lendSel('range', this.value)" ${(noChome || !s.chome || !ranges.length) ? 'disabled' : ''}><option value="">範囲</option>${ranges.map(st => opt(st, st + '～' + Math.min(st + 19, AREA_DATA[s.district][s.chome]) + '番', s.range)).join('')}</select>`
+            + (showRangeNav ? rangeNavBtn(1, rangeIdx >= 0 && rangeIdx < ranges.length - 1, '▶') : '')
+            + '</div>'
             + '</div>';
         // 範囲内の番地一覧（番地ごとに 件数・状態・プレビュー・返却期日・貸出ボタン）
         if (listAreas.length) {
@@ -4140,16 +4191,22 @@
                 // 機能②: 未貸出は冷却状態を判定。冷却中/停止中はバッジ＋貸出ボタン無効、manager には状態切替ボタンを出す。
                 const cool = lent2 ? null : coolingStateOf_(a);
                 const blocked = !!(cool && (cool.state === 'cooling' || cool.state === 'hold')); // 貸出不可（冷却中/停止中）
+                // li-badge は PC(769px+) では状態文字と同一行、スマホでは従来どおり改行（<br>の代わりに display 切替。app.css 参照）
                 const coolBadge = !cool ? ''
-                    : cool.state === 'cooling' ? `<span style="color:#2f6d8f; font-weight:bold;">❄ 冷却中（あと${cool.days}日）</span><br>`
-                    : cool.state === 'hold'    ? `<span style="color:#8a6d3b; font-weight:bold;">⏸ 停止中</span><br>`
-                    : cool.state === 'open'    ? `<span style="color:#2f9e44; font-weight:bold;">解禁済み（次の貸出まで）</span><br>` : '';
+                    : cool.state === 'cooling' ? `<span class="li-badge" style="color:#2f6d8f; font-weight:bold;">❄ 冷却中（あと${cool.days}日）</span>`
+                    : cool.state === 'hold'    ? `<span class="li-badge" style="color:#8a6d3b; font-weight:bold;">⏸ 停止中</span>`
+                    : cool.state === 'open'    ? `<span class="li-badge" style="color:#2f9e44; font-weight:bold;">解禁済み（次の貸出まで）</span>` : '';
                 const statusHtml = lent2
                     ? `<span style="color:#C75F56;">貸出中（${a.lendCount || 1}回目）: ${escHtml(who)}（${escHtml(a.lendDate || '-')} → <span class="${dueClass(a.dueDate)}">${escHtml(a.dueDate || '-')}</span>）</span>`
                     : `${coolBadge}<span style="color:#555;">最終返却日: ${escHtml(a.lastReturn || 'なし')}　これまで ${a.lendCount || 0} 回</span>`;
                 const dateInput = (lent2 || blocked) ? '' : `<span style="margin-left:8px; color:#555;">貸出期限</span><input type="date" id="lend-due-${a.id}" value="${lendDefaultDue()}" style="font-size:12px; padding:2px 4px; width:106px; margin-left:4px; vertical-align:middle;">`; // 未貸出かつ貸出可のみ
                 const canLendThis = canLend && !blocked; // 借りる人が選択済み かつ 冷却中/停止中でない
                 const mgrBtns = (!lent2 && (ME.level || 0) >= 2) ? managerStateBtns_(a, cool) : ''; // 状態切替は manager+ のみ
+                // sysadmin(Lv3)以上は冷却中/停止中でも長押しで上書き貸出できる（サーバ1回で完結。単発の通常タップは案内のみ）。
+                const forceEligible = blocked && (ME.level || 0) >= 3;
+                const lendBtn = forceEligible
+                    ? `<button class="lend-act-btn lend-force-btn" data-aid="${a.id}" data-area="${escHtml(a.area)}" data-state="${cool.state}" data-days="${cool.days || ''}" data-canlend="${canLend ? '1' : '0'}" style="background:#b9c2c8; border-color:#b9c2c8; color:#f0f0f0;">貸出</button>`
+                    : `<button class="lend-act-btn" style="${canLendThis ? 'background:#5E9DB8; border-color:#5E9DB8; color:#fff;' : 'background:#b9c2c8; border-color:#b9c2c8; color:#f0f0f0; cursor:not-allowed;'}" onclick="doLendArea(${a.id})" ${canLendThis ? '' : 'disabled'}>貸出</button>`;
                 // 貸出中の番地は「返却(赤)＋キャンセル(琥珀)」を縦並び。未貸出は「貸出」（不可ならグレーアウト）＋(manager)状態切替。
                 const actBtn = lent2
                     ? `<div style="display:flex; flex-direction:column; gap:4px; flex:0 0 auto;">`
@@ -4157,7 +4214,7 @@
                         + `<button class="lend-act-btn" style="background:#C58A3D; border-color:#C58A3D; color:#fff;" onclick="cancelLendArea(${a.id}, '${escHtml(a.area)}')">キャンセル</button>`
                       + `</div>`
                     : `<div style="display:flex; flex-direction:column; gap:4px; flex:0 0 auto;">`
-                        + `<button class="lend-act-btn" style="${canLendThis ? 'background:#5E9DB8; border-color:#5E9DB8; color:#fff;' : 'background:#b9c2c8; border-color:#b9c2c8; color:#f0f0f0; cursor:not-allowed;'}" onclick="doLendArea(${a.id})" ${canLendThis ? '' : 'disabled'}>貸出</button>`
+                        + lendBtn
                         + mgrBtns
                       + `</div>`;
                 return `<div class="lend-item">`
@@ -4193,8 +4250,9 @@
                 + `</div>`;
         }
         const lentRowHtml = a =>
-            `<div class="lend-row"><div class="grow"><b>${escHtml(a.area)}</b>　<span style="font-size:13px; color:#333;">${escHtml(a.group ? (a.group === SHARED_GROUP_NAME ? '合同' :a.group + '（グループ）') : (a.name || uname(a.user)))}</span><br>`
-            + `<span style="font-size:12px; color:#666;">${escHtml(a.lendDate || '-')} → <span class="${dueClass(a.dueDate)}">${escHtml(a.dueDate || '-')}</span></span></div>`
+            // lr-dates は PC(769px+) では同一行、スマホでは従来どおり改行（<br>の代わりに display 切替。app.css 参照）
+            `<div class="lend-row"><div class="grow"><b>${escHtml(a.area)}</b>　<span style="font-size:13px; color:#333;">${escHtml(a.group ? (a.group === SHARED_GROUP_NAME ? '合同' :a.group + '（グループ）') : (a.name || uname(a.user)))}</span>`
+            + `<span class="lr-dates" style="font-size:12px; color:#666;">${escHtml(a.lendDate || '-')} → <span class="${dueClass(a.dueDate)}">${escHtml(a.dueDate || '-')}</span></span></div>`
             + `<div style="display:flex; gap:4px; flex:0 0 auto;">`
             + `<button class="lend-act-btn sm" style="background:#C75F56; border-color:#C75F56; color:#fff;" onclick="doReturnArea(${a.id}, '${escHtml(a.area)}')">返却</button>`
             + `<button class="lend-act-btn sm" style="background:#C58A3D; border-color:#C58A3D; color:#fff;" onclick="cancelLendArea(${a.id}, '${escHtml(a.area)}')">キャンセル</button>`
@@ -4216,6 +4274,19 @@
         }
         html += `</div></details>`;
         body.innerHTML = html;
+        bindLendForceButtons();
+    }
+    // sysadmin(Lv3)以上向けの「冷却中/停止中でも長押しで上書き貸出」ボタンに動作を割り当てる（描画のたびに再バインド）。
+    // タップ=案内トースト（誤操作防止）／長押し=確認ダイアログ→lendArea を force:true で実行。
+    function bindLendForceButtons() {
+        document.querySelectorAll('#app-modal-body .lend-force-btn').forEach(btn => {
+            attachLongPress(btn,
+                () => showToast((btn.dataset.state === 'hold' ? '⏸停止中' : '❄冷却中') + 'の貸出は長押しで上書き実行してください', false, true),
+                () => {
+                    if (btn.dataset.canlend !== '1') { showToast('借りる人を選んでください', true); return; }
+                    doLendArea(Number(btn.dataset.aid), true);
+                });
+        });
     }
     // プレビュー: モーダルを一旦隠して地図で区域を確認 →「戻る」で選択状態のまま貸出画面へ
     function previewLendArea(areaId) {
@@ -4229,7 +4300,7 @@
         document.getElementById('lend-preview-back').style.display = 'none';
         document.getElementById('app-modal').style.display = 'flex'; // 選択状態は lendState に保持されている
     }
-    function doLendArea(areaId) {
+    function doLendArea(areaId, force) {
         const s = lendState.sel;
         const a = lendState.areas.find(x => String(x.id) === String(areaId));
         if (!a) return;
@@ -4240,12 +4311,20 @@
         const dueEl = document.getElementById('lend-due-' + areaId);
         const due = dueEl ? dueEl.value : '';
         const whoLabel = isShared ? '合同（全員で共同利用）' : (isGroup ? `グループ「${s.group}」全体` : `${u.name || u.email} さん`);
-        appConfirm(`「${a.area}」を\n${whoLabel}に貸し出します。\n返却期日: ${due || '未設定'}`, { okLabel: '貸出する' }).then(ok => {
+        // sysadmin+ の上書き貸出（冷却中/停止中の長押し実行）は、通常確認とは別文言で明示的に警告する。
+        let confirmMsg = `「${a.area}」を\n${whoLabel}に貸し出します。\n返却期日: ${due || '未設定'}`;
+        if (force) {
+            const cool = coolingStateOf_(a);
+            const stateLabel = (cool && cool.state === 'hold') ? '⏸停止中' : `❄冷却中（あと${cool ? cool.days : ''}日）`;
+            confirmMsg = `「${a.area}」は${stateLabel}ですが、\n上書きして${whoLabel}に貸し出しますか？\n返却期日: ${due || '未設定'}`;
+        }
+        appConfirm(confirmMsg, { okLabel: force ? '上書きして貸出' : '貸出する', danger: !!force }).then(ok => {
             if (!ok) return;
             showBusy('貸出中…');
             const params = isGroup
                 ? { areaId: a.id, targetGroup: s.group, dueDate: due ? due.replace(/-/g, '/') : '' }
                 : { areaId: a.id, targetEmail: u.email, dueDate: due ? due.replace(/-/g, '/') : '' };
+            if (force) params.force = true;
             apiCall('lendArea', params)
                 .then(d => {
                     lendState.users = d.users; lendState.areas = d.areas; lendState.groups = d.groups || lendState.groups;

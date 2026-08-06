@@ -54,6 +54,8 @@
         .area-map .chome-badge:hover circle { fill: rgba(165,165,165,0.78); }
         .area-map .chome-badge:active circle { fill: rgba(135,135,135,0.88); }
         .area-map .chome-badge text { fill: #444; font-size: 35px; font-weight: bold; text-anchor: middle; dominant-baseline: central; pointer-events: none; user-select: none; }
+        /* chome-hit: 丸数字の見た目(r=30)より一回り広い透明の当たり領域。見た目は変えず、○の少し外のタップも拾う */
+        .area-map .chome-badge circle.chome-hit { fill: transparent; stroke: none; }
         /* 区域一覧トップの「🗺 全区域マップ」バー（個人=青/グループ=緑/合同=えんじ）。
            旧「地図上に全て表示」の全面ボタンは"ボタンと認識されにくい"ため、情報（左）＋
            明示的な「地図を表示」ボタン（右・テーマ色の塗り）に分離（2026-07-16）。押せるのはボタンのみ */
@@ -258,9 +260,9 @@
         }
         #app-modal { position: absolute; inset: 0; z-index: 10003; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; padding: 16px; touch-action: pan-x pan-y; }
         #app-modal-card { background: #fff; border-radius: 10px; width: min(430px, 94vw); max-height: 84vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
-        /* PCの管理メニュー系画面（再貸出候補・進捗・網羅・ユーザー管理・区域操作履歴・利用状況・メンテナンス）はモーダル幅を広げる。openAppModal(title,theme,wide=true) で付与。スマホ幅は対象外＝カード式のまま */
+        /* PCの管理メニュー系画面（区域の貸出・返却・再貸出候補・進捗・網羅・ユーザー管理・区域操作履歴・利用状況・メンテナンス）はモーダル幅を広げる。openAppModal(title,theme,wide=true) で付与。スマホ幅は対象外＝カード式のまま */
         @media (min-width: 769px) {
-            #app-modal-card.modal-wide { width: min(1080px, 92vw); }
+            #app-modal-card.modal-wide { width: min(1280px, 96vw); }
         }
         #app-modal-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #eee; }
         #app-modal-title { flex: 1; font-weight: bold; font-size: 15px; }
@@ -278,6 +280,8 @@
         #app-modal-card.app-modal-theme-whole #app-modal-body { background: #faf4f5; }
         #app-modal-card[class*="app-modal-theme-"] #app-modal-head button { background: rgba(255,255,255,0.92); border-color: rgba(255,255,255,0.55); color: #333; }
         #app-modal-body select, #app-modal-body input { box-sizing: border-box; padding: 8px; font-size: 15px; border: 1px solid #bbb; border-radius: 6px; }
+        /* 貸出・返却画面：「借りる人」「区域」ブロックを上部固定し、番地一覧だけスクロールさせる（#app-modal-body の padding 分を打ち消して天井に密着） */
+        .lend-sticky-head { position: sticky; top: -12px; z-index: 5; margin: -12px -12px 10px; padding: 12px 12px 8px; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
         /* アイコンのフィルタ（印ボタン長押し）。チェックした種類だけ地図に表示する */
         #icon-filter-modal { position: absolute; inset: 0; z-index: 10004; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; padding: 16px; touch-action: pan-x pan-y; }
         #icon-filter-card { background: #fff; border-radius: 10px; width: min(420px, 94vw); max-height: 86vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
@@ -412,7 +416,9 @@
         .rep-actions .rep-cancel { background: #f0f0f0; color: #333; }
         .lend-row { display: flex; align-items: center; gap: 8px; padding: 8px 4px; border-bottom: 1px dashed #e3e3e3; }
         .lend-row .grow { flex: 1; min-width: 0; }
+        .lend-row .lr-dates { display: block; margin-top: 2px; } /* スマホは従来どおり改行（旧<br>相当）。PCは同一行（下のmedia参照） */
         .lend-item { border: 1px solid #cfe3ec; border-radius: 6px; padding: 8px; margin-bottom: 6px; background: #f7fbfc; }
+        .lend-item .li-badge { display: block; margin-bottom: 2px; } /* スマホは従来どおり改行（旧<br>相当）。PCは同一行（下のmedia参照） */
         /* 貸出・返却・キャンセル・地図プレビュー用のコンパクトボタン。文字「中/大」でも肥大化せず枠内に収める（choice-btn/clear-btn と違い text-md/text-lg 拡大の対象外） */
         .lend-act-btn { flex: 0 0 auto; min-width: 92px; padding: 7px 6px; border-radius: 6px; border: 1.5px solid #c8cfd6; background: #fff; color: #333; font-size: 13px; font-weight: bold; text-align: center; white-space: nowrap; cursor: pointer; -webkit-touch-callout: none; user-select: none; touch-action: manipulation; }
         .lend-act-btn.sm { min-width: 0; padding: 5px 10px; font-size: 12px; }
@@ -464,6 +470,17 @@
             .user-row.usg-row .usg-name, .user-row.usg-row .usg-email { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
             .user-row.usg-row .usg-badge { margin-right: 0; }
             .user-row.usg-row .usg-row3, .user-row.usg-row .usg-row4 { margin-top: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+            /* ユーザー管理（編集フォーム）: メール|漢字名|グループ|状態|権限|削除 を1行のグリッドに。usg-row（利用状況・閲覧専用）とは別クラス条件で衝突回避 */
+            .user-row:not(.usg-row) { display: grid; grid-template-columns: 1.6fr 1fr 1fr 92px 150px 64px; gap: 8px; align-items: center; }
+            .user-row:not(.usg-row) .ua-row1, .user-row:not(.usg-row) .ua-row2 { display: contents; }
+            .user-row:not(.usg-row) input, .user-row:not(.usg-row) select { width: 100%; min-width: 0; }
+            .user-row:not(.usg-row) .ua-del { justify-self: center; margin-left: 0; }
+            /* 区域の貸出・返却／再貸出候補: lend-item（番地一覧・貸出中一覧・候補一覧）を1行に。入り切らない場合は横スクロール。
+               網羅状況(cov-item)は可変個数セルが折り返す一覧のため対象外（変更2の禁止事項＝網羅状況のPC表形式を壊さない） */
+            .lend-item:not(.cov-item) { display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; overflow-x: auto; }
+            .lend-item:not(.cov-item) > div:last-child { flex: 1 1 auto; white-space: nowrap; }
+            .lend-item:not(.cov-item) .li-badge { display: inline; margin-bottom: 0; margin-right: 8px; }
+            .lend-row .lr-dates { display: inline; margin-top: 0; margin-left: 8px; }
         }
         .usg-chip { display: inline-flex; align-items: center; gap: 5px; background: #eef4f8; border-radius: 14px; padding: 3px 4px 3px 10px; font-size: 12px; margin: 2px 4px 2px 0; }
         .usg-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-right: 6px; background: #EEF1F3; color: #4B5560; }
@@ -472,12 +489,15 @@
         .due-over { color: #C75F56; font-weight: bold; } /* 返却期日超過 */
         .due-soon { color: #B0763C; font-weight: bold; } /* 期日まで2週間以内（落ち着いたアンバー） */
         #lend-preview-back { position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%); z-index: 9999; background: #34495e; color: #fff; border: none; border-radius: 20px; padding: 11px 20px; font-size: 15px; font-weight: bold; box-shadow: 0 2px 8px rgba(0,0,0,0.35); cursor: pointer; }
+        /* 全体図の番地ラベルから区域に入った直後だけ出す「区域選択に戻る」（#area-overview-bar と同系の下部中央バー） */
+        #area-return-overview { position: absolute; bottom: 64px; left: 50%; transform: translateX(-50%); z-index: 9999; background: #2c3e50; color: #fff; border: none; border-radius: 23px; padding: 11px 22px; font-size: 15px; font-weight: bold; box-shadow: 0 4px 16px rgba(0,0,0,0.22); cursor: pointer; }
 
         /* ── 区域オーバービュー（「🗺 全て表示」）── */
         /* 枠内に出す丁目/番地ラベル（HTMLマーカー）。タップでその区域を選択（赤枠＋通常利用へ）。色は枠色に合わせてJSで上書き */
         .area-ov-label-wrap { line-height: 0; }
         .area-ov-label { background: rgba(255,255,255,0.92); border: 1.5px solid #155d9e; color: #155d9e; border-radius: 12px; padding: 2px 7px; font-size: 12px; font-weight: bold; line-height: 1.2; white-space: nowrap; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.25); transform-origin: center center; -webkit-touch-callout: none; user-select: none; touch-action: manipulation; }
         body.large-ui .area-ov-label { font-size: 13px; padding: 3px 8px; }
+        body.text-lg .area-ov-label { font-size: 19px; padding: 4px 10px; } /* 右下「文字 大」設定を全体マップの区域ラベルにも反映（body.text-lgはクラス連動のため切替の前後どちらでも効く） */
         /* 表示モード中の操作バー（中央下。区域一覧に戻るバーと同系の見た目） */
         #area-overview-bar { position: absolute; bottom: 64px; left: 50%; transform: translateX(-50%); z-index: 9999; display: flex; align-items: center; gap: 5px; background: #2c3e50; padding: 5px; border-radius: 23px; box-shadow: 0 4px 16px rgba(0,0,0,0.22); max-width: 94%; }
         #area-overview-bar button { background: transparent; color: #fff; border: none; font-weight: bold; cursor: pointer; border-radius: 18px; white-space: nowrap; -webkit-touch-callout: none; user-select: none; touch-action: manipulation; transition: background .12s, transform .06s; }

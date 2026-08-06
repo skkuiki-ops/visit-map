@@ -73,7 +73,7 @@
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-    <link rel="stylesheet" href="app.css?v=20260805d">
+    <link rel="stylesheet" href="app.css?v=20260806b">
 </head>
 <body>
 
@@ -121,8 +121,8 @@
         <button class="menu-item need-manage" onclick="closeMenu(); showProgress();">📈 進捗モニタリング</button>
         <button class="menu-item need-manage" onclick="closeMenu(); showCoverage();">📋 網羅状況</button>
         <button class="menu-item need-manage" onclick="closeMenu(); showUserAdmin();">👥 ユーザー管理</button>
-        <button class="menu-item need-sys" onclick="closeMenu(); showTargetListView();">📄 区域操作履歴※</button>
         <button class="menu-item need-sys" onclick="closeMenu(); showUsageStatus();">📊 利用状況※</button>
+        <button class="menu-item need-sys" onclick="closeMenu(); showTargetListView();">📄 区域操作履歴※</button>
         <button class="menu-item need-sys" onclick="closeMenu(); showMaintenance();">🧹 メンテナンス※</button>
     </details>
     <button class="menu-item" onclick="closeMenu(); signOut();">🚪 サインアウト</button>
@@ -161,6 +161,8 @@
 <!-- 貸出プレビュー中の「戻る」ボタン（地図確認から貸出画面へ復帰） -->
 <button id="lend-preview-back" style="display:none;" onclick="backToLendScreen()">↩ 貸出画面に戻る</button>
 <!-- （区域一覧に戻るバーは廃止：番地を表示したら住所選択遷移と同じ＝下部バーなし） -->
+<!-- 全体図の番地ラベルをタップして区域表示に入った直後だけ表示。タップで同じ全体図に戻る。60秒で自動消滅 -->
+<button id="area-return-overview" style="display:none;" onclick="returnToAreaOverview()">↩ 区域選択に戻る</button>
 <!-- 区域オーバービュー（個人/グループ/全体利用の「全て表示」）中の操作バー。枠内ラベルで区域を選ぶか、✕で表示を終了 -->
 <div id="area-overview-bar" style="display:none;">
     <button id="area-overview-icons" onclick="toggleOverviewIcons()">アイコンを非表示</button>
@@ -200,7 +202,7 @@
     </div>
 </div>
 
-<script src="app.js?v=20260805d"></script>
+<script src="app.js?v=20260806b"></script>
 
 </body>
 </html>
