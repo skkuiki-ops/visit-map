@@ -553,8 +553,9 @@
         .due-over { color: #C75F56; font-weight: bold; } /* 返却期日超過 */
         .due-soon { color: #B0763C; font-weight: bold; } /* 期日まで2週間以内（落ち着いたアンバー） */
         #lend-preview-back { position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%); z-index: 9999; background: #34495e; color: #fff; border: none; border-radius: 20px; padding: 11px 20px; font-size: 15px; font-weight: bold; box-shadow: 0 2px 8px rgba(0,0,0,0.35); cursor: pointer; }
-        /* 全体図の番地ラベルから区域に入った直後だけ出す「区域選択に戻る」（#area-overview-bar と同系の下部中央バー）／集合住宅一覧の🗺から戻る「shl-return-btn」も同スタイル */
-        #area-return-overview, #shl-return-btn { position: absolute; bottom: 64px; left: 50%; transform: translateX(-50%); z-index: 9999; background: #2c3e50; color: #fff; border: none; border-radius: 23px; padding: 11px 22px; font-size: 15px; font-weight: bold; box-shadow: 0 4px 16px rgba(0,0,0,0.22); cursor: pointer; }
+        /* 全体図の番地ラベルから区域に入った直後だけ出す「区域選択に戻る」（#area-overview-bar と同系の下部中央バー）／集合住宅一覧の🗺から戻る「shl-return-btn」／
+           区域一覧・利用状況・区域操作履歴から地図へ来た直後だけ出す汎用「screen-return-btn」も同スタイル */
+        #area-return-overview, #shl-return-btn, #screen-return-btn { position: absolute; bottom: 64px; left: 50%; transform: translateX(-50%); z-index: 9999; background: #2c3e50; color: #fff; border: none; border-radius: 23px; padding: 11px 22px; font-size: 15px; font-weight: bold; box-shadow: 0 4px 16px rgba(0,0,0,0.22); cursor: pointer; }
 
         /* ── 区域オーバービュー（「🗺 全て表示」）── */
         /* 枠内に出す丁目/番地ラベル（HTMLマーカー）。タップでその区域を選択（赤枠＋通常利用へ）。色は枠色に合わせてJSで上書き */
@@ -567,7 +568,8 @@
         #area-overview-bar { position: absolute; bottom: 64px; left: 50%; transform: translateX(-50%); z-index: 9999; display: flex; align-items: center; gap: 5px; background: #2c3e50; padding: 5px; border-radius: 23px; box-shadow: 0 4px 16px rgba(0,0,0,0.22); max-width: 94%; }
         #area-overview-bar button { background: transparent; color: #fff; border: none; font-weight: bold; cursor: pointer; border-radius: 18px; white-space: nowrap; -webkit-touch-callout: none; user-select: none; touch-action: manipulation; transition: background .12s, transform .06s; }
         #area-overview-icons { padding: 9px 18px; font-size: 15px; }
-        #area-overview-icons:active, #area-overview-exit:active { transform: scale(0.97); }
+        #area-overview-return { padding: 9px 15px; font-size: 14px; } /* 個人/グループ/合同・利用状況詳細から入ったときだけ✕の左に表示（showOverviewBar） */
+        #area-overview-icons:active, #area-overview-exit:active, #area-overview-return:active { transform: scale(0.97); }
         body.icons-hidden #area-overview-icons { background: #5E9DB8; } /* 非表示中はトグルを点灯 */
         #area-overview-exit { padding: 9px 15px; font-size: 14px; color: #cfd8df; background: rgba(255,255,255,0.07); }
         #area-overview-exit:hover { background: rgba(255,255,255,0.14); }

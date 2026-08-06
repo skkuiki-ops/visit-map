@@ -73,7 +73,7 @@
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-    <link rel="stylesheet" href="app.css?v=20260806q">
+    <link rel="stylesheet" href="app.css?v=20260807a">
 </head>
 <body>
 
@@ -170,9 +170,14 @@
 <button id="area-return-overview" style="display:none;" onclick="returnToAreaOverview()">↩ 区域選択に戻る</button>
 <!-- 集合住宅一覧(小規模除く)の🗺で地図へ移動した直後だけ表示。タップで一覧へ（開閉状態を保持して復元）。60秒で自動消滅 -->
 <button id="shl-return-btn" style="display:none;" onclick="returnToShugaList()">↩ 集合住宅一覧に戻る</button>
+<!-- 汎用の戻る導線: 区域一覧(個人/グループ/合同)の「地図を表示」・利用状況/区域操作履歴の🗺で地図へ移動した直後だけ表示。
+     タップで登録された戻り先を再表示（showScreenReturnButton/returnFromScreenButton）。60秒で自動消滅 -->
+<button id="screen-return-btn" style="display:none;" onclick="returnFromScreenButton()"></button>
 <!-- 区域オーバービュー（個人/グループ/全体利用の「全て表示」）中の操作バー。枠内ラベルで区域を選ぶか、✕で表示を終了 -->
 <div id="area-overview-bar" style="display:none;">
     <button id="area-overview-icons" onclick="toggleOverviewIcons()">アイコンを非表示</button>
+    <!-- 個人/グループ/合同カード・利用状況詳細の「🗺 全区域マップ」から入ったときだけ表示（overviewReturnTo。showOverviewBar が出し分け） -->
+    <button id="area-overview-return" style="display:none;" onclick="returnFromOverviewBar()">↩ 戻る</button>
     <button id="area-overview-exit" onclick="exitAreaOverview()" aria-label="表示を終了">✕ 終了</button>
 </div>
 <button id="area-nav-btn" onclick="openAreaNav()" style="display:none;">🔍住所</button>
@@ -209,7 +214,7 @@
     </div>
 </div>
 
-<script src="app.js?v=20260806q"></script>
+<script src="app.js?v=20260807a"></script>
 
 </body>
 </html>

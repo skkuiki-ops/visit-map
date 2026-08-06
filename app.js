@@ -70,6 +70,11 @@
         '個人の区域': 'Territorio personal',
         'グループの区域': 'Territorio del grupo',
         '合同の区域': 'Territorio de uso común',
+        // 汎用「↩ ○○に戻る」ボタン（showScreenReturnButton）。区域一覧(個人/グループ/合同)から地図へ来た直後だけ出す。
+        // 利用状況/区域操作履歴（管理系）の戻る導線は仕様どおり日本語固定＝辞書に追加しない（tr()のフォールバックで原文表示）。
+        '↩ 個人の区域に戻る': 'Volver a Territorio personal',
+        '↩ グループの区域に戻る': 'Volver a Territorio del grupo',
+        '↩ 合同の区域に戻る': 'Volver a Territorio de uso común',
         '❓ アプリの使い方': '❓ Cómo usar la app',
         '分析メニュー': 'Menú de análisis',
         '🚪 サインアウト': '🚪 Cerrar sesión',
@@ -459,6 +464,7 @@
         exitAreaOverview(); // 区域オーバービュー表示中なら解除（枠・ラベル・モードを片付ける）
         hideAreaReturnOverviewButton(); // 「区域選択に戻る」も片付ける（タイマー破棄）
         hideShlReturnButton(); // 「集合住宅一覧に戻る」も片付ける（タイマー破棄）
+        hideScreenReturnButton(); // 汎用「↩ ○○に戻る」も片付ける（タイマー破棄）
         clearBanchiBox();
         didAutoGeolocate = false; // 次回サインイン時にまた現在地へ寄せる
         document.getElementById('area-label').style.display = 'none';
@@ -479,6 +485,9 @@
     let overviewBucket = null;           // 'personal' | 'group' | 'whole' | 'usg'
     let overviewLabelMarkers = [];       // 枠内の丁目/番地ラベル（HTMLマーカー）
     let overviewAreas = { personal: [], group: [], whole: [], usg: [] }; // 各バケットの区域一覧（メニュー描画時に格納。usg=利用状況の詳細展開「全区域マップ」用）
+    // オーバービューの「呼び出し元モーダルへの戻り先」（{label, fn}｜null）。個人/グループ/合同の「🗺 全区域マップ」・
+    // 利用状況詳細の「全区域マップ」から入ったときだけ設定し、area-overview-bar に「↩ 戻る」を出す（enterAreaOverviewFor_/usgShowOverview_ が設定、exitAreaOverview が破棄）。
+    let overviewReturnTo = null;
     // 全体図の番地ラベルをタップして区域表示に入った直後だけ出す「区域選択に戻る」ボタン（60秒で自動消滅）。
     let areaReturnOverviewBucket = null; // タップ元の bucket（ボタン押下で同じ全体図へ戻すため）
     let areaReturnOverviewLabel = null;  // タップ元の区域ラベル（戻り先カメラを「直前区域の少し広め」にするため）
@@ -1837,6 +1846,7 @@
     function geocodeAndFly(query, zoom, outline, label, onArrive) {
         hideAreaReturnOverviewButton(); // 住所確定の共通移動処理＝ここで消しておけば、直接geocodeAndFlyを呼ぶ経路(住所検索等)でも消し忘れない
         hideShlReturnButton(); // 同上（集合住宅一覧に戻る）
+        hideScreenReturnButton(); // 同上（汎用「↩ ○○に戻る」）
         zoom = zoom || 18;
         showBusy('検索中…');
         fetch('https://msearch.gsi.go.jp/address-search/AddressSearch?q=' + encodeURIComponent(query))
@@ -3340,6 +3350,7 @@
     function showAssignedArea(area) {
         hideAreaReturnOverviewButton(); // 別の区域表示に入り直す＝呼び出し元(pickOverviewArea)が必要なら直後に改めて表示する
         hideShlReturnButton(); // 同上（集合住宅一覧に戻る）
+        hideScreenReturnButton(); // 同上（汎用「↩ ○○に戻る」。呼び出し元(enterAreaFromListOrigin_等)が必要なら直後に改めて表示する）
         const m = String(area).match(/^(.+?)(\d+)丁目(\d+)番$/);
         if (m) geocodeAndFly(ADDR_PREFIX + m[1] + m[2] + '-' + m[3], 18, true, area);
         else geocodeAndFly(ADDR_PREFIX + area, 16, false, area);
@@ -3612,6 +3623,7 @@
     }
     function showShugaList() {
         hideShlReturnButton(); // 一覧を開き直す＝前回の「集合住宅一覧に戻る」は無効なので即クリーンアップ
+        hideScreenReturnButton(); // 戻り先として開き直す＝前回の汎用「↩ ○○に戻る」も即クリーンアップ
         openAppModal('🏢 集合住宅一覧(小規模除く)', 'shuga', true); // wide=true: PCは表形式のため横幅を拡大（modal-wide。紫テーマと併用）
         shlState.tree = aggregateShugaList_();
         renderShugaList();
@@ -3967,6 +3979,19 @@
         closeAppModal();                 // 一覧モーダルを閉じてから地図へ
         showAssignedArea(area);          // 区域へ flyTo（住所検索と同じ表示）
     }
+    // 個人/グループ/合同の区域一覧・各行「地図を表示」専用の入口（lendAreaRowHtml から呼ぶ）。
+    // enterAreaFromList 自体は共通関数（住所検索・pickOverviewArea 4148・usgOpenArea_ からも使われる）なので変更せず、
+    // ここで発火元カード（origin）に応じた汎用「↩ ○○に戻る」だけ追加で出す。
+    const AREA_LIST_RETURN_ = {
+        personal: ['個人の区域', () => showPersonalAreas()],
+        group: ['グループの区域', () => showGroupAreas()],
+        shared: ['合同の区域', () => showSharedAreas()]
+    };
+    function enterAreaFromListOrigin_(area, origin) {
+        enterAreaFromList(area);
+        const rt = AREA_LIST_RETURN_[origin];
+        if (rt) showScreenReturnButton(rt[0], rt[1]);
+    }
 
     /* ── 区域オーバービュー：利用可能区域を一括で枠表示（個人=青/グループ=緑/全体利用=オレンジ） ──
        見出し右の「🗺 全て表示」から起動。表示中は登録・移動・編集を抑止（apiCallガード＋CSS）し、
@@ -4000,6 +4025,18 @@
         if (bucket === 'whole') return sharedState.areas || []; // 全体利用は showSharedAreas が格納済み
         return overviewAreas[bucket] || [];
     }
+    // 個人/グループ/合同カードの「🗺 全区域マップ」専用の入口。enterAreaOverview 自体（returnToAreaOverview 等の
+    // 他経路からも呼ばれる共通関数）は変更せず、ここで overviewReturnTo（バー内「↩ 戻る」の戻り先）だけ設定する。
+    const AREA_OVERVIEW_RETURN_ = {
+        personal: ['個人の区域', () => showPersonalAreas()],
+        group: ['グループの区域', () => showGroupAreas()],
+        whole: ['合同の区域', () => showSharedAreas()]
+    };
+    function enterAreaOverviewFor_(bucket) {
+        overviewReturnTo = null; // 先にクリア：enterAreaOverview が住所データ未ロード等で早期returnした場合、前回の戻り先を残さない
+        const ok = enterAreaOverview(bucket);
+        if (ok) { const rt = AREA_OVERVIEW_RETURN_[bucket]; if (rt) overviewReturnTo = { label: rt[0], fn: rt[1] }; }
+    }
     // 表示モードに入る：当該バケットの区域を一括で枠＋薄塗り＋ラベル描画し、全体が収まるようフィット。
     function enterAreaOverview(bucket, focusLabel) {
         if (!OVERVIEW_COLORS[bucket]) return;
@@ -4008,6 +4045,7 @@
         if (!areas.length) { showToast('表示できる区域がありません', true); return; }
         hideAreaReturnOverviewButton(); // 別の全体図へ入り直す＝前回の「区域選択に戻る」は無効なので即クリーンアップ
         hideShlReturnButton(); // 同上（集合住宅一覧に戻る）
+        hideScreenReturnButton(); // 同上（汎用「↩ ○○に戻る」）
         closeAppModal();              // 一覧モーダルを閉じてから地図へ
         clearBanchiBox();             // 既存の赤枠を消す
         document.getElementById('area-label').style.display = 'none'; // 上部の住所ラベルも消す
@@ -4066,6 +4104,7 @@
         const ovIcons = document.getElementById('area-overview-icons');
         if (ovIcons) ovIcons.textContent = tr('アイコンを表示');
         if (skipped) showToast(skipped + '件は地図に表示できませんでした', true);
+        return true; // enterAreaOverviewFor_ が成功時だけ overviewReturnTo を設定するための戻り値（早期returnはundefined=falsy）
     }
     // ラベルのズーム連動スケール（z16以上=等倍／16未満は広角ほど小さく・下限0.5倍）
     function overviewLabelScale() {
@@ -4144,6 +4183,7 @@
     }
     // 表示モード終了：枠・薄塗り・ラベルを消して通常地図へ戻す（赤枠 banchi-box には触らない）。
     function exitAreaOverview() {
+        overviewReturnTo = null; // ✕終了/番地ラベル選択など、どの経路で抜けても戻り先は必ず破棄（早期returnより前でOK＝毎回クリアは冪等）
         const hasSource = !!(map && map.getSource && map.getSource('areas-overview'));
         if (!overviewMode && !overviewLabelMarkers.length && !hasSource) return;
         overviewMode = false;
@@ -4158,15 +4198,31 @@
     function showOverviewBar() {
         const bar = document.getElementById('area-overview-bar');
         if (bar) bar.style.display = '';
+        const rbtn = document.getElementById('area-overview-return'); // 戻り先があるときだけ✕の左に「↩ 戻る」を出す
+        if (rbtn) {
+            if (overviewReturnTo && overviewReturnTo.label) {
+                rbtn.textContent = '↩ ' + tr(overviewReturnTo.label);
+                rbtn.style.display = '';
+            } else {
+                rbtn.style.display = 'none';
+            }
+        }
     }
     function hideOverviewBar() {
         const bar = document.getElementById('area-overview-bar');
         if (bar) bar.style.display = 'none';
     }
+    // オーバービューバーの「↩ 戻る」タップ：表示モードを終了してから戻り先モーダルを開く（フォーカスが移った後に開く＝既存①②と同じ順序）。
+    function returnFromOverviewBar() {
+        const rt = overviewReturnTo;
+        exitAreaOverview(); // overviewReturnTo のクリアもここで行われる
+        if (rt && rt.fn) rt.fn();
+    }
     // 「区域選択に戻る」ボタン：全体図のラベルをタップして区域表示に入った直後だけ表示し、60秒で自動消滅する（pickOverviewArea から呼ぶ）。
     function showAreaReturnOverviewButton(bucket, label) {
         clearAreaReturnOverviewTimer(); // 多重起動防止（前回分のタイマーを必ず破棄してから張り直す）
         hideShlReturnButton(); // 「集合住宅一覧に戻る」と同時表示させない
+        hideScreenReturnButton(); // 汎用「↩ ○○に戻る」と同時表示させない
         areaReturnOverviewBucket = bucket;
         areaReturnOverviewLabel = label || null; // 戻り先カメラを「直前区域の少し広め」にするため保持
         const btn = document.getElementById('area-return-overview');
@@ -4190,6 +4246,7 @@
     function showShlReturnButton() {
         clearShlReturnTimer(); // 多重起動防止
         hideAreaReturnOverviewButton(); // 「区域選択に戻る」と同時表示させない
+        hideScreenReturnButton(); // 汎用「↩ ○○に戻る」と同時表示させない
         const btn = document.getElementById('shl-return-btn');
         if (btn) btn.style.display = '';
         shlReturnTimer = setTimeout(hideShlReturnButton, 60000);
@@ -4206,6 +4263,35 @@
     // ボタンタップ：一覧を再表示する（開閉状態は showShugaList→renderShugaList が shlState.openKeys から復元）。
     function returnToShugaList() {
         showShugaList();
+    }
+    // 汎用「↩ ○○に戻る」ボタン：戻る導線が無かった遷移（区域一覧の「地図を表示」・利用状況/区域操作履歴の🗺）から
+    // 地図へ来た直後だけ表示する。①「区域選択に戻る」②「集合住宅一覧に戻る」と同じ流儀（多重起動防止・相互排他・60秒自動消滅）。
+    // 押下時は自分では hide しない＝戻り先の show 関数冒頭で hide する規約（②と同じ）。
+    let screenReturnTimer = null;
+    let screenReturnOnClick = null; // 現在登録されている戻り先コールバック
+    function showScreenReturnButton(label, onReturn) {
+        clearScreenReturnTimer(); // 多重起動防止
+        hideAreaReturnOverviewButton(); // 「区域選択に戻る」と同時表示させない
+        hideShlReturnButton(); // 「集合住宅一覧に戻る」と同時表示させない
+        screenReturnOnClick = onReturn;
+        const btn = document.getElementById('screen-return-btn');
+        if (btn) { btn.textContent = tr('↩ ' + label + 'に戻る'); btn.style.display = ''; }
+        screenReturnTimer = setTimeout(hideScreenReturnButton, 60000);
+    }
+    // ボタン押下時・サインアウト時・別の画面表示に入り直した時に呼ぶ（即時クリーンアップ）。
+    function hideScreenReturnButton() {
+        clearScreenReturnTimer();
+        screenReturnOnClick = null;
+        const btn = document.getElementById('screen-return-btn');
+        if (btn) btn.style.display = 'none';
+    }
+    function clearScreenReturnTimer() {
+        if (screenReturnTimer) { clearTimeout(screenReturnTimer); screenReturnTimer = null; }
+    }
+    // ボタンタップ：登録された戻り先を実行する（自分では hide しない＝戻り先の show 関数冒頭で hide される）。
+    function returnFromScreenButton() {
+        const fn = screenReturnOnClick;
+        if (fn) fn();
     }
     // ボタンタップ：保持しておいた bucket で同じ種類の全体図へ戻る（カメラは直前区域の少し広めに＝全区域fitBoundsはしない）。
     // ここでは hideAreaReturnOverviewButton() を呼ばない＝enterAreaOverview 成功時の冒頭クリーンアップに任せる。
@@ -4274,7 +4360,7 @@
             + `<div class="grow"><b style="font-size:16px;">${escHtml(a.area)}</b>${a.count !== '' && a.count != null ? `<span style="color:#888; font-size:12px;">${tr(`（${a.count}件）`)}</span>` : ''}<br>`
             + `<span style="color:#666; font-size:12px;">${tr('貸出開始:')} ${escHtml(a.lendDate || '-')}<br>${tr('返却期日:')} <span class="${dueClass(a.dueDate)}">${escHtml(a.dueDate || '-')}</span>${daysLeftLabel(a.dueDate)}</span></div>`
             + `<div style="display:flex; flex-direction:column; gap:4px; flex-shrink:0;">`
-            + `<button class="choice-btn" style="background:#eef3f6; padding:5px 8px; font-size:12px;" onclick="enterAreaFromList('${escHtml(a.area)}')">${tr('地図を表示')}</button>`
+            + `<button class="choice-btn" style="background:#eef3f6; padding:5px 8px; font-size:12px;" onclick="enterAreaFromListOrigin_('${escHtml(a.area)}', '${origin}')">${tr('地図を表示')}</button>`
             + (canReturn ? `<button class="clear-btn return-hold-btn" data-aid="${a.id}" data-area="${escHtml(a.area)}" data-origin="${origin}" style="padding:5px 8px; font-size:12px;">${tr('長押しで返却')}</button>` : '')
             + `</div></div>`;
     }
@@ -4305,13 +4391,14 @@
     }
     // 👤 個人の区域カード（青テーマ）
     function showPersonalAreas() {
+        hideScreenReturnButton(); // 戻り先として開き直す＝前回の汎用「↩ ○○に戻る」も即クリーンアップ
         openAppModal('個人の区域', 'personal'); // アイコンは openAppModal が MI_ICON.personal を付ける
         const render = list => {
             const mine = (list || []).filter(a => a.lentTo !== 'group'); // 自分個人への貸出
             overviewAreas.personal = mine; // 「🗺 全て表示」（一括枠表示）用に保持
             const body = document.getElementById('app-modal-body');
             if (!mine.length) { body.innerHTML = `<div style="color:#888; padding:8px;">${tr('あなた個人への割り当てはありません。')}</div>`; return; }
-            let html = `<div class="area-allbar aa-personal"><div class="aa-info"><span class="aa-ttl">${tr('🗺 全区域マップ')}</span><span class="aa-sub">${mine.length} ${tr('区域')}</span></div><button class="aa-showmap" onclick="enterAreaOverview('personal')" title="${tr('個人の区域を全て地図上に枠表示')}">${tr('地図を表示')}</button></div>`;
+            let html = `<div class="area-allbar aa-personal"><div class="aa-info"><span class="aa-ttl">${tr('🗺 全区域マップ')}</span><span class="aa-sub">${mine.length} ${tr('区域')}</span></div><button class="aa-showmap" onclick="enterAreaOverviewFor_('personal')" title="${tr('個人の区域を全て地図上に枠表示')}">${tr('地図を表示')}</button></div>`;
             html += distAccHtml_(mine, 'personal'); // 地区ごとのアコーディオン（全体利用と同じ見た目）
             body.innerHTML = html;
             bindReturnHoldButtons(); // 「長押しで返却」を有効化
@@ -4324,6 +4411,7 @@
     }
     // 👥 グループの区域カード（緑テーマ）
     function showGroupAreas() {
+        hideScreenReturnButton(); // 戻り先として開き直す＝前回の汎用「↩ ○○に戻る」も即クリーンアップ
         openAppModal('グループの区域', 'group'); // アイコンは openAppModal が MI_ICON.group を付ける
         const render = list => {
             const grp = (list || []).filter(a => a.lentTo === 'group'); // 自分の所属グループへの貸出
@@ -4331,7 +4419,7 @@
             const body = document.getElementById('app-modal-body');
             if (!grp.length) { body.innerHTML = `<div style="color:#888; padding:8px;">${tr('現在、グループへの割り当てはありません。')}</div>`; return; }
             document.getElementById('app-modal-title').innerHTML = MI_ICON.group + escHtml(tr('グループの区域') + '（' + grp[0].group + '）'); // 見出しに対象グループ名を表示（アイコンつき）
-            let html = `<div class="area-allbar aa-group"><div class="aa-info"><span class="aa-ttl">${tr('🗺 全区域マップ')}</span><span class="aa-sub">${grp.length} ${tr('区域')}</span></div><button class="aa-showmap" onclick="enterAreaOverview('group')" title="${tr('グループの区域を全て地図上に枠表示')}">${tr('地図を表示')}</button></div>`;
+            let html = `<div class="area-allbar aa-group"><div class="aa-info"><span class="aa-ttl">${tr('🗺 全区域マップ')}</span><span class="aa-sub">${grp.length} ${tr('区域')}</span></div><button class="aa-showmap" onclick="enterAreaOverviewFor_('group')" title="${tr('グループの区域を全て地図上に枠表示')}">${tr('地図を表示')}</button></div>`;
             html += distAccHtml_(grp, 'group'); // 地区ごとのアコーディオン（全体利用と同じ見た目）
             body.innerHTML = html;
             bindReturnHoldButtons(); // 「長押しで返却」を有効化
@@ -4353,6 +4441,7 @@
     }
     // （地図/一覧トグルは廃止：全体利用は常に一覧＝地区アコーディオン表示）
     function showSharedAreas() {
+        hideScreenReturnButton(); // 戻り先として開き直す＝前回の汎用「↩ ○○に戻る」も即クリーンアップ
         openAppModal('合同の区域', 'whole'); // アイコンは openAppModal が MI_ICON.whole を付ける（旧称=全体利用の区域。2026-07-16改称・保存値の予約語「全体利用」は不変）
         const render = list => {
             sharedState.areas = list || [];
@@ -4369,7 +4458,7 @@
         const areas = sharedState.areas || [];
         if (!areas.length) { body.innerHTML = `<div style="color:#888; padding:8px;">${tr('現在、合同の区域はありません。')}</div>`; return; }
         // ① アコーディオン群の一番上に「🗺 全区域マップ」バー（情報＋「地図を表示」ボタン＝一括枠表示へ）
-        let html = `<div class="area-allbar aa-whole"><div class="aa-info"><span class="aa-ttl">${tr('🗺 全区域マップ')}</span><span class="aa-sub">${tr('貸出中 計')} ${areas.length} ${tr('区域')}</span></div><button class="aa-showmap" onclick="enterAreaOverview('whole')" title="${tr('合同の区域を全て地図上に枠表示')}">${tr('地図を表示')}</button></div>`;
+        let html = `<div class="area-allbar aa-whole"><div class="aa-info"><span class="aa-ttl">${tr('🗺 全区域マップ')}</span><span class="aa-sub">${tr('貸出中 計')} ${areas.length} ${tr('区域')}</span></div><button class="aa-showmap" onclick="enterAreaOverviewFor_('whole')" title="${tr('合同の区域を全て地図上に枠表示')}">${tr('地図を表示')}</button></div>`;
         // ② 地区ごとのアコーディオン（個人/グループと共通の distAccHtml_。全体利用は lentTo 無し＝canReturn は level>=1 に自然退化）
         html += distAccHtml_(areas, 'shared');
         body.innerHTML = html;
@@ -5049,7 +5138,11 @@
     // 一覧はローカル(tlvState)に保持し、地図側（currentData/currentMarkers）の同期は「🗺 地図」実行時に行う
     // （開いただけで renderMarkers すると、開いていた吹き出し＝入力途中のメモ等を無警告で壊すため。tlvOpenOnMap_ 参照）。
     let tlvState = { data: [], nameByEmail: {}, filter: { q: '', type: '', status: '', from: '', to: '' }, limit: 200 };
-    function showTargetListView() {
+    // opts.keep=true のときは filter・limit をリセットしない（tlvOpenOnMap_ の「↩ 区域操作履歴に戻る」から呼ぶ再表示用。
+    // メニューからの通常オープン（無引数）は従来どおり全リセット）。データはこの場合も毎回取り直す（鮮度優先。集合住宅一覧と同じ思想）。
+    function showTargetListView(opts) {
+        const keep = !!(opts && opts.keep);
+        hideScreenReturnButton(); // 戻り先として開き直す＝前回の汎用「↩ ○○に戻る」も即クリーンアップ
         openAppModal('📄 区域操作履歴', null, true);
         showBusy('読み込み中…');
         Promise.all([apiCall('getData', {}), apiCall('getUsers', {}).catch(() => [])]).then(([data, users]) => {
@@ -5057,8 +5150,7 @@
             const map = {};
             (Array.isArray(users) ? users : []).forEach(u => { const em = String(u.email || '').trim().toLowerCase(); if (em) map[em] = u.name || ''; });
             tlvState.nameByEmail = map;
-            tlvState.filter = { q: '', type: '', status: '', from: '', to: '' };
-            tlvState.limit = 200;
+            if (!keep) { tlvState.filter = { q: '', type: '', status: '', from: '', to: '' }; tlvState.limit = 200; }
             renderTargetListView();
         }).catch(handleServerError).finally(hideBusy);
     }
@@ -5140,6 +5232,7 @@
         closeAppModal();
         renderMarkers(tlvState.data);
         openPinDeepLink(id);
+        showScreenReturnButton('区域操作履歴', () => showTargetListView({ keep: true })); // フィルタ・表示件数を保持して再表示
     }
     function renderTargetListView() {
         const body = document.getElementById('app-modal-body');
@@ -5177,14 +5270,17 @@
     // ── sysadmin専用: 利用状況（UserListベース。最終利用日時・貸出中区域を横断表示） ──
     let usgState = { users: [], areas: [], filter: { q: '', group: '', role: '', status: '', lend: '' } };
     let usgExpandedEmail = null; // 詳細展開中のユーザー（1人限定。フィルタ再適用や再オープンで消えてよい仕様）
-    function showUsageStatus() {
+    // opts.keep=true のときは filter・usgExpandedEmail をリセットしない（usgOpenArea_/usgShowOverview_ の「↩ 利用状況に戻る」
+    // から呼ぶ再表示用。メニューからの通常オープン（無引数）は従来どおり全リセット）。データはこの場合も毎回取り直す（鮮度優先）。
+    function showUsageStatus(opts) {
+        const keep = !!(opts && opts.keep);
+        hideScreenReturnButton(); // 戻り先として開き直す＝前回の汎用「↩ ○○に戻る」も即クリーンアップ
         openAppModal('📊 利用状況', null, true);
         showBusy('読み込み中…');
         Promise.all([apiCall('getUsers', {}), apiCall('getLendData', {})]).then(([users, lend]) => {
             usgState.users = users || [];
             usgState.areas = (lend && lend.areas) || [];
-            usgState.filter = { q: '', group: '', role: '', status: '', lend: '' };
-            usgExpandedEmail = null;
+            if (!keep) { usgState.filter = { q: '', group: '', role: '', status: '', lend: '' }; usgExpandedEmail = null; }
             renderUsageStatus();
         }).catch(handleServerError).finally(hideBusy);
     }
@@ -5210,7 +5306,9 @@
         const areas = usgAreasFor_(u);
         if (!areas.length) return;
         overviewAreas.usg = areas;
-        enterAreaOverview('usg');
+        overviewReturnTo = null; // 先にクリア：enterAreaOverview が住所データ未ロード等で早期returnした場合、前回の戻り先を残さない
+        const ok = enterAreaOverview('usg');
+        if (ok) overviewReturnTo = { label: '利用状況', fn: () => showUsageStatus({ keep: true }) }; // バー内「↩ 戻る」の戻り先（フィルタ・展開状態を保持して再表示）
     }
     function usgRoleLabel_(role) {
         return { user: '一般', lender: '貸出係', manager: '管理者', sysadmin: 'システム管理者' }[role] || role || '';
@@ -5259,10 +5357,11 @@
             return true;
         });
     }
-    // モーダルを閉じ、区域一覧と同じ enterAreaFromList で地図へ（住所検索と同じ表示・区域一覧に戻るバーは出さない仕様と統一）
+    // モーダルを閉じ、区域一覧と同じ enterAreaFromList で地図へ（住所検索と同じ表示）。汎用「↩ 利用状況に戻る」を表示する。
     function usgOpenArea_(area) {
         closeAppModal();
         enterAreaFromList(area);
+        showScreenReturnButton('利用状況', () => showUsageStatus({ keep: true })); // フィルタ・展開状態を保持して再表示
     }
     // 詳細パネル（名前タップで展開）。grid の外＝行 <div class="user-row usg-row"> の直後にきょうだい要素として差し込む
     // 全幅div（.usg-detail は .user-row.usg-row 自身のグリッド定義に含まれないため、PC表形式のグリッド列がずれない）。
