@@ -1129,7 +1129,7 @@
             if (String(status) === '未訪問') delete map[ak]; else map[ak] = status; // 「訪問可」＝属性なし＝キー削除
             if (isLegacyAttrVal_(map[vk])) delete map[vk];                          // レガシー掃除（v の属性値は a: に一本化）
         } else {
-            if (isLegacyAttrVal_(map[vk])) map[ak] = String(map[vk]);               // レイジー退避（属性を消さない）
+            if (!map[ak] && isLegacyAttrVal_(map[vk])) map[ak] = String(map[vk]);   // レイジー退避（a: が空の時だけ。既存の a: を上書きしない）
             map[vk] = status;
         }
         return map;
@@ -3467,10 +3467,11 @@
                     let roomsDone = 0;
                     roomKeysOf_(map).forEach(k => { // a: キーは部屋キーへ正規化＋重複排除（属性だけの部屋も1回だけ数える）
                         if (!validSet[k]) return; // 有効部屋リストにある部屋だけ集計（建物編集で外れた部屋のS列残骸は無視＝率が100%超になるのを防ぐ）
-                        if (roomResultIn_(map, k)) { roomsDone++; return; } // 訪問結果があれば訪問済み
-                        const a = roomAttrIn_(map, k); // 訪問結果が無い部屋だけ属性で数える（レガシー=vの属性値も拾う）
-                        if (a === '空き家') st.vacant++;
-                        else if (a === '訪問拒否') st.refuse++;
+                        const a = roomAttrIn_(map, k); // 属性優先（戸建てと統一）：属性があれば結果の有無に関わらず訪問済みに数えない
+                        if (a === '空き家') { st.vacant++; return; }
+                        if (a === '訪問拒否') { st.refuse++; return; }
+                        if (a) return; // 外国語・他は属性はあるが専用カウンタなし＝母数のみ
+                        if (roomResultIn_(map, k)) roomsDone++; // 属性が無い部屋だけ訪問結果で訪問済みに数える
                     });
                     st.room += rooms; st.roomDone += roomsDone; // 集合は「部屋」を母数にする（棟は数えない＝戸建てピンと二重計上しない）
                 }
@@ -3581,7 +3582,7 @@
     const SHL_UNSET_DISTRICT = '（住所未設定）'; // 住所が判定できない建物のグループ名（末尾に表示）
     let shlState = { tree: null };
     function showShugaList() {
-        openAppModal('🏢 集合住宅一覧(中規模～)');
+        openAppModal('🏢 集合住宅一覧(中規模～)', 'shuga');
         shlState.tree = aggregateShugaList_();
         renderShugaList();
     }
@@ -3615,10 +3616,10 @@
             let map = {};
             try { map = JSON.parse(item.部屋ステータス || '{}') || {}; } catch (e) { map = {}; }
             let roomsDone = 0;
-            Object.keys(map).forEach(k => {
-                if (isAttrKey_(k)) return; // 属性スロット(a:)は部屋ではない＝分子に数えない（訪問済みは結果スロットで判定）
+            roomKeysOf_(map).forEach(k => { // a: キーは部屋キーへ正規化＋重複排除（属性だけの部屋も1回だけ数える）
                 if (isMgrKey(k)) return; // 管理人キーは部屋数の分子から除外
                 if (!validSet[k]) return;
+                if (roomAttrIn_(map, k)) return; // 属性優先（戸建てと統一）：属性があれば訪問済みの分子から除外
                 if (roomResultIn_(map, k)) roomsDone++;
             });
             const b = bucket(district, chomeKey);
@@ -3642,9 +3643,12 @@
         });
         return tree;
     }
+    // 見出し行の右側に置くサマリー（<summary>内の.da-chev手前に差し込む。1〜2行・折返し可）
     function shlSummaryHtml_(s) {
-        return `<div class="shl-sum-l">${tr('建物数')}：${fmtNum_(s.N)}（${tr('立禁除く')} ${fmtNum_(s.M)}）</div>`
-            + `<div class="shl-sum-l">${tr('部屋数')}：${fmtNum_(s.a)}/${fmtNum_(s.b)}（${tr('立禁除く')} ${fmtNum_(s.c)}/${fmtNum_(s.d)}）</div>`;
+        return `<span class="shl-sum-inline">`
+            + `<div class="shl-sum-l">${tr('建物数')}：${fmtNum_(s.N)}（${tr('立禁除く')} ${fmtNum_(s.M)}）</div>`
+            + `<div class="shl-sum-l">${tr('部屋数')}：${fmtNum_(s.a)}/${fmtNum_(s.b)}（${tr('立禁除く')} ${fmtNum_(s.c)}/${fmtNum_(s.d)}）</div>`
+            + `</span>`;
     }
     function shlBuildingRowHtml_(b) {
         const item = b.item;
@@ -3654,10 +3658,11 @@
         const attrOpt = SHUGA_ATTR_OPTS_.find(o => o.v === item.属性);
         if (attrOpt && attrOpt.v !== '不明') badges += `<span class="shl-badge" style="background:${attrOpt.bg}; color:${attrOpt.fg}; border:1px solid ${attrOpt.bd};">${escHtml(tr(attrOpt.label))}</span>`;
         if (b.isTachikin) badges += `<span class="shl-badge shl-badge-red">${escHtml(tr('立禁'))}</span>`;
+        // 建物名＋部屋数＋バッジ＋🗺 を1行（flex-wrap）に。狭い時は名前が1行目・メタ情報(部屋数/バッジ/🗺)ごと2行目へ折返す
         return `<div class="shl-bldg-row">`
-            + `<div class="shl-bldg-main"><div class="shl-bldg-name">${escHtml(name)}</div>`
-            + `<div class="shl-bldg-sub">${tr('部屋数')}：${fmtNum_(b.roomsDoneForItem)}/${fmtNum_(b.roomsForItem)}${badges}</div></div>`
-            + `<span class="shl-maplink" onclick="closeAppModal(); openPinDeepLink('${escHtml(String(item.ID))}');" title="${tr('地図で開く')}">🗺</span>`
+            + `<span class="shl-bldg-name">${escHtml(name)}</span>`
+            + `<span class="shl-bldg-meta">${tr('部屋数')}：${fmtNum_(b.roomsDoneForItem)}/${fmtNum_(b.roomsForItem)}${badges}`
+            + `<span class="shl-maplink" onclick="closeAppModal(); openPinDeepLink('${escHtml(String(item.ID))}');" title="${tr('地図で開く')}">🗺</span></span>`
             + `</div>`;
     }
     function renderShugaList() {
@@ -3672,16 +3677,15 @@
         let html = '';
         dists.forEach(d => {
             const dist = tree[d];
-            html += `<details class="dist-acc"><summary><span class="da-name">${escHtml(tr(d))}</span><span class="da-chev">▾</span></summary><div class="da-body">`
-                + `<div class="shl-sum">${shlSummaryHtml_(dist.total)}</div>`;
+            html += `<details class="dist-acc shl-acc"><summary><span class="da-name">${escHtml(tr(d))}</span>${shlSummaryHtml_(dist.total)}<span class="da-chev">▾</span></summary><div class="da-body">`;
             const chomeKeys = Object.keys(dist.chomes);
             chomeKeys.forEach(c => {
                 const ch = dist.chomes[c];
                 if (chomeKeys.length === 1 && c === d) { // 丁目なし地区（鹿骨町 等・住所未設定含む）：地区直下に建物一覧
                     html += ch.buildings.map(shlBuildingRowHtml_).join('');
                 } else {
-                    html += `<details class="dist-acc"><summary><span class="da-name">${escHtml(tr(c))}</span><span class="da-chev">▾</span></summary><div class="da-body">`
-                        + `<div class="shl-sum">${shlSummaryHtml_(ch)}</div>${ch.buildings.map(shlBuildingRowHtml_).join('')}</div></details>`;
+                    html += `<details class="dist-acc shl-acc"><summary><span class="da-name">${escHtml(tr(c))}</span>${shlSummaryHtml_(ch)}<span class="da-chev">▾</span></summary><div class="da-body">`
+                        + `${ch.buildings.map(shlBuildingRowHtml_).join('')}</div></details>`;
                 }
             });
             html += `</div></details>`;

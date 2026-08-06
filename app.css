@@ -90,14 +90,17 @@
         .mnt-acc.mnt-clear > summary { background:#9E5A4A; }     /* 期間指定クリア＝テラコッタ */
         .mnt-acc.mnt-coverage > summary { background:#7A4A6A; }  /* 網羅履歴クリア＝紫（実行ボタンと同系） */
         .mnt-acc.mnt-settings > summary { background:#3D6B8A; }  /* 運用設定＝青（保存ボタンと同系） */
-        /* 集合住宅一覧(中規模～)：地区/丁目サマリー・建物行（.dist-acc の中身のみ追加。見出しは既存のまま） */
-        .shl-sum { font-size:12px; color:#555; margin-bottom:8px; }
+        /* 集合住宅一覧(中規模～)：地区/丁目の見出しバー色（紫系・洗練）＋サマリーを見出し行の右側へ（.shl-acc に閉じる。他のdist-accには影響しない） */
+        .dist-acc.shl-acc > summary { background:#F5EDF7; color:#5B2E70; }
+        .dist-acc.shl-acc[open] > summary { border-bottom-color:#E7D8EE; }
+        .dist-acc.shl-acc > summary .da-chev { color:#9C6FAE; }
+        .dist-acc.shl-acc > summary .shl-sum-inline { flex:0 1 42%; min-width:0; text-align:right; font-size:11px; line-height:1.35; color:#7A4A8C; margin:0 6px; }
         .shl-sum-l { line-height:1.6; }
-        .shl-bldg-row { display:flex; align-items:center; gap:8px; padding:8px 4px; border-bottom:1px solid #eee; }
+        /* 建物行：建物名＋部屋数＋バッジ＋🗺 を1行に（flex-wrap。狭い時は名前が1行目・メタ情報(部屋数/バッジ/🗺)が2行目にまとまって折り返す） */
+        .shl-bldg-row { display:flex; flex-wrap:wrap; align-items:center; gap:6px 8px; padding:8px 4px; border-bottom:1px solid #eee; }
         .shl-bldg-row:last-child { border-bottom:none; }
-        .shl-bldg-main { flex:1; min-width:0; }
-        .shl-bldg-name { font-weight:bold; font-size:14px; word-break:break-all; }
-        .shl-bldg-sub { font-size:12px; color:#555; margin-top:3px; display:flex; flex-wrap:wrap; align-items:center; gap:5px; }
+        .shl-bldg-name { font-weight:bold; font-size:14px; word-break:break-all; flex:1 1 auto; min-width:120px; }
+        .shl-bldg-meta { flex:0 0 auto; display:flex; flex-wrap:wrap; align-items:center; gap:5px; font-size:12px; color:#555; margin-left:auto; }
         .shl-badge { display:inline-block; padding:1px 8px; border-radius:9px; font-size:11px; font-weight:bold; background:#EEF1F3; color:#4B5560; }
         .shl-badge-red { background:#F3D9D5; color:#7a342c; border:1px solid #7a342c; }
         .shl-maplink { flex-shrink:0; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; font-size:18px; line-height:1; padding:4px 6px; border-radius:8px; }
@@ -235,6 +238,8 @@
         .menu-item.cat-group:active { background: #275C43; }
         .menu-item.cat-whole { background: #8E3E4E; color: #fff; }
         .menu-item.cat-whole:active { background: #7B3543; }
+        .menu-item.cat-shuga { background: #7A3E8E; color: #fff; } /* 集合住宅一覧＝紫（他3カードと並ぶ第4カード） */
+        .menu-item.cat-shuga:active { background: #68347A; }
         .menu-item.cat-help { background: #fbf2e0; border-left: 3px solid #D9A441; }
         .mi-ico { width: 21px; height: 21px; vertical-align: -5px; margin-right: 7px; } /* 区域カテゴリの自作SVGアイコン（白シルエット。メニュー3ボタン・モーダルのテーマ見出しで共用） */
         /* 貸出/管理メニューのアコーディオン（基本閉じ）。権限（貸出=lender+／管理=manager+）が無いと details ごと非表示 */
@@ -295,6 +300,9 @@
         #app-modal-card.app-modal-theme-whole #app-modal-head { background: #8E3E4E; border-bottom-color: #833948; }
         #app-modal-card.app-modal-theme-whole #app-modal-title { color: #fff; }
         #app-modal-card.app-modal-theme-whole #app-modal-body { background: #faf4f5; }
+        #app-modal-card.app-modal-theme-shuga #app-modal-head { background: #7A3E8E; border-bottom-color: #6C3680; }
+        #app-modal-card.app-modal-theme-shuga #app-modal-title { color: #fff; }
+        #app-modal-card.app-modal-theme-shuga #app-modal-body { background: #f8f4fa; }
         #app-modal-card[class*="app-modal-theme-"] #app-modal-head button { background: rgba(255,255,255,0.92); border-color: rgba(255,255,255,0.55); color: #333; }
         #app-modal-body select, #app-modal-body input { box-sizing: border-box; padding: 8px; font-size: 15px; border: 1px solid #bbb; border-radius: 6px; }
         /* 貸出・返却画面：「借りる人」「区域」ブロックを上部固定し、番地一覧だけスクロールさせる（#app-modal-body の padding 分を打ち消して天井に密着） */
