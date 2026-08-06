@@ -54,8 +54,9 @@
         .area-map .chome-badge:hover circle { fill: rgba(165,165,165,0.78); }
         .area-map .chome-badge:active circle { fill: rgba(135,135,135,0.88); }
         .area-map .chome-badge text { fill: #444; font-size: 35px; font-weight: bold; text-anchor: middle; dominant-baseline: central; pointer-events: none; user-select: none; }
-        /* chome-hit: 丸数字の見た目(r=30)より一回り広い透明の当たり領域。見た目は変えず、○の少し外のタップも拾う */
-        .area-map .chome-badge circle.chome-hit { fill: transparent; stroke: none; }
+        /* chome-hit: 丸数字の見た目(r=30)より一回り広い透明の当たり領域。見た目は変えず、○の少し外のタップも拾う。
+           可視円より先に全バッジ分をまとめて描画する2層構成のため、.chome-badge の外側（chome-hit-layer）に置く。 */
+        .area-map .chome-hit-layer circle.chome-hit { fill: transparent; stroke: none; cursor: pointer; -webkit-touch-callout: none; }
         /* 区域一覧トップの「🗺 全区域マップ」バー（個人=青/グループ=緑/合同=えんじ）。
            旧「地図上に全て表示」の全面ボタンは"ボタンと認識されにくい"ため、情報（左）＋
            明示的な「地図を表示」ボタン（右・テーマ色の塗り）に分離（2026-07-16）。押せるのはボタンのみ */
@@ -211,7 +212,8 @@
         .menu-item.need-lend, .menu-item.need-manage, .menu-item.need-sys { display: none; } /* 役割で出し分け */
         /* 貸出メニュー（lender+）＝琥珀茶系／管理メニュー（manager+・sysadmin）＝スレート青系 で帯色を分けて区別 */
         body.role-lend .menu-item.need-lend { display: block; background: #faf6ec; border-left: 3px solid #C09A5A; }
-        body.role-manage .menu-item.need-manage, body.role-sys .menu-item.need-sys { display: block; background: #f1f5f8; border-left: 3px solid #7C97AD; }
+        body.role-manage .menu-item.need-manage { display: block; background: #f1f5f8; border-left: 3px solid #7C97AD; }
+        body.role-sys .menu-item.need-sys { display: block; background: #f4f4f5; border-left: 3px solid #9AA0A6; } /* システム管理者専用はグレー系（管理メニューのスレート青と区別） */
         /* カテゴリ色分け：個人=インディゴ／グループ=深緑／全体利用=えんじ（反転見出し。地図の一括枠表示・モーダル見出しと統一）／使い方=橙 */
         .menu-item.cat-personal { background: #3D4E81; color: #fff; }
         .menu-item.cat-personal:active { background: #33436E; }
@@ -258,7 +260,8 @@
             .print-hide { display: none !important; }
             .print-grid td.pf, .print-map-wrap img.basemap { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         }
-        #app-modal { position: absolute; inset: 0; z-index: 10003; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; padding: 16px; touch-action: pan-x pan-y; }
+        /* align-items は flex-start＝カードの上端を固定（中央寄せだと、フィルタ等で内容の縦量が減るたびカードが縦中央へ動いて見にくい） */
+        #app-modal { position: absolute; inset: 0; z-index: 10003; background: rgba(0,0,0,0.4); display: none; align-items: flex-start; justify-content: center; padding: 16px; touch-action: pan-x pan-y; }
         #app-modal-card { background: #fff; border-radius: 10px; width: min(430px, 94vw); max-height: 84vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
         /* PCの管理メニュー系画面（区域の貸出・返却・再貸出候補・進捗・網羅・ユーザー管理・区域操作履歴・利用状況・メンテナンス）はモーダル幅を広げる。openAppModal(title,theme,wide=true) で付与。スマホ幅は対象外＝カード式のまま */
         @media (min-width: 769px) {
@@ -464,17 +467,18 @@
             .tlv-row .tlv-c { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0; text-align: left; }
             .tlv-row1 .tlv-c-place { font-size: 13px; }
             .tlv-row2 .tlv-c-map { margin-left: 0; justify-self: start; }
-            .usg-head-row { grid-template-columns: 130px 1fr 110px 90px 60px 150px 1fr; }
-            .user-row.usg-row { display: grid; grid-template-columns: 130px 1fr 110px 90px 60px 150px 1fr; gap: 8px; align-items: center; }
+            .usg-head-row { grid-template-columns: 130px 1fr 110px 120px 60px 150px 1fr; }
+            .user-row.usg-row { display: grid; grid-template-columns: 130px 1fr 110px 120px 60px 150px 1fr; gap: 8px; align-items: center; }
             .user-row.usg-row .ua-row1, .user-row.usg-row .ua-row2 { display: contents; }
             .user-row.usg-row .usg-name, .user-row.usg-row .usg-email { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
             .user-row.usg-row .usg-badge { margin-right: 0; }
-            .user-row.usg-row .usg-row3, .user-row.usg-row .usg-row4 { margin-top: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+            .user-row.usg-row .usg-row3 { margin-top: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+            .user-row.usg-row .usg-row4 { margin-top: 0; white-space: normal; } /* 複数区域は折り返して全件表示（切り詰めない） */
             /* ユーザー管理（編集フォーム）: メール|漢字名|グループ|状態|権限|削除 を1行のグリッドに。usg-row（利用状況・閲覧専用）とは別クラス条件で衝突回避 */
-            .user-row:not(.usg-row) { display: grid; grid-template-columns: 1.6fr 1fr 1fr 92px 150px 64px; gap: 8px; align-items: center; }
+            .user-row:not(.usg-row) { display: grid; grid-template-columns: 1.6fr 1fr 1fr 92px 150px 80px; gap: 8px; align-items: center; }
             .user-row:not(.usg-row) .ua-row1, .user-row:not(.usg-row) .ua-row2 { display: contents; }
             .user-row:not(.usg-row) input, .user-row:not(.usg-row) select { width: 100%; min-width: 0; }
-            .user-row:not(.usg-row) .ua-del { justify-self: center; margin-left: 0; }
+            .user-row:not(.usg-row) .ua-del { justify-self: center; margin-left: 0; white-space: nowrap; }
             /* 区域の貸出・返却／再貸出候補: lend-item（番地一覧・貸出中一覧・候補一覧）を1行に。入り切らない場合は横スクロール。
                網羅状況(cov-item)は可変個数セルが折り返す一覧のため対象外（変更2の禁止事項＝網羅状況のPC表形式を壊さない） */
             .lend-item:not(.cov-item) { display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; overflow-x: auto; }
@@ -483,7 +487,9 @@
             .lend-row .lr-dates { display: inline; margin-top: 0; margin-left: 8px; }
         }
         .usg-chip { display: inline-flex; align-items: center; gap: 5px; background: #eef4f8; border-radius: 14px; padding: 3px 4px 3px 10px; font-size: 12px; margin: 2px 4px 2px 0; }
-        .usg-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-right: 6px; background: #EEF1F3; color: #4B5560; }
+        .usg-maplink { display: inline-flex; align-items: center; justify-content: center; cursor: pointer; font-size: 13px; line-height: 1; padding: 2px 5px; text-decoration: none; border-radius: 8px; }
+        .usg-maplink:active { background: #d8e6ee; }
+        .usg-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-right: 6px; background: #EEF1F3; color: #4B5560; white-space: nowrap; }
         .usg-badge-inactive { background: #F3E3E1; color: #8a2f22; }
         .usg-none { color: #999; font-size: 12px; }
         .due-over { color: #C75F56; font-weight: bold; } /* 返却期日超過 */
@@ -495,9 +501,10 @@
         /* ── 区域オーバービュー（「🗺 全て表示」）── */
         /* 枠内に出す丁目/番地ラベル（HTMLマーカー）。タップでその区域を選択（赤枠＋通常利用へ）。色は枠色に合わせてJSで上書き */
         .area-ov-label-wrap { line-height: 0; }
-        .area-ov-label { background: rgba(255,255,255,0.92); border: 1.5px solid #155d9e; color: #155d9e; border-radius: 12px; padding: 2px 7px; font-size: 12px; font-weight: bold; line-height: 1.2; white-space: nowrap; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.25); transform-origin: center center; -webkit-touch-callout: none; user-select: none; touch-action: manipulation; }
-        body.large-ui .area-ov-label { font-size: 13px; padding: 3px 8px; }
-        body.text-lg .area-ov-label { font-size: 19px; padding: 4px 10px; } /* 右下「文字 大」設定を全体マップの区域ラベルにも反映（body.text-lgはクラス連動のため切替の前後どちらでも効く） */
+        .area-ov-label { background: rgba(255,255,255,0.92); border: 1.5px solid #155d9e; color: #155d9e; border-radius: 12px; padding: 2px 7px; font-size: 13px; font-weight: bold; line-height: 1.2; white-space: nowrap; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.25); transform-origin: center center; -webkit-touch-callout: none; user-select: none; touch-action: manipulation; }
+        body.large-ui .area-ov-label { font-size: 14px; padding: 3px 8px; }
+        body.text-md .area-ov-label { font-size: 16px; padding: 3px 9px; } /* 右下「文字 中」設定を全体マップの区域ラベルにも反映 */
+        body.text-lg .area-ov-label { font-size: 20px; padding: 4px 10px; } /* 右下「文字 大」設定を全体マップの区域ラベルにも反映（body.text-lgはクラス連動のため切替の前後どちらでも効く） */
         /* 表示モード中の操作バー（中央下。区域一覧に戻るバーと同系の見た目） */
         #area-overview-bar { position: absolute; bottom: 64px; left: 50%; transform: translateX(-50%); z-index: 9999; display: flex; align-items: center; gap: 5px; background: #2c3e50; padding: 5px; border-radius: 23px; box-shadow: 0 4px 16px rgba(0,0,0,0.22); max-width: 94%; }
         #area-overview-bar button { background: transparent; color: #fff; border: none; font-weight: bold; cursor: pointer; border-radius: 18px; white-space: nowrap; -webkit-touch-callout: none; user-select: none; touch-action: manipulation; transition: background .12s, transform .06s; }

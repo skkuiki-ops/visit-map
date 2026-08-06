@@ -459,6 +459,7 @@
     let overviewAreas = { personal: [], group: [], whole: [] }; // 各バケットの区域一覧（メニュー描画時に格納）
     // 全体図の番地ラベルをタップして区域表示に入った直後だけ出す「区域選択に戻る」ボタン（60秒で自動消滅）。
     let areaReturnOverviewBucket = null; // タップ元の bucket（ボタン押下で同じ全体図へ戻すため）
+    let areaReturnOverviewLabel = null;  // タップ元の区域ラベル（戻り先カメラを「直前区域の少し広め」にするため）
     let areaReturnOverviewTimer = null;  // 自動消滅タイマーID（多重起動防止のため毎回クリアしてから張り直す）
     // 表示モード中に許可する読み取り専用 action。これ以外（＝書き込み）は apiCall でブロックする。
     const OVERVIEW_READ_ACTIONS = ['getMyAreas', 'getSharedAreas', 'getData', 'getLendData', 'getMe', 'getUsers'];
@@ -1500,8 +1501,11 @@
         '篠崎町': [674, 893], '新堀': [262, 949], '春江町': [366, 993], '谷河内': [456, 1006]
     };
     // 地区図SVGに重ねる丁目バッジ群を生成する。AREA_DATA の丁目すべてを必ず出す（位置は CHOME_POS／無ければ仮配置）。
+    // 2層構成: ①全バッジの透明当たり円を先にまとめて描画 → ②全バッジの可視円＋数字を後から描画。
+    // 単層(各バッジ内で当たり円→可視円の順)だと、後発バッジの当たり円(r=42)が先発バッジの可視円(r=30)の上に
+    // 重なり、可視円の内側をタップしたのに隣のバッジが反応する誤爆が起きるため（実測: 鹿骨③の内側タップで④反応）。
     function buildChomeBadges() {
-        let s = '<g class="chome-layer">';
+        const items = [];
         Object.keys(AREA_DATA).forEach(function (d) {
             const chomes = AREA_DATA[d];
             if (!chomes) return; // 丁目を持たない地区（鹿骨町）はバッジ無し＝地区そのものをタップして選択
@@ -1512,20 +1516,30 @@
                     const base = AREA_LBL_POS[d] || [452, 530];
                     pos = [base[0] + (idx - (keys.length - 1) / 2) * 48, base[1] + 44];
                 }
-                // chome-hit は見た目の丸(r=30)より一回り広い当たり領域（透明・app.cssで非表示）。○の少し外を押しても反応するように。
-                s += '<g class="chome-badge" onclick="pickChomeOnMap(\'' + d + '\',' + c + ')">'
-                   + '<circle class="chome-hit" cx="' + pos[0] + '" cy="' + pos[1] + '" r="42"/>'
-                   + '<circle cx="' + pos[0] + '" cy="' + pos[1] + '" r="30"/>'
-                   + '<text x="' + pos[0] + '" y="' + pos[1] + '">' + c + '</text></g>';
+                items.push({ d: d, c: c, pos: pos });
             });
         });
-        return s + '</g>';
+        // 第1パス: 透明な当たり円(r=42)のみ全バッジ分を先に描画（○の少し外のタップも拾う。中間地帯の重なりのみ許容）。
+        let hits = '<g class="chome-hit-layer">';
+        items.forEach(function (it) {
+            hits += '<circle class="chome-hit" cx="' + it.pos[0] + '" cy="' + it.pos[1] + '" r="42" onclick="pickChomeOnMap(\'' + it.d + '\',' + it.c + ')"/>';
+        });
+        hits += '</g>';
+        // 第2パス: 可視円(r=30)＋数字。当たり円より後に描くので、可視円のタップは必ず自分のバッジに当たる。
+        let vis = '<g class="chome-layer">';
+        items.forEach(function (it) {
+            vis += '<g class="chome-badge" onclick="pickChomeOnMap(\'' + it.d + '\',' + it.c + ')">'
+                 + '<circle cx="' + it.pos[0] + '" cy="' + it.pos[1] + '" r="30"/>'
+                 + '<text x="' + it.pos[0] + '" y="' + it.pos[1] + '">' + it.c + '</text></g>';
+        });
+        vis += '</g>';
+        return hits + vis;
     }
     // 地区ポリゴンのタップ。丸数字バッジ表示中(丁目トグルON・住所検索モード)かつその地区に丁目があるときは、
     // ポリゴン部分の誤タップで遷移しないよう無視する（丸数字が無い地区＝鹿骨町は従来どおりポリゴンタップで遷移）。
     function distTapDistrict(d) {
         const showChome = !areaPickCallback && areaChomeOn;
-        if (showChome && AREA_DATA[d]) return;
+        if (showChome && AREA_DATA[d]) { showToast('丁目の丸数字をタップしてください', false, true); return; }
         selectArea('district', d);
     }
     // 丁目バッジのタップ：その地区・丁目を確定して既存の「番地を選択」ステップへ。selectArea は変更しない（共用ロジック保護）。
@@ -1747,6 +1761,7 @@
     // outline=true のとき、移動先の番地を含む街区を赤線で囲む。label を画面上部に約10秒表示。
     // onArrive: 到着後（枠描画後）に実行する処理。長押しの一括割当などに使う。
     function geocodeAndFly(query, zoom, outline, label, onArrive) {
+        hideAreaReturnOverviewButton(); // 住所確定の共通移動処理＝ここで消しておけば、直接geocodeAndFlyを呼ぶ経路(住所検索等)でも消し忘れない
         zoom = zoom || 18;
         showBusy('検索中…');
         fetch('https://msearch.gsi.go.jp/address-search/AddressSearch?q=' + encodeURIComponent(query))
@@ -2112,6 +2127,13 @@
             suppressMapTapUntil = Date.now() + 1500; // 離した直後の地図タップ（新規登録）を抑止
             clearTimeout(singleTapTimer);            // 予約済みの戸建て登録タイマーもキャンセル
             if (!dragged) return; // 動かさず離した → 何もしない（通常の click で吹き出しが開く）
+            // ズーム18未満で離した場合は移動を取り消す（開始時に18以上を必須にしているためレアケース＝移動中のピンチ/ホイールでズームアウトした時のみ）。
+            // 「モード維持」にするとリスナー残置で次のタッチがピンを引きずる危険があるため、同座標クラッシュ等と同じ取り消しパターンに揃える。
+            if (map.getZoom() < 18) {
+                renderMarkers(currentData); // 元の位置へ戻す
+                showToast('ズームが足りないため移動を取り消しました（拡大してからやり直してください）', true);
+                return;
+            }
             const ll = marker.getLngLat();
             // 移動先が他のピンと同一座標になる場合は自動キャンセル（同座標スタックを作らない。判定はピンのグループ化と同じ6桁一致）
             const destKey = ll.lat.toFixed(6) + '_' + ll.lng.toFixed(6);
@@ -2144,6 +2166,7 @@
         const enter = () => {
             if (overviewMode) return; // 表示モード中はピン移動不可
             if (activeTouchPoints >= 2) return; // 複数指（ピンチ等）が同時に検知されている間は移動モードに入らない
+            if (map.getZoom() < 18) { showToast('ピンの移動は地図を拡大してから行ってください', false, true); return; } // 誤操作防止：拡大していないと移動を開始しない
             moving = true; dragged = false;
             el.classList.add('marker-moving');
             map.dragPan.disable();                    // 移動中は地図がパンしないように
@@ -2375,7 +2398,7 @@
                         <select id="new-floors" class="numlist" size="5" onchange="generateSetupGrid()" style="background:#FFF9DD;">${Array.from({length:30},(_,i)=>i+1).map(v=>`<option value="${v}" ${v===2?'selected':''}>${v}F</option>`).join('')}</select>
                     </div>
                     <div class="form-group" style="flex:1;"><label>${tr('最大部屋数')}</label>
-                        <select id="new-maxroom" class="numlist" size="5" onchange="generateSetupGrid()" style="background:#FFF9DD;">${Array.from({length:20},(_,i)=>i+1).map(v=>`<option value="${v}" ${v===3?'selected':''}>${String(v).padStart(2,'0')}</option>`).join('')}</select>
+                        <select id="new-maxroom" class="numlist" size="5" onchange="generateSetupGrid()" style="background:#FFF9DD;">${Array.from({length:40},(_,i)=>i+1).map(v=>`<option value="${v}" ${v===3?'selected':''}>${String(v).padStart(2,'0')}</option>`).join('')}</select>
                     </div>
                 </div>
                 <div class="form-group" style="margin:2px 0;">
@@ -3712,7 +3735,7 @@
         return overviewAreas[bucket] || [];
     }
     // 表示モードに入る：当該バケットの区域を一括で枠＋薄塗り＋ラベル描画し、全体が収まるようフィット。
-    function enterAreaOverview(bucket) {
+    function enterAreaOverview(bucket, focusLabel) {
         if (!OVERVIEW_COLORS[bucket]) return;
         if (!addrPoints) { showToast('住所データを読み込み中です。少し待ってから開いてください。', true); return; }
         const areas = overviewBucketAreas(bucket);
@@ -3761,7 +3784,14 @@
         map.on('zoom', updateOverviewLabelScale);  // ズーム16未満で広角ほどラベルを縮小
         updateOverviewLabelScale();
 
-        fitOverview(feats);
+        // 「区域選択に戻る」経由（focusLabel指定あり）のときだけ、直前区域の少し広め（周辺数区域が見える程度）にフィット。
+        // それ以外（メニューから開いた通常の全体図）は従来どおり全区域を fitBounds する。
+        let focused = false;
+        if (focusLabel) {
+            const fr = resolveAreaFeature(focusLabel);
+            if (fr && fr.feature) focused = fitOverviewFocused(fr.feature);
+        }
+        if (!focused) fitOverview(feats);
         showOverviewBar();
         // アイコン(ピン)は毎回「非表示」状態から開始（枠と番地ラベルを見やすく）。番地ラベルタップ／✕／Esc で
         // exitAreaOverview が icons-hidden を解除＝通常のアイコン表示へ戻る。下部バーのトグルで手動表示も可。
@@ -3776,15 +3806,23 @@
         if (z >= 16) return 1;
         return Math.max(0.5, 1 - (16 - z) * 0.13);
     }
+    // 文字サイズ設定（小/中/大）に応じた基準px。CSSの .area-ov-label 各段階（app.css）と一致させる。
+    function overviewLabelBaseSize() {
+        if (document.body.classList.contains('text-lg')) return 20;
+        if (document.body.classList.contains('text-md')) return 16;
+        return 14; // large-ui は常時付与＝実質「小」の実効値
+    }
     function updateOverviewLabelScale() {
         const z = map.getZoom();
         const hide = z < 15;            // ズーム15より広角になったら文字（ラベル）を消す
         const s = overviewLabelScale();
+        const base = overviewLabelBaseSize();
         overviewLabelMarkers.forEach(m => {
             const inner = m.getElement && m.getElement() && m.getElement().firstElementChild;
             if (!inner) return;
             inner.style.display = hide ? 'none' : '';
-            if (!hide) inner.style.transform = 'scale(' + s + ')';
+            // transform:scale()の小数拡大縮小はにじみの原因になるため、font-size(整数px)を直接変える方式に変更。
+            if (!hide) inner.style.fontSize = Math.max(7, Math.round(base * s)) + 'px';
         });
     }
     function drawOverviewFeatures(fc) {
@@ -3811,6 +3849,20 @@
         if (!isFinite(minX)) return;
         map.fitBounds([[minX, minY], [maxX, maxY]], { padding: 56, maxZoom: 17, duration: 900 });
     }
+    // 「区域選択に戻る」用：1区域のbboxを中心にその5倍相当の範囲へフィット（周辺の数区域のラベルが見える程度の広さ）。
+    function fitOverviewFocused(feature) {
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        eachFeatureCoord(feature.geometry, (x, y) => {
+            if (x < minX) minX = x; if (x > maxX) maxX = x;
+            if (y < minY) minY = y; if (y > maxY) maxY = y;
+        });
+        if (!isFinite(minX)) return false;
+        const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+        const halfW = Math.max((maxX - minX) / 2, 0.0004) * 5;
+        const halfH = Math.max((maxY - minY) / 2, 0.0004) * 5;
+        map.fitBounds([[cx - halfW, cy - halfH], [cx + halfW, cy + halfH]], { padding: 56, maxZoom: 16, duration: 900 });
+        return true;
+    }
     function clearOverviewLabels() {
         overviewLabelMarkers.forEach(m => m.remove());
         overviewLabelMarkers = [];
@@ -3821,7 +3873,7 @@
         exitAreaOverview();                       // 表示モード解除（枠・ラベル除去、編集ロック解除）
         suppressMapTapUntil = Date.now() + 1200;  // 抜けた直後の貫通タップ抑止
         enterAreaFromList(label);                 // 赤枠＋上部ラベル＋?area=（内部の showAssignedArea が一旦ボタンを隠す）
-        showAreaReturnOverviewButton(bucket);      // 全体図ラベル経由のときだけ「区域選択に戻る」を表示（60秒で自動消滅）
+        showAreaReturnOverviewButton(bucket, label); // 全体図ラベル経由のときだけ「区域選択に戻る」を表示（60秒で自動消滅）
     }
     // 表示モード終了：枠・薄塗り・ラベルを消して通常地図へ戻す（赤枠 banchi-box には触らない）。
     function exitAreaOverview() {
@@ -3845,9 +3897,10 @@
         if (bar) bar.style.display = 'none';
     }
     // 「区域選択に戻る」ボタン：全体図のラベルをタップして区域表示に入った直後だけ表示し、60秒で自動消滅する（pickOverviewArea から呼ぶ）。
-    function showAreaReturnOverviewButton(bucket) {
+    function showAreaReturnOverviewButton(bucket, label) {
         clearAreaReturnOverviewTimer(); // 多重起動防止（前回分のタイマーを必ず破棄してから張り直す）
         areaReturnOverviewBucket = bucket;
+        areaReturnOverviewLabel = label || null; // 戻り先カメラを「直前区域の少し広め」にするため保持
         const btn = document.getElementById('area-return-overview');
         if (btn) btn.style.display = '';
         areaReturnOverviewTimer = setTimeout(hideAreaReturnOverviewButton, 60000);
@@ -3856,17 +3909,20 @@
     function hideAreaReturnOverviewButton() {
         clearAreaReturnOverviewTimer();
         areaReturnOverviewBucket = null;
+        areaReturnOverviewLabel = null;
         const btn = document.getElementById('area-return-overview');
         if (btn) btn.style.display = 'none';
     }
     function clearAreaReturnOverviewTimer() {
         if (areaReturnOverviewTimer) { clearTimeout(areaReturnOverviewTimer); areaReturnOverviewTimer = null; }
     }
-    // ボタンタップ：保持しておいた bucket で同じ種類の全体図へ戻る。
+    // ボタンタップ：保持しておいた bucket で同じ種類の全体図へ戻る（カメラは直前区域の少し広めに＝全区域fitBoundsはしない）。
+    // ここでは hideAreaReturnOverviewButton() を呼ばない＝enterAreaOverview 成功時の冒頭クリーンアップに任せる。
+    // 早期return（住所データ未ロード等）で失敗した場合にボタン・タイマーが残り、再タップで再試行できるようにするため。
     function returnToAreaOverview() {
         const bucket = areaReturnOverviewBucket;
-        hideAreaReturnOverviewButton();
-        if (bucket) enterAreaOverview(bucket);
+        const label = areaReturnOverviewLabel;
+        if (bucket) enterAreaOverview(bucket, label);
     }
     // オーバービューの「アイコンを非表示/表示」トグル（ピン＝全マーカーをCSSで一括非表示）。オーバービューを抜けると自動で戻る。
     function toggleOverviewIcons() {
@@ -4199,13 +4255,14 @@
                 const statusHtml = lent2
                     ? `<span style="color:#C75F56;">貸出中（${a.lendCount || 1}回目）: ${escHtml(who)}（${escHtml(a.lendDate || '-')} → <span class="${dueClass(a.dueDate)}">${escHtml(a.dueDate || '-')}</span>）</span>`
                     : `${coolBadge}<span style="color:#555;">最終返却日: ${escHtml(a.lastReturn || 'なし')}　これまで ${a.lendCount || 0} 回</span>`;
-                const dateInput = (lent2 || blocked) ? '' : `<span style="margin-left:8px; color:#555;">貸出期限</span><input type="date" id="lend-due-${a.id}" value="${lendDefaultDue()}" style="font-size:12px; padding:2px 4px; width:106px; margin-left:4px; vertical-align:middle;">`; // 未貸出かつ貸出可のみ
+                // force対象(blocked×sysadmin+)は上書き貸出でも期日を入力できるよう欄を出す。それ以外のblockedは非表示のまま。
+                const dateInput = (lent2 || (blocked && (ME.level || 0) < 3)) ? '' : `<span style="margin-left:8px; color:#555;">貸出期限</span><input type="date" id="lend-due-${a.id}" value="${lendDefaultDue()}" style="font-size:12px; padding:2px 4px; width:106px; margin-left:4px; vertical-align:middle;">`; // 未貸出かつ貸出可（またはforce対象）のみ
                 const canLendThis = canLend && !blocked; // 借りる人が選択済み かつ 冷却中/停止中でない
                 const mgrBtns = (!lent2 && (ME.level || 0) >= 2) ? managerStateBtns_(a, cool) : ''; // 状態切替は manager+ のみ
                 // sysadmin(Lv3)以上は冷却中/停止中でも長押しで上書き貸出できる（サーバ1回で完結。単発の通常タップは案内のみ）。
                 const forceEligible = blocked && (ME.level || 0) >= 3;
                 const lendBtn = forceEligible
-                    ? `<button class="lend-act-btn lend-force-btn" data-aid="${a.id}" data-area="${escHtml(a.area)}" data-state="${cool.state}" data-days="${cool.days || ''}" data-canlend="${canLend ? '1' : '0'}" style="background:#b9c2c8; border-color:#b9c2c8; color:#f0f0f0;">貸出</button>`
+                    ? `<button class="lend-act-btn lend-force-btn" data-aid="${a.id}" data-area="${escHtml(a.area)}" data-state="${cool.state}" data-days="${cool.days || ''}" data-canlend="${canLend ? '1' : '0'}" style="background:#b9c2c8; border-color:#b9c2c8; color:#f0f0f0; cursor:pointer;">長押しで貸出</button>`
                     : `<button class="lend-act-btn" style="${canLendThis ? 'background:#5E9DB8; border-color:#5E9DB8; color:#fff;' : 'background:#b9c2c8; border-color:#b9c2c8; color:#f0f0f0; cursor:not-allowed;'}" onclick="doLendArea(${a.id})" ${canLendThis ? '' : 'disabled'}>貸出</button>`;
                 // 貸出中の番地は「返却(赤)＋キャンセル(琥珀)」を縦並び。未貸出は「貸出」（不可ならグレーアウト）＋(manager)状態切替。
                 const actBtn = lent2
@@ -4317,6 +4374,7 @@
             const cool = coolingStateOf_(a);
             const stateLabel = (cool && cool.state === 'hold') ? '⏸停止中' : `❄冷却中（あと${cool ? cool.days : ''}日）`;
             confirmMsg = `「${a.area}」は${stateLabel}ですが、\n上書きして${whoLabel}に貸し出しますか？\n返却期日: ${due || '未設定'}`;
+            if (cool && cool.state === 'hold') confirmMsg += '\n※この区域の「停止」設定は解除されます';
         }
         appConfirm(confirmMsg, { okLabel: force ? '上書きして貸出' : '貸出する', danger: !!force }).then(ok => {
             if (!ok) return;
@@ -4902,7 +4960,7 @@
         const u = x.u, inactive = (u.active === false);
         const last = String(u.lastUsed || '').trim();
         const areasHtml = x.areas.length
-            ? x.areas.map(a => '<span class="usg-chip">' + escHtml(a.area) + '<button class="choice-btn" style="background:#eef3f6; padding:2px 7px; font-size:10px;" onclick="usgOpenArea_(\'' + escHtml(a.area) + '\')">🗺 地図</button></span>').join('')
+            ? x.areas.map(a => '<span class="usg-chip">' + escHtml(a.area) + '<span class="usg-maplink" onclick="usgOpenArea_(\'' + escHtml(a.area) + '\')" title="' + tr('地図で開く') + '">🗺</span></span>').join('')
             : '<span class="usg-none">—</span>';
         return '<div class="user-row usg-row' + (inactive ? ' ua-inactive' : '') + '">'
             + '<div class="ua-row1"><span class="usg-name" style="font-weight:bold;">' + escHtml(u.name || '（名前未設定）') + '</span><span class="usg-email" style="color:#666; font-size:12px;">' + escHtml(u.email || '') + '</span></div>'
@@ -5344,7 +5402,7 @@
 
         const opt = (v, label, cur) => `<option value="${v}" ${String(cur) === String(v) ? 'selected' : ''}>${label}</option>`;
         const floorOpts = Array.from({length:30},(_,i)=>i+1).map(v => opt(v, v + 'F', floors)).join('');
-        const roomOpts = Array.from({length:20},(_,i)=>i+1).map(v => opt(v, String(v).padStart(2,'0'), maxRoom)).join('');
+        const roomOpts = Array.from({length:40},(_,i)=>i+1).map(v => opt(v, String(v).padStart(2,'0'), maxRoom)).join('');
         // オートロック/構成属性/管理人は coloredButtonsHtml で色付きボタン生成（下のHTMLで直接呼ぶ）
 
         const html = `
@@ -5371,9 +5429,9 @@
             <label style="font-size:11px; font-weight:bold;">${tr('緑=有効。不要な部屋をタップで外す')}</label>
             <div id="setup-grid-container" style="max-height:120px; overflow:auto; margin-bottom:8px;"></div>
             <div class="inline-group"><label>${tr('オートロック')}</label>${coloredButtonsHtml('new-lock', SHUGA_LOCK_OPTS_, lock, 'single')}</div>
-            <div class="inline-group"><label>${tr('立禁表記')}</label>${coloredButtonsHtml('new-noentry', SHUGA_NOENTRY_OPTS_, noEntry, 'single')}</div>
             <div class="inline-group"><label>${tr('構成属性')}</label>${coloredButtonsHtml('new-attribute', SHUGA_ATTR_OPTS_, item.属性, 'compose')}</div>
             <div class="inline-group"><label>${tr('管理人')}</label>${coloredButtonsHtml('new-manager', SHUGA_MGR_OPTS_, item.管理人, 'single')}</div>
+            <div class="inline-group"><label>${tr('立禁表記')}</label>${coloredButtonsHtml('new-noentry', SHUGA_NOENTRY_OPTS_, noEntry, 'single')}</div>
             <div class="form-group"><label>${tr('メモ')}</label><input type="text" id="new-memo" value="${escHtml(memoText)}"></div>
             <div class="btn-row">
                 <button class="submit-btn" id="edit-save-btn" onclick="saveShugaEdit(${rowNumber}, this)">${tr('更新を保存')}</button>
