@@ -199,6 +199,14 @@
         'ベンガル語': 'Bengalí', 'シンハラ語': 'Cingalés', 'タイ語': 'Tailandés', 'ロシア語': 'Ruso',
         'アラビア語': 'Árabe', 'モンゴル語': 'Mongol', '手話': 'Lengua de señas'
     });
+    // ── 集合住宅一覧(中規模～)（メニュー・地区/丁目サマリー・建物行） ──
+    Object.assign(I18N_ES, {
+        '🏢 集合住宅一覧(中規模～)': '🏢 Lista de edificios (mediano o más)',
+        '建物数': 'N.º de edificios', '部屋数': 'N.º de habitaciones', '立禁除く': 'sin prohibido',
+        '（住所未設定）': '(sin dirección)',
+        '対象の集合住宅がありません': 'No hay edificios que cumplan la condición',
+        '地図で開く': 'Abrir en el mapa'
+    });
     // ── トースト・確認・進行表示（showToast/appConfirm/showBusy/showDone の入口で変換） ──
     Object.assign(I18N_ES, {
         '保存中...': 'Guardando…', '保存中…': 'Guardando…', '登録中...': 'Registrando…',
@@ -294,6 +302,7 @@
         setText('#area-back-btn');
         setText('#area-modal-title');
         setText('#area-view-toggle');
+        setText('#menu-shugalist');
         setText('#icon-filter-head .ttl');
         document.querySelectorAll('#icon-filter-actions button').forEach(b => { b.textContent = tr(b.textContent.trim()); });
     }
@@ -416,6 +425,7 @@
         else if (next === 'large') document.body.classList.add('text-lg');
         localStorage.setItem('textScale', next);
         updateTextBtnText();
+        if (overviewMode) updateOverviewLabelScale(); // 全体図表示中の切替も即反映（ラベルはインラインfont-size方式のためクラス切替だけでは変わらない）
     }
 
     // ※ GISの handleCredential / scheduleTokenRefresh / refreshTokenOnResume（prompt() によるトークン更新と
@@ -1072,6 +1082,58 @@
     function roomTag(rk) { return isMgrKey(rk) ? MGR_KEY : (rk + '号室'); }
     // onclick テンプレートに埋める JS リテラル。数値部屋はそのまま、管理人は文字列なのでクォートする。
     function roomKeyJs(rk) { return isMgrKey(rk) ? ("'" + rk + "'") : rk; }
+
+    /* ── 部屋ステータス(S列 JSON)のキー体系（GAS code_api.gs と同一） ──────────────
+       1部屋につき2スロットを同じJSONに持つ（属性と訪問結果を分離＝訪問結果を押しても属性が消えない）。
+         "101"    … 訪問結果スロット(v): 不在(N回目) / 会えた / 投函
+         "a:101"  … 属性スロット(a): 訪問拒否 / 外国語 / 空き家 / 他（「訪問可」＝キーを削除）
+       管理人も同じ（"管理人" / "a:管理人"）。
+       ・後方互換: 分離前の旧データは v に属性値が入っている。属性リーダは a: が無ければ v の属性値を見る。
+       ・レイジー退避: 訪問結果を書くとき、現 v が属性値なら a: へ写してから v を上書きする（GAS と同規則）。
+       ・部屋を列挙する処理は a: キーを部屋として数えない（isAttrKey_ でスキップ）。
+       ・セルの見た目は「属性優先」（戸建てのピン表示と同じ思想）＝ roomDisplayIn_。 */
+    const ROOM_ATTR_PREFIX = 'a:';
+    const ROOM_ATTR_VALUES = ['未訪問', '訪問拒否', '外国語', '空き家', '他'];
+    function isAttrKey_(k) { return String(k).indexOf(ROOM_ATTR_PREFIX) === 0; }
+    function attrKeyOf_(rk) { return ROOM_ATTR_PREFIX + String(rk); }
+    // v に入っている値が「レガシー属性値」（＝a: へ退避すべき属性。未訪問・空は対象外）か。
+    function isLegacyAttrVal_(v) { v = String(v || ''); return v !== '' && v !== '未訪問' && ROOM_ATTR_VALUES.indexOf(v) >= 0; }
+    function parseRoomMap_(item) { try { return JSON.parse((item && item.部屋ステータス) || '{}') || {}; } catch (e) { return {}; } }
+    // 属性リーダ: a: キーがあればその値、無ければ v のレガシー属性値、どちらも無ければ ''（＝訪問可）。
+    function roomAttrIn_(map, rk) {
+        const a = map[attrKeyOf_(rk)];
+        if (a != null && a !== '') return String(a);
+        return isLegacyAttrVal_(map[rk]) ? String(map[rk]) : '';
+    }
+    // 結果リーダ: v が訪問結果(不在/会えた/投函)ならその値。属性値・未訪問・空は「結果なし」。
+    function roomResultIn_(map, rk) { const v = String(map[rk] || ''); return isVisitResult_(v) ? v : ''; }
+    // セル表示値＝属性優先（属性が無ければ訪問結果）。roomVisual に渡す値。
+    function roomDisplayIn_(map, rk) { return roomAttrIn_(map, rk) || String(map[rk] || ''); }
+    // S列JSONに登場する「部屋キー」の一覧（重複なし）。a:101 は 101 に正規化する
+    //（属性だけ・訪問結果だけ・両方 のどのケースでも、その部屋を1回だけ数えるため）。
+    function roomKeysOf_(map) {
+        const seen = {}, out = [];
+        Object.keys(map).forEach(k => {
+            const rk = isAttrKey_(k) ? k.slice(ROOM_ATTR_PREFIX.length) : k;
+            if (rk === '' || seen[rk]) return;
+            seen[rk] = true; out.push(rk);
+        });
+        return out;
+    }
+    function roomAttrOf(item, rk) { return roomAttrIn_(parseRoomMap_(item), rk); }
+    function roomResultOf(item, rk) { return roomResultIn_(parseRoomMap_(item), rk); }
+    // S列JSONへの書き込み規則（GAS updateRoomStatus と同一）。isAttr=属性スロット / それ以外=訪問結果スロット。
+    function applyRoomSlot_(map, rk, status, isAttr) {
+        const ak = attrKeyOf_(rk), vk = String(rk);
+        if (isAttr) {
+            if (String(status) === '未訪問') delete map[ak]; else map[ak] = status; // 「訪問可」＝属性なし＝キー削除
+            if (isLegacyAttrVal_(map[vk])) delete map[vk];                          // レガシー掃除（v の属性値は a: に一本化）
+        } else {
+            if (isLegacyAttrVal_(map[vk])) map[ak] = String(map[vk]);               // レイジー退避（属性を消さない）
+            map[vk] = status;
+        }
+        return map;
+    }
 
     function roomVisual(status) {
         status = status || '';
@@ -2500,7 +2562,9 @@
     // 部屋番号(101…) → ABC表記。short=true は升目用（「A」のみ）、false は操作欄/履歴用（2階以上は「A（2階）」）。
     function roomAbc(roomNum, short) {
         const f = Math.floor(roomNum / 100), r = roomNum % 100;
-        const letter = (r >= 1 && r <= 26) ? String.fromCharCode(64 + r) : String(r); // 1→A,2→B…（最大部屋数20なのでA–Tで収まる）
+        const letter = (r >= 1 && r <= 26) ? String.fromCharCode(64 + r)
+            : (r >= 27 && r <= 52) ? 'A' + String.fromCharCode(64 + (r - 26)) // 27→AA…40→AN（最大部屋数40化に追従。表示専用＝保存キーは数値のまま）
+            : String(r); // 1→A,2→B…
         return (short || f < 2) ? letter : `${letter}（${f}階）`;
     }
     // グリッド升目の番号ラベル（モード別）。通常=「101」／不明=左右／ABC=「A」。
@@ -3401,12 +3465,12 @@
                     let map = {};
                     try { map = JSON.parse(item.部屋ステータス || '{}') || {}; } catch (e) { map = {}; }
                     let roomsDone = 0;
-                    Object.keys(map).forEach(k => {
+                    roomKeysOf_(map).forEach(k => { // a: キーは部屋キーへ正規化＋重複排除（属性だけの部屋も1回だけ数える）
                         if (!validSet[k]) return; // 有効部屋リストにある部屋だけ集計（建物編集で外れた部屋のS列残骸は無視＝率が100%超になるのを防ぐ）
-                        const v = String(map[k] || '');
-                        if (isVisitResult_(v)) roomsDone++;
-                        else if (v.indexOf('空き家') >= 0) st.vacant++;
-                        else if (v.indexOf('訪問拒否') >= 0) st.refuse++;
+                        if (roomResultIn_(map, k)) { roomsDone++; return; } // 訪問結果があれば訪問済み
+                        const a = roomAttrIn_(map, k); // 訪問結果が無い部屋だけ属性で数える（レガシー=vの属性値も拾う）
+                        if (a === '空き家') st.vacant++;
+                        else if (a === '訪問拒否') st.refuse++;
                     });
                     st.room += rooms; st.roomDone += roomsDone; // 集合は「部屋」を母数にする（棟は数えない＝戸建てピンと二重計上しない）
                 }
@@ -3509,6 +3573,119 @@
         if (progState.excludedTachikin > 0) {
             html += `<div style="font-size:11px; color:#888; margin-top:8px;">※ 立禁表記ありの集合住宅 ${progState.excludedTachikin}棟 は訪問母数（部屋数）から除外</div>`;
         }
+        body.innerHTML = html;
+    }
+
+    // ── 全員向け: 集合住宅一覧(中規模～)。地区→丁目→建物 の階層で currentData をその場集計（apiCallなし・シートには書かない）。
+    //    進捗モニタリング(aggregateProgress)と同じ「住所→district/chomeKeyの正規表現」の流儀を踏襲する。
+    const SHL_UNSET_DISTRICT = '（住所未設定）'; // 住所が判定できない建物のグループ名（末尾に表示）
+    let shlState = { tree: null };
+    function showShugaList() {
+        openAppModal('🏢 集合住宅一覧(中規模～)');
+        shlState.tree = aggregateShugaList_();
+        renderShugaList();
+    }
+    // currentData から 種別=集合住宅 かつ 戸数(units)>SHUGA_SMALL_MAX（中規模以上）のみを対象に集計する
+    function aggregateShugaList_() {
+        const blankBucket = () => ({ N: 0, M: 0, a: 0, b: 0, c: 0, d: 0, buildings: [] }); // N/M=建物数(全/立禁除く)、a/b・c/d=部屋数(訪問済/有効・全/立禁除く)
+        const blankTotal = () => ({ N: 0, M: 0, a: 0, b: 0, c: 0, d: 0 });
+        const tree = {};
+        const bucket = (district, chomeKey) => {
+            if (!tree[district]) tree[district] = { chomes: {}, total: blankTotal() };
+            if (!tree[district].chomes[chomeKey]) tree[district].chomes[chomeKey] = blankBucket();
+            return tree[district].chomes[chomeKey];
+        };
+        (currentData || []).forEach(item => {
+            if (item.種別 !== '集合住宅') return;
+            const units = parseInt(item.総戸数) || (item.有効部屋リスト ? String(item.有効部屋リスト).split(',').filter(s => s !== '').length : 0);
+            if (units <= SHUGA_SMALL_MAX) return; // 中規模未満（小規模）は対象外
+            const lng = parseFloat(item.経度), lat = parseFloat(item.緯度);
+            if (isNaN(lng) || isNaN(lat) || lng === 0 || lat === 0) return; // 地図描画と同じ条件で不正座標を除外（🗺リンクが機能しないため）
+            const addr = (item.住所 && item.住所 !== '-' && String(item.住所).trim() !== '') ? addrWithoutGo(item.住所) : (deriveAddress(lng, lat) || '');
+            let district = SHL_UNSET_DISTRICT, chomeKey = SHL_UNSET_DISTRICT;
+            const m = String(addr).match(/^(.+?)(\d+丁目)\d+番$/);
+            if (m) { district = m[1]; chomeKey = m[1] + m[2]; }
+            else if (addr) { district = addr; chomeKey = addr; } // 丁目なし地区（鹿骨町 等）
+            const isTachikin = (item.立禁表記 || '不明') === 'あり';
+            // 有効部屋リスト(P列)にある部屋だけを母数にし、部屋ステータス(S列)で訪問済み(会えた/不在/投函)を数える。
+            // 予約キー「管理人」は有効部屋リストに含まれないため validSet で自然に除外されるが、S列残骸対策として明示的にも除外する。
+            const validSet = {};
+            let rooms = 0;
+            String(item.有効部屋リスト || '').split(',').forEach(s => { const k = String(s).trim(); if (k !== '') { validSet[k] = true; rooms++; } });
+            let map = {};
+            try { map = JSON.parse(item.部屋ステータス || '{}') || {}; } catch (e) { map = {}; }
+            let roomsDone = 0;
+            Object.keys(map).forEach(k => {
+                if (isAttrKey_(k)) return; // 属性スロット(a:)は部屋ではない＝分子に数えない（訪問済みは結果スロットで判定）
+                if (isMgrKey(k)) return; // 管理人キーは部屋数の分子から除外
+                if (!validSet[k]) return;
+                if (roomResultIn_(map, k)) roomsDone++;
+            });
+            const b = bucket(district, chomeKey);
+            b.N += 1; if (!isTachikin) b.M += 1;
+            b.a += roomsDone; b.b += rooms;
+            if (!isTachikin) { b.c += roomsDone; b.d += rooms; }
+            b.buildings.push({ item: item, isTachikin: isTachikin, hasAL: getAutolock(item) === 'あり', roomsForItem: rooms, roomsDoneForItem: roomsDone });
+        });
+        Object.keys(tree).forEach(d => {
+            const tot = tree[d].total;
+            Object.keys(tree[d].chomes).forEach(c => {
+                const s = tree[d].chomes[c];
+                // 建物一覧は住所(番・号)の昇順（自然順）。住所同一・空は建物名順。
+                s.buildings.sort((x, y) => {
+                    const cmp = String(x.item.住所 || '').localeCompare(String(y.item.住所 || ''), 'ja', { numeric: true, sensitivity: 'base' });
+                    if (cmp !== 0) return cmp;
+                    return String(x.item['建物名 / 世帯名'] || '').localeCompare(String(y.item['建物名 / 世帯名'] || ''), 'ja', { numeric: true, sensitivity: 'base' });
+                });
+                tot.N += s.N; tot.M += s.M; tot.a += s.a; tot.b += s.b; tot.c += s.c; tot.d += s.d;
+            });
+        });
+        return tree;
+    }
+    function shlSummaryHtml_(s) {
+        return `<div class="shl-sum-l">${tr('建物数')}：${fmtNum_(s.N)}（${tr('立禁除く')} ${fmtNum_(s.M)}）</div>`
+            + `<div class="shl-sum-l">${tr('部屋数')}：${fmtNum_(s.a)}/${fmtNum_(s.b)}（${tr('立禁除く')} ${fmtNum_(s.c)}/${fmtNum_(s.d)}）</div>`;
+    }
+    function shlBuildingRowHtml_(b) {
+        const item = b.item;
+        const name = String(item['建物名 / 世帯名'] || '').trim() || tr('(名称なし)');
+        let badges = '';
+        if (b.hasAL) badges += `<span class="shl-badge shl-badge-red">AL</span>`;
+        const attrOpt = SHUGA_ATTR_OPTS_.find(o => o.v === item.属性);
+        if (attrOpt && attrOpt.v !== '不明') badges += `<span class="shl-badge" style="background:${attrOpt.bg}; color:${attrOpt.fg}; border:1px solid ${attrOpt.bd};">${escHtml(tr(attrOpt.label))}</span>`;
+        if (b.isTachikin) badges += `<span class="shl-badge shl-badge-red">${escHtml(tr('立禁'))}</span>`;
+        return `<div class="shl-bldg-row">`
+            + `<div class="shl-bldg-main"><div class="shl-bldg-name">${escHtml(name)}</div>`
+            + `<div class="shl-bldg-sub">${tr('部屋数')}：${fmtNum_(b.roomsDoneForItem)}/${fmtNum_(b.roomsForItem)}${badges}</div></div>`
+            + `<span class="shl-maplink" onclick="closeAppModal(); openPinDeepLink('${escHtml(String(item.ID))}');" title="${tr('地図で開く')}">🗺</span>`
+            + `</div>`;
+    }
+    function renderShugaList() {
+        const body = document.getElementById('app-modal-body');
+        const tree = shlState.tree || {};
+        const distKeys = Object.keys(tree);
+        if (!distKeys.length) { body.innerHTML = `<div style="color:#888; padding:8px;">${tr('対象の集合住宅がありません')}</div>`; return; }
+        // 既知の地区順(AREA_GRID_ORDER)＋その他＋末尾に住所未設定（他画面の地区アコーディオンと同じ並び方）
+        const dists = AREA_GRID_ORDER.filter(d => tree[d])
+            .concat(distKeys.filter(d => AREA_GRID_ORDER.indexOf(d) < 0 && d !== SHL_UNSET_DISTRICT));
+        if (tree[SHL_UNSET_DISTRICT]) dists.push(SHL_UNSET_DISTRICT);
+        let html = '';
+        dists.forEach(d => {
+            const dist = tree[d];
+            html += `<details class="dist-acc"><summary><span class="da-name">${escHtml(tr(d))}</span><span class="da-chev">▾</span></summary><div class="da-body">`
+                + `<div class="shl-sum">${shlSummaryHtml_(dist.total)}</div>`;
+            const chomeKeys = Object.keys(dist.chomes);
+            chomeKeys.forEach(c => {
+                const ch = dist.chomes[c];
+                if (chomeKeys.length === 1 && c === d) { // 丁目なし地区（鹿骨町 等・住所未設定含む）：地区直下に建物一覧
+                    html += ch.buildings.map(shlBuildingRowHtml_).join('');
+                } else {
+                    html += `<details class="dist-acc"><summary><span class="da-name">${escHtml(tr(c))}</span><span class="da-chev">▾</span></summary><div class="da-body">`
+                        + `<div class="shl-sum">${shlSummaryHtml_(ch)}</div>${ch.buildings.map(shlBuildingRowHtml_).join('')}</div></details>`;
+                }
+            });
+            html += `</div></details>`;
+        });
         body.innerHTML = html;
     }
 
@@ -3669,7 +3846,7 @@
                     grid += `<td class="pc"><div class="pm">${marks[rn] === 'c' ? '会社' : '個人'}</div></td>`;
                     continue;
                 }
-                const ch = roomVisual(map[rn]).char, mark = (ch === '拒' || ch === '外') ? ch : '';
+                const ch = roomVisual(roomDisplayIn_(map, rn)).char, mark = (ch === '拒' || ch === '外') ? ch : ''; // 表示はアプリのグリッドと同じ属性優先
                 const numLabel = roomCellLabel(rn, mode, f, r, floors, maxRoom);
                 grid += `<td class="pc"><div class="pn">${escHtml(String(numLabel))}</div>${mark ? `<div class="ps">${escHtml(mark)}</div>` : ''}</td>`;
             }
@@ -4838,7 +5015,7 @@
             + '<span class="tlv-c tlv-c-name">' + escHtml(tlvUpdatedByName_(item)) + '</span>'
             + '<span class="tlv-c tlv-c-email">' + escHtml(item.最終更新者 || '—') + '</span>'
             + '<span class="tlv-c tlv-c-type">' + escHtml(item.種別 || '') + '</span>'
-            + '<button class="choice-btn tlv-c tlv-c-map" style="background:#eef3f6; padding:1px 8px; font-size:11px;" onclick="tlvOpenOnMap_(\'' + escHtml(String(item.ID)) + '\')">🗺 地図</button>'
+            + '<span class="usg-maplink tlv-c tlv-c-map" onclick="tlvOpenOnMap_(\'' + escHtml(String(item.ID)) + '\')" title="' + tr('地図で開く') + '">🗺</span>'
             + '</div>'
             + '</div>';
     }
@@ -5000,6 +5177,10 @@
         applyUsgFilter();
     }
 
+    // 集合住宅の「小規模」判定の閾値（この戸数以下が小規模＝アパート型アイコン／広域で先に隠す対象。超は中規模以上＝マンション型アイコン）。
+    // マーカー描画(isSmallShuga)と「集合住宅一覧(中規模～)」画面(showShugaList)の対象判定で共有する。
+    const SHUGA_SMALL_MAX = 12;
+
     // ✨ 最重要: スプレッドシートから読み込んだ瞬間に「絶対数値化」する描画処理
     function renderMarkers(data) {
         // 非配列（想定外の応答・通信の乱れで undefined 等）は、地図を白紙にせず現状のピンを保持し、赤エラーも出さない（不安を煽らない）。
@@ -5055,15 +5236,15 @@
             markerEl.className = 'custom-marker';
 
             let popupHtml = `<div class="popup-content">`;
-            let isSmallShuga = false; // 小さめ集合住宅(12戸以下)＝広域で先に隠す対象
+            let isSmallShuga = false; // 小さめ集合住宅(SHUGA_SMALL_MAX戸以下)＝広域で先に隠す対象
 
             if (firstItem.種別 === '集合住宅') {
                 markerEl.className += ' marker-shuga';
-                // 戸数が12以下はアパート(低層SVG)、13以上はマンション(高層SVG)。白シルエットで背景色(構成属性)が生きる
+                // 戸数がSHUGA_SMALL_MAX以下はアパート(低層SVG)、それ超はマンション(高層SVG)。白シルエットで背景色(構成属性)が生きる
                 const units = parseInt(firstItem.総戸数) || (firstItem.有効部屋リスト ? String(firstItem.有効部屋リスト).split(',').filter(s => s !== '').length : 0);
-                isSmallShuga = units <= 12;
+                isSmallShuga = units <= SHUGA_SMALL_MAX;
                 const bNameForIcon = String(firstItem['建物名 / 世帯名'] || '').trim();
-                markerEl.innerHTML = bNameForIcon === '' ? ICON_SMALL_BLDG : (units > 12 ? ICON_MANSION : ICON_APART);
+                markerEl.innerHTML = bNameForIcon === '' ? ICON_SMALL_BLDG : (units > SHUGA_SMALL_MAX ? ICON_MANSION : ICON_APART);
                 // 背景＝構成属性（ファミリー/シングル等）で色分け
                 markerEl.style.background = shugaColor(firstItem.属性);
                 // 薄黄(ファミリー/混在)背景では白シルエットが見えないため、濃い黄土色に切り替える
@@ -5329,10 +5510,10 @@
                 if (validRoomsArr.includes(roomNum)) {
                     // 色は状態で変える。文字は通常は部屋番号だが、拒否・外国語のときは☆を表示する。
                     // （番号はセルをタップすると下の操作欄に「XXX号室」として表示される）
-                    const st = roomStatusMap[roomNum];
-                    const v = roomVisual(st);
+                    const v = roomVisual(roomDisplayIn_(roomStatusMap, roomNum)); // 属性優先（属性が無ければ訪問結果）＝戸建てのピンと同じ思想
+                    const attr = roomAttrIn_(roomStatusMap, roomNum);
                     // 拒否・連携する外国語は☆。連携しない外国語は☆にせず数字表記のまま（色は紫のまま）。
-                    const showStar = (st === '訪問拒否') || (st === '外国語' && !isNonLinkLang_(roomLangMap[roomNum]));
+                    const showStar = (attr === '訪問拒否') || (attr === '外国語' && !isNonLinkLang_(roomLangMap[roomNum]));
                     let label = showStar ? '☆' : roomCellLabel(roomNum, mode, f, r, floors, maxRoom);
                     if (roomMarkMap[roomNum]) label = roomMarkLabel(roomMarkMap[roomNum]); // 個人宅=🏠／会社=🏢
                     gridHtml += `<td class="cell-active" data-room="${roomNum}" style="min-width:40px; background:${v.bg}; color:${v.color};">${label}</td>`;
@@ -5349,7 +5530,7 @@
         let mgrHtml = '';
         if (String(first.管理人) === 'あり') {
             // セルの表記は他の部屋と同様に固定（「管理人」）。状態は色だけで表す（roomVisual）。見出しは付けない。
-            const mv = roomVisual(roomStatusMap[MGR_KEY]);
+            const mv = roomVisual(roomDisplayIn_(roomStatusMap, MGR_KEY)); // 管理人も部屋と同じ属性優先表示
             mgrHtml = `<table class="grid-table" style="width:auto; margin-top:8px;"><tbody><tr>`
                 + `<td class="cell-active" data-room="${MGR_KEY}" style="min-width:72px; background:${mv.bg}; color:${mv.color}; text-align:center; font-size:0.85em;">${tr('管理人')}</td>`
                 + `</tr></tbody></table>`;
@@ -5497,7 +5678,7 @@
             let historyArr = [];
             try { historyArr = JSON.parse(item.履歴データ || '[]') || []; } catch (e) { historyArr = []; }
             const hasRecord = (rn) => {
-                if (roomStatusOf(item, rn)) return true;
+                if (roomStatusOf(item, rn) || roomAttrOf(item, rn)) return true; // 訪問結果(v)・属性(a:)のどちらかがあれば記録あり
                 const prefix = roomTag(rn) + ': ';
                 return historyArr.some(h => String((h && h.status) || '').indexOf(prefix) === 0);
             };
@@ -5595,8 +5776,10 @@
             } catch(e){}
         }
 
-        // この部屋の現在値（属性 or 訪問結果）。選択ボタンのハイライトに使う。
-        const curRoomVal = roomStatusOf(item, roomNum);
+        // この部屋の現在値。属性(a:スロット)と訪問結果(vスロット)は独立なので、それぞれの現在値でハイライトする。
+        const roomMap = parseRoomMap_(item);
+        const curAttr = roomAttrIn_(roomMap, roomNum);     // 属性行（''＝訪問可）
+        const curResult = roomResultIn_(roomMap, roomNum); // 訪問結果行
         // この部屋の言語（V列JSON）。外国語のとき注記表示に使う。
         let roomLang = '';
         try { const _lm = JSON.parse((item && item.言語) || '{}') || {}; roomLang = _lm[roomNum] || ''; } catch(e) {}
@@ -5608,11 +5791,11 @@
         const html = `
             <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px;">
                 <span style="font-weight:bold; font-size:12px;">${title}</span>
-                ${attrLineHtml(curRoomVal, `saveRoomState(${buildingRow}, ${roomKeyJs(roomNum)}, '%v')`, true)}
+                ${attrLineHtml(curAttr, `saveRoomState(${buildingRow}, ${roomKeyJs(roomNum)}, '%v')`, true)}
             </div>
-            ${curRoomVal === '外国語' && roomLang ? `<div class="lang-note">${tr('言語：')}${escHtml(langLinkLabel_(roomLang))}</div>` : ''}
+            ${curAttr === '外国語' && roomLang ? `<div class="lang-note">${tr('言語：')}${escHtml(langLinkLabel_(roomLang))}</div>` : ''}
             <div style="font-weight:bold; font-size:12px; margin:2px 0 4px;">${tr('訪問結果')}</div>
-            ${resultChoiceHtml(curRoomVal, `saveRoomStatus(${buildingRow}, ${roomKeyJs(roomNum)}, '%v')`)}
+            ${resultChoiceHtml(curResult, `saveRoomStatus(${buildingRow}, ${roomKeyJs(roomNum)}, '%v')`)}
             <div style="font-weight:bold; font-size:14px; margin-top:4px;">${tr('部屋の履歴:')}</div>
             <div class="history-box" style="min-height:46px; max-height:60px; margin-top:2px;">${historyHtml || ((item && ('履歴データ' in item)) ? `<div style="color:#aaa;">${tr('履歴なし')}</div>` : `<div style="color:#aaa;">${tr('履歴を読み込み中…')}</div>`)}</div>
         `;
@@ -5689,7 +5872,8 @@
         return '不在(' + n + '回目)';
     }
 
-    // 部屋の現在値（S列の部屋ステータスJSON）を安全に取り出す共通ヘルパー
+    // 部屋の訪問結果スロット(v)の生値（S列JSONの "101" キー）を安全に取り出す共通ヘルパー。
+    // ※ 属性は roomAttrOf / 訪問結果の判定込みなら roomResultOf を使う（レガシー互換はそちらが吸収する）。
     function roomStatusOf(item, roomNum) {
         try { return (JSON.parse((item && item.部屋ステータス) || '{}') || {})[roomNum] || ''; } catch (e) { return ''; }
     }
@@ -5854,24 +6038,27 @@
     }
 
     // 部屋の更新（訪問結果・属性 共通）。ポップアップを閉じず、グリッドの色・履歴を楽観的に即反映する。
-    function applyRoomChange(buildingRow, roomNum, finalStatus, addHistory, doneMsg) {
+    // isAttr=true は属性スロット(a:)への書き込み。false・未指定は訪問結果スロット(v)への書き込み。
+    function applyRoomChange(buildingRow, roomNum, finalStatus, addHistory, doneMsg, isAttr) {
         const idx = currentData.findIndex(d => d.rowNumber === buildingRow);
         if (idx < 0) return;
-        if (roomStatusOf(currentData[idx], roomNum) === finalStatus) return; // 同値スキップ（不在は繰り上げ済みで一致しない）
+        const curMap = parseRoomMap_(currentData[idx]);
+        // 同値スキップはスロットごとに判定する（不在は繰り上げ済みで一致しない。属性の '' は「訪問可」＝未訪問と同義）
+        if (isAttr) { if ((roomAttrIn_(curMap, roomNum) || '未訪問') === String(finalStatus)) return; }
+        else if (roomResultIn_(curMap, roomNum) === String(finalStatus)) return;
 
         enqueueOptimistic(buildingRow, { // 建物行単位で直列化（同一建物の履歴順序を保証）
             snapshot: () => { const it = currentData.find(d => d.rowNumber === buildingRow); return { 部屋ステータス: it.部屋ステータス, 最新ステータス: it.最新ステータス, 履歴データ: it.履歴データ }; },
             apply: () => {
                 const i = currentData.findIndex(d => d.rowNumber === buildingRow);
                 const it = currentData[i];
-                let rsMap = {}; try { rsMap = JSON.parse(it.部屋ステータス || '{}') || {}; } catch (e) {}
-                rsMap[String(roomNum)] = finalStatus;
+                const rsMap = applyRoomSlot_(parseRoomMap_(it), roomNum, finalStatus, isAttr); // GAS と同じ規則（レイジー退避・レガシー掃除込み）
                 const patch = { 部屋ステータス: JSON.stringify(rsMap), 最新ステータス: roomTag(roomNum) + ': ' + finalStatus };
                 if (addHistory) patch.履歴データ = addRoomProvisionalHistory(it.履歴データ, roomNum, finalStatus);
                 currentData[i] = Object.assign({}, it, patch);
                 renderShugaRoom(buildingRow, roomNum);
             },
-            send: () => apiCall('updateRoom', { buildingRow: buildingRow, roomNum: roomNum, status: finalStatus, addHistory: addHistory, id: pinIdOf(buildingRow) }),
+            send: () => apiCall('updateRoom', { buildingRow: buildingRow, roomNum: roomNum, status: finalStatus, addHistory: addHistory, attr: !!isAttr, id: pinIdOf(buildingRow) }),
             reconcile: (latest) => reconcileShugaRoom(buildingRow, roomNum, latest),
             restore: (snap) => { const i = currentData.findIndex(d => d.rowNumber === buildingRow); if (i >= 0) { currentData[i] = Object.assign({}, currentData[i], snap); renderShugaRoom(buildingRow, roomNum); } },
             onSuccess: () => showDone(doneMsg || '更新しました') // 訪問結果/属性で文言を出し分け（戸建てと対称に）
@@ -5883,9 +6070,9 @@
         let status = val;
         if (val === '不在') {
             const item = currentData.find(d => d.rowNumber === buildingRow);
-            status = nextAbsence(roomStatusOf(item, roomNum));
+            status = nextAbsence(roomResultOf(item, roomNum)); // 回数の元は訪問結果スロット（属性は繰り上げに影響させない）
         }
-        applyRoomChange(buildingRow, roomNum, status, true, '訪問結果を記録しました');
+        applyRoomChange(buildingRow, roomNum, status, true, '訪問結果を記録しました', false);
     }
 
     // 戸建ての属性（通常/訪問拒否/外国語/空き家）。タップ即反映（ピン形・色も変わる）→ 裏で保存 → 失敗で巻き戻し。
@@ -5923,11 +6110,11 @@
         // 訪問拒否・外国語は個人情報を伴うため、直接更新せず報告フォームを開く（送信成功時にサーバ側で部屋属性も更新）
         if (state === '訪問拒否' || state === '外国語') {
             const item = currentData.find(d => d.rowNumber === buildingRow);
-            if (item && roomStatusOf(item, roomNum) === state) return; // 既に同じ属性ならフォームを開かない
+            if (item && roomAttrOf(item, roomNum) === state) return; // 既に同じ属性ならフォームを開かない
             openReportForm({ reportType: state, kind: '集合住宅', buildingRow: buildingRow, roomNum: roomNum, item: item });
             return;
         }
-        applyRoomChange(buildingRow, roomNum, state, true, '属性を更新しました');
+        applyRoomChange(buildingRow, roomNum, state, true, '属性を更新しました', true);
     }
 
     /* ── 報告フォーム（拒否・外国語）──────────────────────────────
@@ -5972,7 +6159,7 @@
             app: pinAppLink_(rowForLink),
             map: gmapLink_(lat, lng),
             rowReady: ctx.rowReady || null,
-            curResult: isNewPin ? '' : (isShuga ? roomStatusOf(item, ctx.roomNum) : (item.最新ステータス || '')) // 不在の回数計算の元（現在の訪問結果）
+            curResult: isNewPin ? '' : (isShuga ? roomResultOf(item, ctx.roomNum) : (item.最新ステータス || '')) // 不在の回数計算の元（集合は訪問結果スロット＝属性は影響させない）
         };
         // 新規（戸建て）＝登録完了で rowNumber／アプリリンクを後から注入する。注入はローカル ctxRef に束縛し、別フォームを開いた後の混入を防ぐ。
         const ctxRef = reportCtx;
