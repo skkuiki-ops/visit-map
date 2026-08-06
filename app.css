@@ -91,11 +91,17 @@
         .mnt-acc.mnt-coverage > summary { background:#7A4A6A; }  /* 網羅履歴クリア＝紫（実行ボタンと同系） */
         .mnt-acc.mnt-settings > summary { background:#3D6B8A; }  /* 運用設定＝青（保存ボタンと同系） */
         /* 集合住宅一覧(中規模～)：地区/丁目の見出しバー色（紫系・洗練）＋サマリーを見出し行の右側へ（.shl-acc に閉じる。他のdist-accには影響しない） */
+        /* 丁目（既定）: 淡紫 */
         .dist-acc.shl-acc > summary { background:#F5EDF7; color:#5B2E70; }
         .dist-acc.shl-acc[open] > summary { border-bottom-color:#E7D8EE; }
         .dist-acc.shl-acc > summary .da-chev { color:#9C6FAE; }
-        .dist-acc.shl-acc > summary .shl-sum-inline { flex:0 1 42%; min-width:0; text-align:right; font-size:11px; line-height:1.35; color:#7A4A8C; margin:0 6px; }
+        /* 地区（.shl-dist併記）: 丁目より一段深い紫で親子を区別 */
+        .dist-acc.shl-acc.shl-dist > summary { background:#DCC2E8; color:#4A2560; }
+        .dist-acc.shl-acc.shl-dist[open] > summary { border-bottom-color:#CBA8DA; }
+        .dist-acc.shl-acc.shl-dist > summary .da-chev { color:#7A3E8E; }
+        .dist-acc.shl-acc > summary .shl-sum-inline { flex:0 1 58%; min-width:0; text-align:right; font-size:11px; line-height:1.35; color:#7A4A8C; margin:0 6px; }
         .shl-sum-l { line-height:1.6; }
+        .shl-sum-l2 { font-size:10px; color:#9C7BAD; line-height:1.5; } /* 立禁除く行（2段目）：1段目より小さめ・薄め */
         /* 建物行：建物名＋部屋数＋バッジ＋🗺 を1行に（flex-wrap。狭い時は名前が1行目・メタ情報(部屋数/バッジ/🗺)が2行目にまとまって折り返す） */
         .shl-bldg-row { display:flex; flex-wrap:wrap; align-items:center; gap:6px 8px; padding:8px 4px; border-bottom:1px solid #eee; }
         .shl-bldg-row:last-child { border-bottom:none; }
@@ -105,6 +111,14 @@
         .shl-badge-red { background:#F3D9D5; color:#7a342c; border:1px solid #7a342c; }
         .shl-maplink { flex-shrink:0; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; font-size:18px; line-height:1; padding:4px 6px; border-radius:8px; }
         .shl-maplink:active { background:#d8e6ee; }
+        .shl-addr { font-weight:normal; font-size:11px; color:#888; margin-left:4px; } /* スマホ：建物名の右に小さく併記する住所（X-X-X） */
+        .shl-head-row, .shl-c { display:none; } /* PC専用列（住所/部屋数/AL/構成/立禁/地図）はスマホでは非表示。ヘッダー行も同様 */
+        /* 本文先頭の「全体」合計バー（アコーディオンでない常時表示ブロック。area-allbarの帯と同系・紫テーマ）。PC/スマホ共通・幅いっぱいでも崩れないシンプルなflex */
+        .shl-allbar { display:flex; align-items:center; gap:10px; width:100%; box-sizing:border-box; border:1.5px solid #7A3E8E; border-radius:11px; padding:10px 12px; margin-bottom:10px; background:#F5EDF7; color:#4A2560; }
+        .shl-allbar-label { flex-shrink:0; font-size:14px; font-weight:bold; background:#7A3E8E; color:#fff; border-radius:9px; padding:5px 12px; }
+        .shl-allbar-info { display:flex; flex-direction:column; gap:2px; min-width:0; }
+        .shl-allbar-l1 { font-size:14px; font-weight:bold; }
+        .shl-allbar-l2 { font-size:11px; color:#8a5a9c; }
         /* 移動後の地域名ラベル（画面上部・常時表示・タップで枠/表示を消去） */
         #area-label { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 9999; background: rgba(44,62,80,0.92); color: #fff; font-weight: bold; font-size: 14px; padding: 8px 16px; border-radius: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); max-width: 92%; text-align: center; cursor: pointer; -webkit-touch-callout: none; user-select: none; touch-action: manipulation; }
         body.text-md #area-label { font-size: 16px; padding: 9px 18px; } /* 右下「文字 中」設定を上部番地ラベルにも反映（従来はfont-sizeの上書きが無く枠だけ変化していた） */
@@ -506,6 +520,12 @@
             .lend-item:not(.cov-item) > div:last-child { flex: 1 1 auto; white-space: nowrap; }
             .lend-item:not(.cov-item) .li-badge { display: inline; margin-bottom: 0; margin-right: 8px; }
             .lend-row .lr-dates { display: inline; margin-top: 0; margin-left: 8px; }
+            /* 集合住宅一覧(中規模～)：建物名|住所|部屋数|AL|構成属性|立禁|地図 の7列グリッド。スマホ用(.shl-bldg-meta等)は隠し、PC専用列(.shl-c-*)を表示 */
+            .shl-head-row { display: grid; font-size: 12px; font-weight: bold; color: #555; padding: 4px 10px; border-bottom: 2px solid #c4ccd3; margin-bottom: 4px; grid-template-columns: 1fr 72px 150px 44px 90px 52px 40px; }
+            .shl-bldg-row { display: grid; grid-template-columns: 1fr 72px 150px 44px 90px 52px 40px; gap: 8px; align-items: center; }
+            .shl-bldg-meta, .shl-addr { display: none; } /* スマホ用の統合メタ表示・名前併記の小住所はPCでは列に分離するため隠す */
+            .shl-c { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+            .shl-c-rooms { font-size: 12px; color: #555; }
         }
         .usg-chip { display: inline-flex; align-items: center; gap: 5px; background: #eef4f8; border-radius: 14px; padding: 3px 4px 3px 10px; font-size: 12px; margin: 2px 4px 2px 0; }
         .usg-maplink { display: inline-flex; align-items: center; justify-content: center; cursor: pointer; font-size: 13px; line-height: 1; padding: 2px 5px; text-decoration: none; border-radius: 8px; }
@@ -516,8 +536,8 @@
         .due-over { color: #C75F56; font-weight: bold; } /* 返却期日超過 */
         .due-soon { color: #B0763C; font-weight: bold; } /* 期日まで2週間以内（落ち着いたアンバー） */
         #lend-preview-back { position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%); z-index: 9999; background: #34495e; color: #fff; border: none; border-radius: 20px; padding: 11px 20px; font-size: 15px; font-weight: bold; box-shadow: 0 2px 8px rgba(0,0,0,0.35); cursor: pointer; }
-        /* 全体図の番地ラベルから区域に入った直後だけ出す「区域選択に戻る」（#area-overview-bar と同系の下部中央バー） */
-        #area-return-overview { position: absolute; bottom: 64px; left: 50%; transform: translateX(-50%); z-index: 9999; background: #2c3e50; color: #fff; border: none; border-radius: 23px; padding: 11px 22px; font-size: 15px; font-weight: bold; box-shadow: 0 4px 16px rgba(0,0,0,0.22); cursor: pointer; }
+        /* 全体図の番地ラベルから区域に入った直後だけ出す「区域選択に戻る」（#area-overview-bar と同系の下部中央バー）／集合住宅一覧の🗺から戻る「shl-return-btn」も同スタイル */
+        #area-return-overview, #shl-return-btn { position: absolute; bottom: 64px; left: 50%; transform: translateX(-50%); z-index: 9999; background: #2c3e50; color: #fff; border: none; border-radius: 23px; padding: 11px 22px; font-size: 15px; font-weight: bold; box-shadow: 0 4px 16px rgba(0,0,0,0.22); cursor: pointer; }
 
         /* ── 区域オーバービュー（「🗺 全て表示」）── */
         /* 枠内に出す丁目/番地ラベル（HTMLマーカー）。タップでその区域を選択（赤枠＋通常利用へ）。色は枠色に合わせてJSで上書き */

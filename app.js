@@ -202,10 +202,10 @@
     // ── 集合住宅一覧(中規模～)（メニュー・地区/丁目サマリー・建物行） ──
     Object.assign(I18N_ES, {
         '🏢 集合住宅一覧(中規模～)': '🏢 Lista de edificios (mediano o más)',
-        '建物数': 'N.º de edificios', '部屋数': 'N.º de habitaciones', '立禁除く': 'sin prohibido',
+        '建物': 'Edificios', '部屋数': 'N.º de habitaciones', '立禁除く': 'sin prohibido',
         '（住所未設定）': '(sin dirección)',
         '対象の集合住宅がありません': 'No hay edificios que cumplan la condición',
-        '地図で開く': 'Abrir en el mapa'
+        '地図で開く': 'Abrir en el mapa', '地図': 'Mapa', '全体': 'Total'
     });
     // ── トースト・確認・進行表示（showToast/appConfirm/showBusy/showDone の入口で変換） ──
     Object.assign(I18N_ES, {
@@ -447,6 +447,7 @@
         closeAreaNav();
         exitAreaOverview(); // 区域オーバービュー表示中なら解除（枠・ラベル・モードを片付ける）
         hideAreaReturnOverviewButton(); // 「区域選択に戻る」も片付ける（タイマー破棄）
+        hideShlReturnButton(); // 「集合住宅一覧に戻る」も片付ける（タイマー破棄）
         clearBanchiBox();
         didAutoGeolocate = false; // 次回サインイン時にまた現在地へ寄せる
         document.getElementById('area-label').style.display = 'none';
@@ -1824,6 +1825,7 @@
     // onArrive: 到着後（枠描画後）に実行する処理。長押しの一括割当などに使う。
     function geocodeAndFly(query, zoom, outline, label, onArrive) {
         hideAreaReturnOverviewButton(); // 住所確定の共通移動処理＝ここで消しておけば、直接geocodeAndFlyを呼ぶ経路(住所検索等)でも消し忘れない
+        hideShlReturnButton(); // 同上（集合住宅一覧に戻る）
         zoom = zoom || 18;
         showBusy('検索中…');
         fetch('https://msearch.gsi.go.jp/address-search/AddressSearch?q=' + encodeURIComponent(query))
@@ -3326,6 +3328,7 @@
     // 区域ラベルを地図に表示（「○○N丁目M番」は赤枠つき、丁目なし地区は移動のみ）
     function showAssignedArea(area) {
         hideAreaReturnOverviewButton(); // 別の区域表示に入り直す＝呼び出し元(pickOverviewArea)が必要なら直後に改めて表示する
+        hideShlReturnButton(); // 同上（集合住宅一覧に戻る）
         const m = String(area).match(/^(.+?)(\d+)丁目(\d+)番$/);
         if (m) geocodeAndFly(ADDR_PREFIX + m[1] + m[2] + '-' + m[3], 18, true, area);
         else geocodeAndFly(ADDR_PREFIX + area, 16, false, area);
@@ -3433,6 +3436,8 @@
     function barColor_(r) { return r < 25 ? '#C75F56' : r < 50 ? '#D98E5A' : r < 70 ? '#E2C36A' : r < 85 ? '#9BC27E' : '#5E9DB8'; }
     function fmtPct_(done, total) { return total ? Math.round(done / total * 1000) / 10 : 0; }
     function fmtNum_(n) { return (n == null || n === '') ? n : String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); } // 1234 → 1,234
+    // 集合住宅一覧(中規模～)専用: 部屋数の%表示（訪問済み/有効・小数1桁）。分母0は「—」（fmtPct_は他画面で0%表示に使うため流用しない）
+    function shlPctTxt_(done, total) { return total ? fmtPct_(done, total).toFixed(1) + '%' : '—'; }
     function progBar_(r) { return `<div class="prog-bar"><span style="width:${Math.min(100, r)}%; background:${barColor_(r)};"></span></div>`; }
     // currentData を 地区→丁目 に集計する
     function aggregateProgress(areaList) {
@@ -3580,9 +3585,21 @@
     // ── 全員向け: 集合住宅一覧(中規模～)。地区→丁目→建物 の階層で currentData をその場集計（apiCallなし・シートには書かない）。
     //    進捗モニタリング(aggregateProgress)と同じ「住所→district/chomeKeyの正規表現」の流儀を踏襲する。
     const SHL_UNSET_DISTRICT = '（住所未設定）'; // 住所が判定できない建物のグループ名（末尾に表示）
-    let shlState = { tree: null };
+    // openKeys: 🗺で地図へ抜ける直前に開いていた地区/丁目アコーディオンのキー集合（{key:true}）。再表示(renderShugaList)で復元する。
+    let shlState = { tree: null, openKeys: {} };
+    // 住所(D列。「○○2丁目10番3号」等)から丁目/番/号の数字だけを抽出し「2-10-3」の形に短縮する（地区名は列/アコーディオンで自明なので省く）。
+    // パースできない値・空はそのまま返す（生値表示）。
+    function shlAddrShort_(addr) {
+        const s = String(addr || '');
+        const nums = [];
+        const re = /(\d+)(?:丁目|番|号)/g;
+        let m;
+        while ((m = re.exec(s)) !== null) nums.push(m[1]);
+        return nums.length ? nums.join('-') : s;
+    }
     function showShugaList() {
-        openAppModal('🏢 集合住宅一覧(中規模～)', 'shuga');
+        hideShlReturnButton(); // 一覧を開き直す＝前回の「集合住宅一覧に戻る」は無効なので即クリーンアップ
+        openAppModal('🏢 集合住宅一覧(中規模～)', 'shuga', true); // wide=true: PCは表形式のため横幅を拡大（modal-wide。紫テーマと併用）
         shlState.tree = aggregateShugaList_();
         renderShugaList();
     }
@@ -3602,7 +3619,8 @@
             if (units <= SHUGA_SMALL_MAX) return; // 中規模未満（小規模）は対象外
             const lng = parseFloat(item.経度), lat = parseFloat(item.緯度);
             if (isNaN(lng) || isNaN(lat) || lng === 0 || lat === 0) return; // 地図描画と同じ条件で不正座標を除外（🗺リンクが機能しないため）
-            const addr = (item.住所 && item.住所 !== '-' && String(item.住所).trim() !== '') ? addrWithoutGo(item.住所) : (deriveAddress(lng, lat) || '');
+            const rawAddr = (item.住所 && item.住所 !== '-' && String(item.住所).trim() !== '') ? item.住所 : (deriveAddress(lng, lat) || ''); // 号込みの生住所（建物行の短縮表示に使う）
+            const addr = addrWithoutGo(rawAddr);
             let district = SHL_UNSET_DISTRICT, chomeKey = SHL_UNSET_DISTRICT;
             const m = String(addr).match(/^(.+?)(\d+丁目)\d+番$/);
             if (m) { district = m[1]; chomeKey = m[1] + m[2]; }
@@ -3626,7 +3644,7 @@
             b.N += 1; if (!isTachikin) b.M += 1;
             b.a += roomsDone; b.b += rooms;
             if (!isTachikin) { b.c += roomsDone; b.d += rooms; }
-            b.buildings.push({ item: item, isTachikin: isTachikin, hasAL: getAutolock(item) === 'あり', roomsForItem: rooms, roomsDoneForItem: roomsDone });
+            b.buildings.push({ item: item, isTachikin: isTachikin, hasAL: getAutolock(item) === 'あり', roomsForItem: rooms, roomsDoneForItem: roomsDone, addrShort: shlAddrShort_(rawAddr) });
         });
         Object.keys(tree).forEach(d => {
             const tot = tree[d].total;
@@ -3643,27 +3661,69 @@
         });
         return tree;
     }
-    // 見出し行の右側に置くサマリー（<summary>内の.da-chev手前に差し込む。1〜2行・折返し可）
+    // 見出し行の右側に置くサマリー（<summary>内の.da-chev手前に差し込む）。1段目=全体（建物・部屋数/%）、2段目=立禁除く（小さめ・薄め）
     function shlSummaryHtml_(s) {
         return `<span class="shl-sum-inline">`
-            + `<div class="shl-sum-l">${tr('建物数')}：${fmtNum_(s.N)}（${tr('立禁除く')} ${fmtNum_(s.M)}）</div>`
-            + `<div class="shl-sum-l">${tr('部屋数')}：${fmtNum_(s.a)}/${fmtNum_(s.b)}（${tr('立禁除く')} ${fmtNum_(s.c)}/${fmtNum_(s.d)}）</div>`
+            + `<div class="shl-sum-l">${tr('建物')} ${fmtNum_(s.N)} ・ ${tr('部屋')} ${fmtNum_(s.a)}/${fmtNum_(s.b)}（${shlPctTxt_(s.a, s.b)}）</div>`
+            + `<div class="shl-sum-l shl-sum-l2">${tr('立禁除く')} ${fmtNum_(s.M)} ・ ${fmtNum_(s.c)}/${fmtNum_(s.d)}（${shlPctTxt_(s.c, s.d)}）</div>`
             + `</span>`;
+    }
+    // 本文先頭に常時表示する「全地区の合計」バー（アコーディオンではない1ブロック）。書式・%規則は shlSummaryHtml_ と同一。
+    function shlAllBarHtml_(tot) {
+        return `<div class="shl-allbar">`
+            + `<span class="shl-allbar-label">${tr('全体')}</span>`
+            + `<div class="shl-allbar-info">`
+            + `<div class="shl-allbar-l1">${tr('建物')} ${fmtNum_(tot.N)} ・ ${tr('部屋')} ${fmtNum_(tot.a)}/${fmtNum_(tot.b)}（${shlPctTxt_(tot.a, tot.b)}）</div>`
+            + `<div class="shl-allbar-l2">${tr('立禁除く')} ${fmtNum_(tot.M)} ・ ${fmtNum_(tot.c)}/${fmtNum_(tot.d)}（${shlPctTxt_(tot.c, tot.d)}）</div>`
+            + `</div></div>`;
+    }
+    // PC(≥769px)表形式のヘッダー行。スマホでは.shl-head-rowをCSSで非表示（区域操作履歴の.tlv-head-rowと同じ流儀）
+    function shlHeadRowHtml_() {
+        return `<div class="shl-head-row">`
+            + `<span>${tr('建物名')}</span><span>${tr('住所')}</span><span>${tr('部屋数')}</span>`
+            + `<span>AL</span><span>${tr('構成属性')}</span><span>${tr('立禁')}</span><span>${tr('地図')}</span>`
+            + `</div>`;
     }
     function shlBuildingRowHtml_(b) {
         const item = b.item;
         const name = String(item['建物名 / 世帯名'] || '').trim() || tr('(名称なし)');
-        let badges = '';
-        if (b.hasAL) badges += `<span class="shl-badge shl-badge-red">AL</span>`;
+        const addrShort = escHtml(b.addrShort || '');
+        const alBadge = b.hasAL ? `<span class="shl-badge shl-badge-red">AL</span>` : '';
         const attrOpt = SHUGA_ATTR_OPTS_.find(o => o.v === item.属性);
-        if (attrOpt && attrOpt.v !== '不明') badges += `<span class="shl-badge" style="background:${attrOpt.bg}; color:${attrOpt.fg}; border:1px solid ${attrOpt.bd};">${escHtml(tr(attrOpt.label))}</span>`;
-        if (b.isTachikin) badges += `<span class="shl-badge shl-badge-red">${escHtml(tr('立禁'))}</span>`;
-        // 建物名＋部屋数＋バッジ＋🗺 を1行（flex-wrap）に。狭い時は名前が1行目・メタ情報(部屋数/バッジ/🗺)ごと2行目へ折返す
+        const attrBadge = (attrOpt && attrOpt.v !== '不明')
+            ? `<span class="shl-badge" style="background:${attrOpt.bg}; color:${attrOpt.fg}; border:1px solid ${attrOpt.bd};">${escHtml(tr(attrOpt.label))}</span>` : '';
+        const tachikinBadge = b.isTachikin ? `<span class="shl-badge shl-badge-red">${escHtml(tr('立禁'))}</span>` : '';
+        const badges = alBadge + attrBadge + tachikinBadge;
+        const mapLink = `<span class="shl-maplink" onclick="shlOpenOnMap('${escHtml(String(item.ID))}');" title="${tr('地図で開く')}">🗺</span>`;
+        // スマホ: 建物名(+住所を小さく併記)＋部屋数＋バッジ＋🗺 を1行（flex-wrap）に。狭い時は名前が1行目・メタ情報ごと2行目へ折返す（既存レイアウトのまま）
+        // PC: 名前/住所/部屋数/AL/構成/立禁/地図 の7列グリッド（.shl-c-* はスマホ非表示・.shl-bldg-meta等はPC非表示。値が無い列は「—」で桁を維持）
         return `<div class="shl-bldg-row">`
-            + `<span class="shl-bldg-name">${escHtml(name)}</span>`
-            + `<span class="shl-bldg-meta">${tr('部屋数')}：${fmtNum_(b.roomsDoneForItem)}/${fmtNum_(b.roomsForItem)}${badges}`
-            + `<span class="shl-maplink" onclick="closeAppModal(); openPinDeepLink('${escHtml(String(item.ID))}');" title="${tr('地図で開く')}">🗺</span></span>`
+            + `<span class="shl-bldg-name">${escHtml(name)}${addrShort ? `<span class="shl-addr">${addrShort}</span>` : ''}</span>`
+            + `<span class="shl-bldg-meta">${tr('部屋数')} ${fmtNum_(b.roomsDoneForItem)}/${fmtNum_(b.roomsForItem)}（${shlPctTxt_(b.roomsDoneForItem, b.roomsForItem)}）${badges}${mapLink}</span>`
+            + `<span class="shl-c shl-c-addr">${addrShort || '—'}</span>`
+            + `<span class="shl-c shl-c-rooms">${fmtNum_(b.roomsDoneForItem)}/${fmtNum_(b.roomsForItem)}（${shlPctTxt_(b.roomsDoneForItem, b.roomsForItem)}）</span>`
+            + `<span class="shl-c shl-c-al">${alBadge || '—'}</span>`
+            + `<span class="shl-c shl-c-attr">${attrBadge || '—'}</span>`
+            + `<span class="shl-c shl-c-tachikin">${tachikinBadge || '—'}</span>`
+            + `<span class="shl-c shl-c-map">${mapLink}</span>`
             + `</div>`;
+    }
+    // 🗺タップ: 開いていたアコーディオンの開閉状態を保持してから地図へ（closeAppModal→openPinDeepLink）。「集合住宅一覧に戻る」を表示する。
+    function shlOpenOnMap(id) {
+        shlCaptureOpenState_();
+        closeAppModal();
+        openPinDeepLink(id);
+        showShlReturnButton();
+    }
+    // 現在開いている地区/丁目アコーディオンのキーを shlState.openKeys に記録する（renderShugaList の data-shl-key と対応）
+    function shlCaptureOpenState_() {
+        const body = document.getElementById('app-modal-body');
+        const keys = {};
+        if (body) body.querySelectorAll('details.shl-acc[open]').forEach(el => {
+            const k = el.getAttribute('data-shl-key');
+            if (k) keys[k] = true;
+        });
+        shlState.openKeys = keys;
     }
     function renderShugaList() {
         const body = document.getElementById('app-modal-body');
@@ -3674,18 +3734,27 @@
         const dists = AREA_GRID_ORDER.filter(d => tree[d])
             .concat(distKeys.filter(d => AREA_GRID_ORDER.indexOf(d) < 0 && d !== SHL_UNSET_DISTRICT));
         if (tree[SHL_UNSET_DISTRICT]) dists.push(SHL_UNSET_DISTRICT);
-        let html = '';
+        const openKeys = shlState.openKeys || {};
+        // 全地区の合計（aggregateShugaList_の各地区totalを積み上げ）を本文先頭に常時表示
+        const allTotal = { N: 0, M: 0, a: 0, b: 0, c: 0, d: 0 };
+        distKeys.forEach(d => {
+            const t = tree[d].total;
+            allTotal.N += t.N; allTotal.M += t.M; allTotal.a += t.a; allTotal.b += t.b; allTotal.c += t.c; allTotal.d += t.d;
+        });
+        let html = shlAllBarHtml_(allTotal);
         dists.forEach(d => {
             const dist = tree[d];
-            html += `<details class="dist-acc shl-acc"><summary><span class="da-name">${escHtml(tr(d))}</span>${shlSummaryHtml_(dist.total)}<span class="da-chev">▾</span></summary><div class="da-body">`;
+            const dKey = escHtml(d);
+            html += `<details class="dist-acc shl-acc shl-dist" data-shl-key="${dKey}"${openKeys[d] ? ' open' : ''}><summary><span class="da-name">${escHtml(tr(d))}</span>${shlSummaryHtml_(dist.total)}<span class="da-chev">▾</span></summary><div class="da-body">`;
             const chomeKeys = Object.keys(dist.chomes);
             chomeKeys.forEach(c => {
                 const ch = dist.chomes[c];
                 if (chomeKeys.length === 1 && c === d) { // 丁目なし地区（鹿骨町 等・住所未設定含む）：地区直下に建物一覧
-                    html += ch.buildings.map(shlBuildingRowHtml_).join('');
+                    html += shlHeadRowHtml_() + ch.buildings.map(shlBuildingRowHtml_).join('');
                 } else {
-                    html += `<details class="dist-acc shl-acc"><summary><span class="da-name">${escHtml(tr(c))}</span>${shlSummaryHtml_(ch)}<span class="da-chev">▾</span></summary><div class="da-body">`
-                        + `${ch.buildings.map(shlBuildingRowHtml_).join('')}</div></details>`;
+                    const cKey = escHtml(d + '|' + c);
+                    html += `<details class="dist-acc shl-acc" data-shl-key="${cKey}"${openKeys[d + '|' + c] ? ' open' : ''}><summary><span class="da-name">${escHtml(tr(c))}</span>${shlSummaryHtml_(ch)}<span class="da-chev">▾</span></summary><div class="da-body">`
+                        + shlHeadRowHtml_() + `${ch.buildings.map(shlBuildingRowHtml_).join('')}</div></details>`;
                 }
             });
             html += `</div></details>`;
@@ -3922,6 +3991,7 @@
         const areas = overviewBucketAreas(bucket);
         if (!areas.length) { showToast('表示できる区域がありません', true); return; }
         hideAreaReturnOverviewButton(); // 別の全体図へ入り直す＝前回の「区域選択に戻る」は無効なので即クリーンアップ
+        hideShlReturnButton(); // 同上（集合住宅一覧に戻る）
         closeAppModal();              // 一覧モーダルを閉じてから地図へ
         clearBanchiBox();             // 既存の赤枠を消す
         document.getElementById('area-label').style.display = 'none'; // 上部の住所ラベルも消す
@@ -4080,6 +4150,7 @@
     // 「区域選択に戻る」ボタン：全体図のラベルをタップして区域表示に入った直後だけ表示し、60秒で自動消滅する（pickOverviewArea から呼ぶ）。
     function showAreaReturnOverviewButton(bucket, label) {
         clearAreaReturnOverviewTimer(); // 多重起動防止（前回分のタイマーを必ず破棄してから張り直す）
+        hideShlReturnButton(); // 「集合住宅一覧に戻る」と同時表示させない
         areaReturnOverviewBucket = bucket;
         areaReturnOverviewLabel = label || null; // 戻り先カメラを「直前区域の少し広め」にするため保持
         const btn = document.getElementById('area-return-overview');
@@ -4096,6 +4167,29 @@
     }
     function clearAreaReturnOverviewTimer() {
         if (areaReturnOverviewTimer) { clearTimeout(areaReturnOverviewTimer); areaReturnOverviewTimer = null; }
+    }
+    // 「集合住宅一覧に戻る」ボタン：集合住宅一覧の🗺で地図へ移動した直後だけ表示し、60秒で自動消滅する（shlOpenOnMap から呼ぶ）。
+    // 「区域選択に戻る」と同じ流儀（多重起動防止・即時クリーンアップ）。
+    let shlReturnTimer = null;
+    function showShlReturnButton() {
+        clearShlReturnTimer(); // 多重起動防止
+        hideAreaReturnOverviewButton(); // 「区域選択に戻る」と同時表示させない
+        const btn = document.getElementById('shl-return-btn');
+        if (btn) btn.style.display = '';
+        shlReturnTimer = setTimeout(hideShlReturnButton, 60000);
+    }
+    // ボタン押下時・サインアウト時・別の画面表示に入り直した時に呼ぶ（即時クリーンアップ）。
+    function hideShlReturnButton() {
+        clearShlReturnTimer();
+        const btn = document.getElementById('shl-return-btn');
+        if (btn) btn.style.display = 'none';
+    }
+    function clearShlReturnTimer() {
+        if (shlReturnTimer) { clearTimeout(shlReturnTimer); shlReturnTimer = null; }
+    }
+    // ボタンタップ：一覧を再表示する（開閉状態は showShugaList→renderShugaList が shlState.openKeys から復元）。
+    function returnToShugaList() {
+        showShugaList();
     }
     // ボタンタップ：保持しておいた bucket で同じ種類の全体図へ戻る（カメラは直前区域の少し広めに＝全区域fitBoundsはしない）。
     // ここでは hideAreaReturnOverviewButton() を呼ばない＝enterAreaOverview 成功時の冒頭クリーンアップに任せる。
