@@ -556,9 +556,8 @@
         /* 全体図の番地ラベルから区域に入った直後だけ出す「区域選択に戻る」（#area-overview-bar と同系の下部中央バー）／集合住宅一覧の🗺から戻る「shl-return-btn」／
            区域一覧・利用状況・区域操作履歴から地図へ来た直後だけ出す汎用「screen-return-btn」も同スタイル */
         #area-return-overview, #shl-return-btn, #screen-return-btn { position: absolute; bottom: 64px; left: 50%; transform: translateX(-50%); z-index: 9999; background: #2c3e50; color: #fff; border: none; border-radius: 23px; padding: 11px 22px; font-size: 15px; font-weight: bold; box-shadow: 0 4px 16px rgba(0,0,0,0.22); cursor: pointer; }
-        /* メニュー展開中はこの5個を一時的に隠す（重なり防止・メニュー最下段のタップ奪取を塞ぐ。タイマーは止めない＝メニューを閉じれば復帰。G6） */
-        body.menu-open #area-return-overview, body.menu-open #shl-return-btn, body.menu-open #screen-return-btn,
-        body.menu-open #area-overview-bar, body.menu-open #lend-preview-back { visibility: hidden; }
+        /* メニュー展開中はこの3ボタンだけ一時的に隠す（重なり防止。タイマーは止めない＝メニューを閉じれば復帰）。area-overview-bar は対象外＝既存挙動どおり */
+        body.menu-open #area-return-overview, body.menu-open #shl-return-btn, body.menu-open #screen-return-btn { visibility: hidden; }
 
         /* ── 区域オーバービュー（「🗺 全て表示」）── */
         /* 枠内に出す丁目/番地ラベル（HTMLマーカー）。タップでその区域を選択（赤枠＋通常利用へ）。色は枠色に合わせてJSで上書き */

@@ -78,8 +78,6 @@
         // 一般画面の固定戻るボタン（#area-return-overview・#shl-return-btn。applyStaticI18n が起動時/getMe確定時に setText）
         '↩ 区域選択に戻る': '↩ Volver a la selección de territorio',
         '↩ 集合住宅一覧に戻る': '↩ Volver a la lista de edificios',
-        '↩ 戻る': '↩ Volver', // G4: 区域オーバービューバー（#area-overview-return）の短縮表示。戻り先ラベルは title 属性（未翻訳）
-
         '❓ アプリの使い方': '❓ Cómo usar la app',
         '分析メニュー': 'Menú de análisis',
         '🚪 サインアウト': '🚪 Cerrar sesión',
@@ -469,8 +467,6 @@
         ME = { email: '', name: '', group: '', level: 0 };
         closeAreaNav();
         exitAreaOverview(); // 区域オーバービュー表示中なら解除（枠・ラベル・モードを片付ける）
-        distAccOpenKeys = { personal: null, group: null, shared: null }; // G2: アコーディオン開閉の復元キー・フラグも破棄（別アカウントに前回の開閉状態を残さない）
-        distAccRestoreArmed = { personal: false, group: false, shared: false };
         hideAreaReturnOverviewButton(); // 「区域選択に戻る」も片付ける（タイマー破棄）
         hideShlReturnButton(); // 「集合住宅一覧に戻る」も片付ける（タイマー破棄）
         hideScreenReturnButton(); // 汎用「↩ ○○に戻る」も片付ける（タイマー破棄）
@@ -486,7 +482,6 @@
         document.getElementById('startup-overlay').classList.add('hidden'); // 起動中ローディングを隠す（NG＝ログインへ）
         document.getElementById('signout-btn').style.display = 'none';
         document.getElementById('login-overlay').classList.remove('hidden');
-        exitAreaOverview(); // G5: 区域オーバービュー表示中なら解除（バー・overviewReturnTo の残留を防ぐ）
         hideAreaReturnOverviewButton(); // F9: 認証エラー等で強制的にログイン画面へ戻る経路でも「区域選択に戻る」等の残留を片付ける
         hideShlReturnButton();
         hideScreenReturnButton();
@@ -4004,13 +3999,11 @@
     // enterAreaFromList 自体は共通関数（住所検索・pickOverviewArea 4148・usgOpenArea_ からも使われる）なので変更せず、
     // ここで発火元カード（origin）に応じた汎用「↩ ○○に戻る」だけ追加で出す。
     const AREA_LIST_RETURN_ = {
-        // G2: 「↩ 戻る」経由のときだけ distAccRestoreArmed を立ててから開き直す（メニューからの通常オープンは全閉のまま）
-        personal: ['個人の区域', () => { distAccRestoreArmed.personal = true; showPersonalAreas(); }],
-        group: ['グループの区域', () => { distAccRestoreArmed.group = true; showGroupAreas(); }],
-        shared: ['合同の区域', () => { distAccRestoreArmed.shared = true; showSharedAreas(); }]
+        personal: ['個人の区域', () => showPersonalAreas()],
+        group: ['グループの区域', () => showGroupAreas()],
+        shared: ['合同の区域', () => showSharedAreas()]
     };
     function enterAreaFromListOrigin_(area, origin) {
-        if (origin) distAccCaptureOpenState_(origin); // 地図へ移る直前の開閉状態を保存（↩ 戻るで開き直した時だけ復元するため。G1）
         enterAreaFromList(area);
         const rt = AREA_LIST_RETURN_[origin];
         if (rt) showScreenReturnButton(rt[0], rt[1]);
@@ -4052,10 +4045,9 @@
     // 他経路からも呼ばれる共通関数）は変更せず、ここで戻り先情報を enterAreaOverview に引数で渡す
     // （overviewReturnTo の代入は enterAreaOverview 内・showOverviewBar 直前で行う＝バー描画時に必ず値が入っている）。
     const AREA_OVERVIEW_RETURN_ = {
-        // G2: 「↩ 戻る」経由のときだけ distAccRestoreArmed を立ててから開き直す（メニューからの通常オープンは全閉のまま）
-        personal: ['個人の区域', () => { distAccRestoreArmed.personal = true; showPersonalAreas(); }],
-        group: ['グループの区域', () => { distAccRestoreArmed.group = true; showGroupAreas(); }],
-        whole: ['合同の区域', () => { distAccRestoreArmed.shared = true; showSharedAreas(); }] // whole起動元の復元キーは distAccOpenKeys.shared（AREA_OVERVIEW_ORIGIN_ と同じ対応）
+        personal: ['個人の区域', () => showPersonalAreas()],
+        group: ['グループの区域', () => showGroupAreas()],
+        whole: ['合同の区域', () => showSharedAreas()]
     };
     const AREA_OVERVIEW_ORIGIN_ = { personal: 'personal', group: 'group', whole: 'shared' }; // distAccOpenKeys（区域一覧アコーディオンの開閉復元）のキー対応
     function enterAreaOverviewFor_(bucket) {
@@ -4233,8 +4225,7 @@
         const rbtn = document.getElementById('area-overview-return'); // 戻り先があるときだけ✕の左に「↩ ○○に戻る」を出す（他の戻るボタンと同じ全文一致方式）
         if (rbtn) {
             if (overviewReturnTo && overviewReturnTo.label) {
-                rbtn.textContent = tr('↩ 戻る'); // G4: スマホ幅溢れ対策で短縮表示。戻り先ラベルは title 属性に入れる
-                rbtn.title = overviewReturnTo.label + 'に戻る';
+                rbtn.textContent = tr('↩ ' + overviewReturnTo.label + 'に戻る');
                 rbtn.style.display = '';
             } else {
                 rbtn.style.display = 'none';
@@ -4386,10 +4377,7 @@
             rebuildVisibleAreaSet_(); // 貸出・返却がピン表示制限にも追従する
             if (!changed) return;
             const modal = document.getElementById('app-modal'), card = document.getElementById('app-modal-card');
-            if (modal && modal.style.display !== 'none' && card && card.className === 'app-modal-theme-' + theme) {
-                distAccKeepOpenAcrossRefresh_(theme); // G3: 裏最新化の再描画で開閉状態が全閉に戻らないよう引き継ぐ
-                render(areaStore[half]);
-            }
+            if (modal && modal.style.display !== 'none' && card && card.className === 'app-modal-theme-' + theme) render(areaStore[half]);
         }).catch(() => {});
     }
 
@@ -4417,14 +4405,10 @@
         });
     }
     // 区域一覧を地区ごとのアコーディオンにする（個人/グループ/全体利用 共通の見た目）。メニューからの通常オープンは
-    // 最初はすべて閉じた状態（2026-07-04 ユーザー指定・維持）。全体図・各行「地図を表示」の「↩ 戻る」で開き直した直後だけ、
-    // distAccCaptureOpenState_ で保存した開閉状態を1回だけ復元する（distAccOpenKeys）。
+    // 最初はすべて閉じた状態（2026-07-04 ユーザー指定・維持）。全体図の「↩ 戻る」で開き直した直後だけ、
+    // enterAreaOverviewFor_ が distAccCaptureOpenState_ で保存した開閉状態を1回だけ復元する（distAccOpenKeys）。
     let distAccOpenKeys = { personal: null, group: null, shared: null }; // origin別。null=保存なし（通常どおり全閉）
-    // G2: 「次の1回だけ openKeys を適用してよい」フラグ。戻り系コールバック（AREA_LIST_RETURN_/AREA_OVERVIEW_RETURN_
-    // の fn、および G3 の裏最新化）が明示的に立てたときだけ distAccHtml_ が復元する。✕終了・タイマー消滅を経て
-    // メニューから開いた場合はフラグが立たないため、captured キーが残っていても使われず「全閉」のまま（残留防止）。
-    let distAccRestoreArmed = { personal: false, group: false, shared: false };
-    // 地図へ移る直前（enterAreaOverviewFor_/enterAreaFromListOrigin_）に、現在開いているアコーディオンのキーを origin 別に記録する。
+    // 地図へ移る直前（enterAreaOverviewFor_）に、現在開いているアコーディオンのキーを origin 別に記録する。
     function distAccCaptureOpenState_(origin) {
         const body = document.getElementById('app-modal-body');
         const keys = {};
@@ -4434,24 +4418,13 @@
         });
         distAccOpenKeys[origin] = keys;
     }
-    // G3: distAccHtml_ を使う3画面（個人/グループ/合同）の裏最新化（refreshAreaHalf_）直前に呼ぶ。再描画で開閉が
-    // 全閉に戻らないよう、現在DOMで開いているアコーディオンのキーを拾って引き継ぐ（lendState.lentOpen と同じ思想）。
-    const DIST_ACC_THEME_ORIGIN_ = { personal: 'personal', group: 'group', whole: 'shared' }; // app-modal-theme-* → distAccOpenKeys のキー対応
-    function distAccKeepOpenAcrossRefresh_(theme) {
-        const origin = DIST_ACC_THEME_ORIGIN_[theme];
-        if (!origin) return;
-        distAccCaptureOpenState_(origin);
-        distAccRestoreArmed[origin] = true;
-    }
     function distAccHtml_(areas, origin) {
         const byDist = {};
         areas.forEach(a => { const d = districtOfArea(a.area); (byDist[d] = byDist[d] || []).push(a); });
         const dists = AREA_GRID_ORDER.filter(d => (byDist[d] || []).length)
             .concat(Object.keys(byDist).filter(d => AREA_GRID_ORDER.indexOf(d) < 0));
-        // フラグが立っている時（↩ 戻る経由・G3の裏最新化直後）だけ復元。メニューからの通常オープンは常に全閉。
-        const openKeys = distAccRestoreArmed[origin] ? distAccOpenKeys[origin] : null;
+        const openKeys = distAccOpenKeys[origin]; // ↩ 戻るで開き直した時だけ非null（消費後は下でnullに戻し、以後の通常オープンは全閉のまま）
         distAccOpenKeys[origin] = null;
-        distAccRestoreArmed[origin] = false;
         return dists.map(d => {
             const rows = byDist[d] || [];
             const dKey = escHtml(d);

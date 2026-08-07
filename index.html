@@ -73,7 +73,7 @@
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-    <link rel="stylesheet" href="app.css?v=20260807c">
+    <link rel="stylesheet" href="app.css?v=20260807b">
 </head>
 <body>
 
@@ -177,7 +177,7 @@
 <div id="area-overview-bar" style="display:none;">
     <button id="area-overview-icons" onclick="toggleOverviewIcons()">アイコンを非表示</button>
     <!-- 個人/グループ/合同カード・利用状況詳細の「🗺 全区域マップ」から入ったときだけ表示（overviewReturnTo。enterAreaOverview が showOverviewBar 直前に代入・出し分け）。
-         表示文言は showOverviewBar が「↩ 戻る」に固定し、戻り先ラベルは title 属性に入れる（幅溢れ対策。この初期テキストは非表示中のプレースホルダー） -->
+         表示文言は showOverviewBar が「↩ ○○に戻る」の全文形式に差し替える（この初期テキストは非表示中のプレースホルダー） -->
     <button id="area-overview-return" style="display:none;" onclick="returnFromOverviewBar()">↩ 戻る</button>
     <button id="area-overview-exit" onclick="exitAreaOverview()" aria-label="表示を終了">✕ 終了</button>
 </div>
@@ -215,7 +215,7 @@
     </div>
 </div>
 
-<script src="app.js?v=20260807c"></script>
+<script src="app.js?v=20260807b"></script>
 
 </body>
 </html>
