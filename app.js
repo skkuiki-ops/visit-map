@@ -78,6 +78,8 @@
         // 一般画面の固定戻るボタン（#area-return-overview・#shl-return-btn。applyStaticI18n が起動時/getMe確定時に setText）
         '↩ 区域選択に戻る': '↩ Volver a la selección de territorio',
         '↩ 集合住宅一覧に戻る': '↩ Volver a la lista de edificios',
+        '↩ 戻る': '↩ Volver', // G4: 区域オーバービューバー（#area-overview-return）の短縮表示。戻り先ラベルは title 属性（未翻訳）
+
         '❓ アプリの使い方': '❓ Cómo usar la app',
         '分析メニュー': 'Menú de análisis',
         '🚪 サインアウト': '🚪 Cerrar sesión',
@@ -467,6 +469,8 @@
         ME = { email: '', name: '', group: '', level: 0 };
         closeAreaNav();
         exitAreaOverview(); // 区域オーバービュー表示中なら解除（枠・ラベル・モードを片付ける）
+        distAccOpenKeys = { personal: null, group: null, shared: null }; // G2: アコーディオン開閉の復元キー・フラグも破棄（別アカウントに前回の開閉状態を残さない）
+        distAccRestoreArmed = { personal: false, group: false, shared: false };
         hideAreaReturnOverviewButton(); // 「区域選択に戻る」も片付ける（タイマー破棄）
         hideShlReturnButton(); // 「集合住宅一覧に戻る」も片付ける（タイマー破棄）
         hideScreenReturnButton(); // 汎用「↩ ○○に戻る」も片付ける（タイマー破棄）
@@ -482,6 +486,8 @@
         document.getElementById('startup-overlay').classList.add('hidden'); // 起動中ローディングを隠す（NG＝ログインへ）
         document.getElementById('signout-btn').style.display = 'none';
         document.getElementById('login-overlay').classList.remove('hidden');
+        closeMenu(); // doSignOut と同様、menu-open の残留を防ぐ
+        exitAreaOverview(); // G5: 区域オーバービュー表示中なら解除（バー・overviewReturnTo の残留を防ぐ）
         hideAreaReturnOverviewButton(); // F9: 認証エラー等で強制的にログイン画面へ戻る経路でも「区域選択に戻る」等の残留を片付ける
         hideShlReturnButton();
         hideScreenReturnButton();
@@ -1305,7 +1311,9 @@
     // 起動時（fetchVisibleAreas_）や区域一覧画面で取得した区域データの生値をセッション内に保持する。
     //  区域一覧（個人/グループ/全体利用）はこれで「開いた瞬間に即表示 → 裏で最新化」でき、毎回のサーバ待ちが消える。
     //  mine=getMyAreas（個人＋所属グループ）／shared=getSharedAreas（全体利用）。null=未取得。
-    const areaStore = { mine: null, shared: null };
+    //  mineLoaded/sharedLoaded: 「未取得(null)」と「取得済みで空([])」を区別するフラグ（B-4）。
+    //  []は真値のため mine/shared 自体の truthy 判定だけでは両者を区別できない＝このフラグで明示する。
+    const areaStore = { mine: null, shared: null, mineLoaded: false, sharedLoaded: false };
     // areaStore の両半分から visibleAreaSet（ピン表示制限）を作り直す。
     //  片方だけで作ると欠けた集合＝担当区域の誤非表示になるため、両方そろってからのみ更新。manager以上は制限なし＝触らない。
     function rebuildVisibleAreaSet_() {
@@ -1323,6 +1331,8 @@
         Promise.all([apiCall('getMyAreas', {}), apiCall('getSharedAreas', {})]).then(([mine, shared]) => {
             areaStore.mine = mine || [];
             areaStore.shared = shared || [];
+            areaStore.mineLoaded = true;
+            areaStore.sharedLoaded = true;
             rebuildVisibleAreaSet_();
         }).catch(() => {
             // 取得失敗: 数回リトライ。全部失敗してもキャッシュ由来の visibleAreaSet はそのまま維持（＝fail-open にしない）。
@@ -2991,6 +3001,12 @@
             showToast((err && err.message) ? err.message : '現在この区域は貸し出せません', false, true);
             return;
         }
+        // UserList読取障害（UserListUnavailable）＝サーバ側インフラ障害。ErrorLogはサーバ側で記録済みなので二重送信せず、
+        // サーバ文言をそのままsoftトーストで出す（「通信が不安定です」に潰さない・自動再サインインもしない）。
+        if (err && err.code === 'UserListUnavailable') {
+            showToast((err && err.message) ? err.message : 'UserListを読み込めませんでした。時間をおいて再度お試しください', false, true);
+            return;
+        }
         console.error('サーバーエラー:', err); // 原因調査はコンソール／ErrorLogで可能。画面には技術的な文言を出さない（不安を煽らない）。
         const msg = (err && err.message) ? err.message : String(err);
         sendErrorToServer('CommError', msg, 'handleServerError'); // 誰の端末で起きたかを ErrorLog に集約（画面表示とは独立して記録は残す）
@@ -3103,7 +3119,10 @@
                 LANG_MASTER = me.langMaster;
                 try { localStorage.setItem('vm_langMaster', JSON.stringify(me.langMaster)); } catch (e) {}
             }
-        }).catch(() => { /* 取得失敗でも本体は動かす（メニューが一般表示・番地は内蔵値のまま） */ });
+        }).catch(e => {
+            try { sendErrorToServer('CommError', 'getMe失敗: ' + ((e && e.message) || e), 'loadMe'); } catch (_) {} // 遠隔調査用に記録（画面表示は従来どおり出さない）
+            /* 取得失敗でも本体は動かす（メニューが一般表示・番地は内蔵値のまま） */
+        });
     }
     function toggleMenu() { document.getElementById('menu-panel').classList.toggle('show'); syncMenuOpenBodyClass_(); }
     function closeMenu() { document.getElementById('menu-panel').classList.remove('show'); syncMenuOpenBodyClass_(); }
@@ -3982,7 +4001,9 @@
                     // 区域キャッシュを返却後の状態に合わせる（古い一覧＝返却済み区域が残った表示を出さないため）。
                     //  一般ユーザーの個人返却は応答が最新の getMyAreas 配列（B-1 の出し分け）＝そのまま採用。それ以外は破棄して再取得させる。
                     areaStore.mine = Array.isArray(res) ? res : null;
+                    areaStore.mineLoaded = Array.isArray(res); // B-4: 最新配列を採用できたときだけ「取得済み」扱い
                     areaStore.shared = null;
+                    areaStore.sharedLoaded = false; // B-4: fetchVisibleAreas_ の再取得完了まで「未取得」に戻す
                     fetchVisibleAreas_(0); // ピン表示制限も返却に追従（裏で両方を再取得して作り直す）
                     if (typeof onDone === 'function') onDone();
                 })
@@ -3999,11 +4020,13 @@
     // enterAreaFromList 自体は共通関数（住所検索・pickOverviewArea 4148・usgOpenArea_ からも使われる）なので変更せず、
     // ここで発火元カード（origin）に応じた汎用「↩ ○○に戻る」だけ追加で出す。
     const AREA_LIST_RETURN_ = {
-        personal: ['個人の区域', () => showPersonalAreas()],
-        group: ['グループの区域', () => showGroupAreas()],
-        shared: ['合同の区域', () => showSharedAreas()]
+        // G2: 「↩ 戻る」経由のときだけ distAccRestoreArmed を立ててから開き直す（メニューからの通常オープンは全閉のまま）
+        personal: ['個人の区域', () => { distAccRestoreArmed.personal = true; showPersonalAreas(); }],
+        group: ['グループの区域', () => { distAccRestoreArmed.group = true; showGroupAreas(); }],
+        shared: ['合同の区域', () => { distAccRestoreArmed.shared = true; showSharedAreas(); }]
     };
     function enterAreaFromListOrigin_(area, origin) {
+        if (origin) distAccCaptureOpenState_(origin); // 地図へ移る直前の開閉状態を保存（↩ 戻るで開き直した時だけ復元するため。G1）
         enterAreaFromList(area);
         const rt = AREA_LIST_RETURN_[origin];
         if (rt) showScreenReturnButton(rt[0], rt[1]);
@@ -4045,9 +4068,10 @@
     // 他経路からも呼ばれる共通関数）は変更せず、ここで戻り先情報を enterAreaOverview に引数で渡す
     // （overviewReturnTo の代入は enterAreaOverview 内・showOverviewBar 直前で行う＝バー描画時に必ず値が入っている）。
     const AREA_OVERVIEW_RETURN_ = {
-        personal: ['個人の区域', () => showPersonalAreas()],
-        group: ['グループの区域', () => showGroupAreas()],
-        whole: ['合同の区域', () => showSharedAreas()]
+        // G2: 「↩ 戻る」経由のときだけ distAccRestoreArmed を立ててから開き直す（メニューからの通常オープンは全閉のまま）
+        personal: ['個人の区域', () => { distAccRestoreArmed.personal = true; showPersonalAreas(); }],
+        group: ['グループの区域', () => { distAccRestoreArmed.group = true; showGroupAreas(); }],
+        whole: ['合同の区域', () => { distAccRestoreArmed.shared = true; showSharedAreas(); }] // whole起動元の復元キーは distAccOpenKeys.shared（AREA_OVERVIEW_ORIGIN_ と同じ対応）
     };
     const AREA_OVERVIEW_ORIGIN_ = { personal: 'personal', group: 'group', whole: 'shared' }; // distAccOpenKeys（区域一覧アコーディオンの開閉復元）のキー対応
     function enterAreaOverviewFor_(bucket) {
@@ -4225,10 +4249,12 @@
         const rbtn = document.getElementById('area-overview-return'); // 戻り先があるときだけ✕の左に「↩ ○○に戻る」を出す（他の戻るボタンと同じ全文一致方式）
         if (rbtn) {
             if (overviewReturnTo && overviewReturnTo.label) {
-                rbtn.textContent = tr('↩ ' + overviewReturnTo.label + 'に戻る');
+                rbtn.textContent = tr('↩ 戻る'); // G4: スマホ幅溢れ対策で短縮表示。戻り先ラベルは title 属性に入れる
+                rbtn.title = overviewReturnTo.label + 'に戻る';
                 rbtn.style.display = '';
             } else {
                 rbtn.style.display = 'none';
+                rbtn.title = ''; // 非表示時も title を残さない（次回 label 未設定のまま再表示された場合の誤表示防止）
             }
         }
     }
@@ -4374,10 +4400,14 @@
         apiCall(half === 'shared' ? 'getSharedAreas' : 'getMyAreas', {}).then(list => {
             const changed = JSON.stringify(list || []) !== JSON.stringify(areaStore[half] || []);
             areaStore[half] = list || [];
+            areaStore[half + 'Loaded'] = true; // B-4: 裏最新化でも「取得済み」を確定させる（store の更新は表示条件と無関係に常に行う）
             rebuildVisibleAreaSet_(); // 貸出・返却がピン表示制限にも追従する
             if (!changed) return;
             const modal = document.getElementById('app-modal'), card = document.getElementById('app-modal-card');
-            if (modal && modal.style.display !== 'none' && card && card.className === 'app-modal-theme-' + theme) render(areaStore[half]);
+            if (modal && modal.style.display !== 'none' && card && card.className === 'app-modal-theme-' + theme) {
+                distAccKeepOpenAcrossRefresh_(theme); // G3: 裏最新化の再描画で開閉状態が全閉に戻らないよう引き継ぐ
+                render(areaStore[half]);
+            }
         }).catch(() => {});
     }
 
@@ -4405,10 +4435,14 @@
         });
     }
     // 区域一覧を地区ごとのアコーディオンにする（個人/グループ/全体利用 共通の見た目）。メニューからの通常オープンは
-    // 最初はすべて閉じた状態（2026-07-04 ユーザー指定・維持）。全体図の「↩ 戻る」で開き直した直後だけ、
-    // enterAreaOverviewFor_ が distAccCaptureOpenState_ で保存した開閉状態を1回だけ復元する（distAccOpenKeys）。
+    // 最初はすべて閉じた状態（2026-07-04 ユーザー指定・維持）。全体図・各行「地図を表示」の「↩ 戻る」で開き直した直後だけ、
+    // distAccCaptureOpenState_ で保存した開閉状態を1回だけ復元する（distAccOpenKeys）。
     let distAccOpenKeys = { personal: null, group: null, shared: null }; // origin別。null=保存なし（通常どおり全閉）
-    // 地図へ移る直前（enterAreaOverviewFor_）に、現在開いているアコーディオンのキーを origin 別に記録する。
+    // G2: 「次の1回だけ openKeys を適用してよい」フラグ。戻り系コールバック（AREA_LIST_RETURN_/AREA_OVERVIEW_RETURN_
+    // の fn、および G3 の裏最新化）が明示的に立てたときだけ distAccHtml_ が復元する。✕終了・タイマー消滅を経て
+    // メニューから開いた場合はフラグが立たないため、captured キーが残っていても使われず「全閉」のまま（残留防止）。
+    let distAccRestoreArmed = { personal: false, group: false, shared: false };
+    // 地図へ移る直前（enterAreaOverviewFor_/enterAreaFromListOrigin_）に、現在開いているアコーディオンのキーを origin 別に記録する。
     function distAccCaptureOpenState_(origin) {
         const body = document.getElementById('app-modal-body');
         const keys = {};
@@ -4418,13 +4452,30 @@
         });
         distAccOpenKeys[origin] = keys;
     }
+    // G3: distAccHtml_ を使う3画面（個人/グループ/合同）の裏最新化（refreshAreaHalf_）直前に呼ぶ。再描画で開閉が
+    // 全閉に戻らないよう、現在DOMで開いているアコーディオンのキーを拾って引き継ぐ（lendState.lentOpen と同じ思想）。
+    const DIST_ACC_THEME_ORIGIN_ = { personal: 'personal', group: 'group', whole: 'shared' }; // app-modal-theme-* → distAccOpenKeys のキー対応
+    function distAccKeepOpenAcrossRefresh_(theme) {
+        const origin = DIST_ACC_THEME_ORIGIN_[theme];
+        if (!origin) return;
+        distAccCaptureOpenState_(origin);
+        distAccRestoreArmed[origin] = true;
+    }
+    // B-1: arm/openKeys のワンショット消費（空表示分岐など distAccHtml_ を通らない render で使う）。
+    //  distAccHtml_ 内の消費と重複して呼ばれても、単に false/null を再代入するだけで無害。
+    function distAccConsumeArm_(origin) {
+        distAccOpenKeys[origin] = null;
+        distAccRestoreArmed[origin] = false;
+    }
     function distAccHtml_(areas, origin) {
         const byDist = {};
         areas.forEach(a => { const d = districtOfArea(a.area); (byDist[d] = byDist[d] || []).push(a); });
         const dists = AREA_GRID_ORDER.filter(d => (byDist[d] || []).length)
             .concat(Object.keys(byDist).filter(d => AREA_GRID_ORDER.indexOf(d) < 0));
-        const openKeys = distAccOpenKeys[origin]; // ↩ 戻るで開き直した時だけ非null（消費後は下でnullに戻し、以後の通常オープンは全閉のまま）
+        // フラグが立っている時（↩ 戻る経由・G3の裏最新化直後）だけ復元。メニューからの通常オープンは常に全閉。
+        const openKeys = distAccRestoreArmed[origin] ? distAccOpenKeys[origin] : null;
         distAccOpenKeys[origin] = null;
+        distAccRestoreArmed[origin] = false;
         return dists.map(d => {
             const rows = byDist[d] || [];
             const dKey = escHtml(d);
@@ -4443,16 +4494,17 @@
             const mine = (list || []).filter(a => a.lentTo !== 'group'); // 自分個人への貸出
             overviewAreas.personal = mine; // 「🗺 全て表示」（一括枠表示）用に保持
             const body = document.getElementById('app-modal-body');
-            if (!mine.length) { body.innerHTML = `<div style="color:#888; padding:8px;">${tr('あなた個人への割り当てはありません。')}</div>`; return; }
+            if (!mine.length) { distAccConsumeArm_('personal'); body.innerHTML = `<div style="color:#888; padding:8px;">${tr('あなた個人への割り当てはありません。')}</div>`; return; }
             let html = `<div class="area-allbar aa-personal"><div class="aa-info"><span class="aa-ttl">${tr('🗺 全区域マップ')}</span><span class="aa-sub">${mine.length} ${tr('区域')}</span></div><button class="aa-showmap" onclick="enterAreaOverviewFor_('personal')" title="${tr('個人の区域を全て地図上に枠表示')}">${tr('地図を表示')}</button></div>`;
             html += distAccHtml_(mine, 'personal'); // 地区ごとのアコーディオン（全体利用と同じ見た目）
             body.innerHTML = html;
             bindReturnHoldButtons(); // 「長押しで返却」を有効化
         };
         // 起動時取得や前回表示の区域データがあれば待たずに即表示し、裏で最新化（体感ゼロ待ち）
-        if (areaStore.mine) { render(areaStore.mine); refreshAreaHalf_('mine', 'personal', render); return; }
+        // mineLoaded で「未取得」と「取得済みで空」を区別（B-4）：未取得のときだけ busy＋取得を出す。
+        if (areaStore.mineLoaded) { render(areaStore.mine); refreshAreaHalf_('mine', 'personal', render); return; }
         showBusy('読み込み中…');
-        runAreaLoad(apiCall('getMyAreas', {}).then(l => { areaStore.mine = l || []; rebuildVisibleAreaSet_(); return l; }),
+        runAreaLoad(apiCall('getMyAreas', {}).then(l => { areaStore.mine = l || []; areaStore.mineLoaded = true; rebuildVisibleAreaSet_(); return l; }),
             render, showPersonalAreas); // 12秒で応答なし／失敗 → 「再度試す」
     }
     // 👥 グループの区域カード（緑テーマ）
@@ -4463,7 +4515,7 @@
             const grp = (list || []).filter(a => a.lentTo === 'group'); // 自分の所属グループへの貸出
             overviewAreas.group = grp; // 「🗺 全て表示」（一括枠表示）用に保持
             const body = document.getElementById('app-modal-body');
-            if (!grp.length) { body.innerHTML = `<div style="color:#888; padding:8px;">${tr('現在、グループへの割り当てはありません。')}</div>`; return; }
+            if (!grp.length) { distAccConsumeArm_('group'); body.innerHTML = `<div style="color:#888; padding:8px;">${tr('現在、グループへの割り当てはありません。')}</div>`; return; }
             document.getElementById('app-modal-title').innerHTML = MI_ICON.group + escHtml(tr('グループの区域') + '（' + grp[0].group + '）'); // 見出しに対象グループ名を表示（アイコンつき）
             let html = `<div class="area-allbar aa-group"><div class="aa-info"><span class="aa-ttl">${tr('🗺 全区域マップ')}</span><span class="aa-sub">${grp.length} ${tr('区域')}</span></div><button class="aa-showmap" onclick="enterAreaOverviewFor_('group')" title="${tr('グループの区域を全て地図上に枠表示')}">${tr('地図を表示')}</button></div>`;
             html += distAccHtml_(grp, 'group'); // 地区ごとのアコーディオン（全体利用と同じ見た目）
@@ -4471,9 +4523,10 @@
             bindReturnHoldButtons(); // 「長押しで返却」を有効化
         };
         // 起動時取得や前回表示の区域データがあれば待たずに即表示し、裏で最新化（体感ゼロ待ち）
-        if (areaStore.mine) { render(areaStore.mine); refreshAreaHalf_('mine', 'group', render); return; }
+        // mineLoaded で「未取得」と「取得済みで空」を区別（B-4）：未取得のときだけ busy＋取得を出す。
+        if (areaStore.mineLoaded) { render(areaStore.mine); refreshAreaHalf_('mine', 'group', render); return; }
         showBusy('読み込み中…');
-        runAreaLoad(apiCall('getMyAreas', {}).then(l => { areaStore.mine = l || []; rebuildVisibleAreaSet_(); return l; }),
+        runAreaLoad(apiCall('getMyAreas', {}).then(l => { areaStore.mine = l || []; areaStore.mineLoaded = true; rebuildVisibleAreaSet_(); return l; }),
             render, showGroupAreas); // 12秒で応答なし／失敗 → 「再度試す」
     }
 
@@ -4494,15 +4547,16 @@
             renderSharedAreas();
         };
         // 起動時取得や前回表示の区域データがあれば待たずに即表示し、裏で最新化（体感ゼロ待ち）
-        if (areaStore.shared) { render(areaStore.shared); refreshAreaHalf_('shared', 'whole', render); return; }
+        // sharedLoaded で「未取得」と「取得済みで空」を区別（B-4）：未取得のときだけ busy＋取得を出す。
+        if (areaStore.sharedLoaded) { render(areaStore.shared); refreshAreaHalf_('shared', 'whole', render); return; }
         showBusy('読み込み中…');
-        runAreaLoad(apiCall('getSharedAreas', {}).then(l => { areaStore.shared = l || []; rebuildVisibleAreaSet_(); return l; }),
+        runAreaLoad(apiCall('getSharedAreas', {}).then(l => { areaStore.shared = l || []; areaStore.sharedLoaded = true; rebuildVisibleAreaSet_(); return l; }),
             render, showSharedAreas); // 12秒で応答なし／失敗 → 「再度試す」
     }
     function renderSharedAreas() {
         const body = document.getElementById('app-modal-body');
         const areas = sharedState.areas || [];
-        if (!areas.length) { body.innerHTML = `<div style="color:#888; padding:8px;">${tr('現在、合同の区域はありません。')}</div>`; return; }
+        if (!areas.length) { distAccConsumeArm_('shared'); body.innerHTML = `<div style="color:#888; padding:8px;">${tr('現在、合同の区域はありません。')}</div>`; return; }
         // ① アコーディオン群の一番上に「🗺 全区域マップ」バー（情報＋「地図を表示」ボタン＝一括枠表示へ）
         let html = `<div class="area-allbar aa-whole"><div class="aa-info"><span class="aa-ttl">${tr('🗺 全区域マップ')}</span><span class="aa-sub">${tr('貸出中 計')} ${areas.length} ${tr('区域')}</span></div><button class="aa-showmap" onclick="enterAreaOverviewFor_('whole')" title="${tr('合同の区域を全て地図上に枠表示')}">${tr('地図を表示')}</button></div>`;
         // ② 地区ごとのアコーディオン（個人/グループと共通の distAccHtml_。全体利用は lentTo 無し＝canReturn は level>=1 に自然退化）
