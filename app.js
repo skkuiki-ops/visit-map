@@ -183,6 +183,17 @@
         'コピーしました': 'Copiado', 'コピーに失敗しました': 'No se pudo copiar',
         '項目が選ばれていません': 'No hay nada seleccionado', '情報が見つかりませんでした': 'No se encontró la información'
     });
+    // ── 区域のQR時限共有（§8.8周辺機能） ──
+    Object.assign(I18N_ES, {
+        '地図を共有': 'Compartir mapa', '共有する': 'Compartir',
+        '共有を開始しました': 'Se inició la compartición',
+        '共有区域に参加しました': 'Se unió al territorio compartido',
+        'この共有は終了しています': 'Esta compartición ha finalizado',
+        '共有の利用時間が終了しました': 'El tiempo de la compartición ha terminado',
+        'スマホのカメラでQRコードを読み取ると、この区域を90分間一緒に使えます': 'Con la cámara del móvil, escanee el código QR para usar este territorio junto con otra persona durante 90 minutos',
+        '利用期限:': 'Válido hasta:', 'まで': '',
+        'この画面を閉じても、時間内は共有が続きます': 'Aunque cierre esta pantalla, la compartición sigue activa durante el tiempo restante'
+    });
     // ── 報告フォーム（拒否・外国語） ──
     Object.assign(I18N_ES, {
         '🌐 外国語 の報告': '🌐 Informe: otro idioma', '🚫 訪問拒否 の報告': '🚫 Informe: rechaza visitas',
@@ -278,7 +289,8 @@
         [/^(\d+)丁目$/, 'Chōme $1'],
         [/^(.+?)(\d+)丁目 の番地を選択$/, '$1 $2 — elija el banchi'],
         [/^同じ地点に (\d+) 世帯$/, '$1 viviendas en este punto'],
-        [/^(.+) でログインしています。\nサインアウトしますか？$/, 'Ha iniciado sesión como $1.\n¿Cerrar sesión?']
+        [/^(.+) でログインしています。\nサインアウトしますか？$/, 'Ha iniciado sesión como $1.\n¿Cerrar sesión?'],
+        [/^「(.+)」の地図を共有しますか？\nQRコードを読み取った人が90分間、この区域を一緒に使えます。$/, '¿Compartir el mapa de «$1»?\nQuien escanee el código QR podrá usar este territorio junto con usted durante 90 minutos.']
     );
     function applyStaticI18n() {
         if (UI_LANG !== 'es') return; // 既定HTMLが日本語なので ja は何もしない
@@ -337,8 +349,8 @@
         const blocksReady = loadBlocks(); // 街区ポリゴン(blocks.geojson)を先読み
         loadAddrPoints();  // 番地代表点(address_points.json)を先読み（住所の逆算用）
         loadDataFromSheet();
-        // 起動時に現在地へ寄せる（現在地ボタンを基本オンに）。?area/?pin のディープリンク時はそちらを優先。
-        if (!DEEP_LINK_AREA && !DEEP_LINK_PIN && !didAutoGeolocate) {
+        // 起動時に現在地へ寄せる（現在地ボタンを基本オンに）。?area/?pin/?share のディープリンク時はそちらを優先。
+        if (!DEEP_LINK_AREA && !DEEP_LINK_PIN && !DEEP_LINK_SHARE && !didAutoGeolocate) {
             didAutoGeolocate = true;
             const triggerGeo = () => { try { geolocateControl.trigger(); } catch (e) {} };
             if (map.loaded()) triggerGeo(); else map.once('load', triggerGeo);
@@ -350,6 +362,14 @@
             blocksReady.then(() => {
                 if (map.loaded()) runAreaDeepLink(DEEP_LINK_AREA);
                 else map.once('load', () => runAreaDeepLink(DEEP_LINK_AREA));
+            });
+        }
+        // 共有リンク(?share=...)で来た場合は、地図と街区データの準備後に参加処理を行う
+        if (DEEP_LINK_SHARE && !deepLinkShareDone) {
+            deepLinkShareDone = true;
+            blocksReady.then(() => {
+                if (map.loaded()) runShareDeepLink(DEEP_LINK_SHARE);
+                else map.once('load', () => runShareDeepLink(DEEP_LINK_SHARE));
             });
         }
     }
@@ -599,11 +619,13 @@
         }
     }
 
-    // 外部リンク（URLパラメータ）：?area=東小岩3丁目5番 で番地表示、?pin=ID でそのIDのピンの吹き出しを開く
+    // 外部リンク（URLパラメータ）：?area=東小岩3丁目5番 で番地表示、?pin=ID でそのIDのピンの吹き出しを開く、
+    // ?share=トークン でQR時限共有への参加（区域のQR時限共有・§8.8周辺機能。あれば area/pin より優先）
     const _urlParams = new URLSearchParams(location.search);
-    const DEEP_LINK_AREA = _urlParams.get('area');
-    const DEEP_LINK_PIN = _urlParams.get('pin');
-    let deepLinkDone = false, deepLinkPinDone = false;
+    const DEEP_LINK_SHARE = _urlParams.get('share');
+    const DEEP_LINK_AREA = DEEP_LINK_SHARE ? null : _urlParams.get('area');
+    const DEEP_LINK_PIN = DEEP_LINK_SHARE ? null : _urlParams.get('pin');
+    let deepLinkDone = false, deepLinkPinDone = false, deepLinkShareDone = false;
     let didAutoGeolocate = false; // 起動時の現在地フォーカスを1回だけ行うためのフラグ
 
     /* ── 表示位置の保存・復元（Androidのタブ破棄対策） ──
@@ -1322,8 +1344,9 @@
         const set = new Set();
         areaStore.mine.forEach(a => { const k = addrWithoutGo(a.area); if (k) set.add(k); });   // 個人＋所属グループの貸出区域
         areaStore.shared.forEach(a => { const k = addrWithoutGo(a.area); if (k) set.add(k); }); // 全体利用の区域
+        try { localStorage.setItem(AREA_SET_KEY, JSON.stringify(Array.from(set))); } catch (e) {} // 次回起動で即適用するためキャッシュ（QR共有は含めない＝期限切れ後の残留防止）
+        if (qrSharedArea && qrSharedArea.exp > Date.now()) { const k = addrWithoutGo(qrSharedArea.area); if (k) set.add(k); } // QR時限共有（期限内のみ・キャッシュ後に加える）
         visibleAreaSet = set;   // 空でも適用（担当区域が無ければ戸建ては非表示）
-        try { localStorage.setItem(AREA_SET_KEY, JSON.stringify(Array.from(set))); } catch (e) {} // 次回起動で即適用するためキャッシュ
         applyZoomVisibility();  // 既存マーカーへ即反映
     }
     // 担当区域を取得して areaStore＋visibleAreaSet を更新。失敗時は数回リトライ（1回の失敗で制限がセッション中ずっと外れる＝区域外漏れを防ぐ）。
@@ -3001,6 +3024,17 @@
             showToast((err && err.message) ? err.message : '現在この区域は貸し出せません', false, true);
             return;
         }
+        // 区域のQR共有: 本人の個人貸出以外への共有試行（ShareDenied）＝業務上の想定エラー。soft案内。
+        if (err && err.code === 'ShareDenied') {
+            showToast((err && err.message) ? err.message : 'この区域は共有できません', false, true);
+            return;
+        }
+        // 区域のQR共有: 期限切れ/終了済みトークンでの参加（ShareExpired）＝呼び出し元で個別処理する想定だが、
+        // 経由し忘れても不安を煽らない案内にフォールバックする。
+        if (err && err.code === 'ShareExpired') {
+            showToast(tr('この共有は終了しています'), false, true);
+            return;
+        }
         // UserList読取障害（UserListUnavailable）＝サーバ側インフラ障害。ErrorLogはサーバ側で記録済みなので二重送信せず、
         // サーバ文言をそのままsoftトーストで出す（「通信が不安定です」に潰さない・自動再サインインもしない）。
         if (err && err.code === 'UserListUnavailable') {
@@ -4415,13 +4449,30 @@
     // 返却は誤タップ防止のため長押しのみ（タップは案内トースト。bindReturnHoldButtons が長押しを割り当てる）。
     function lendAreaRowHtml(a, origin) {
         const canReturn = (a.lentTo === 'self') || (ME.level >= 1); // 個人=本人 / グループ・全体利用=貸出係以上
+        // 👤個人の区域カード（origin==='personal'）の行は常に「本人への個人貸出」（showPersonalAreas の filter による）。
+        // 「地図を表示」ボタンをタップ＝従来どおり地図表示／長押し＝QR時限共有の開始 に切り替える（bindShowMapButtons が結線）。
+        const isPersonalLend = origin === 'personal';
+        const mapBtn = isPersonalLend
+            ? `<button class="choice-btn show-map-btn" data-aid="${a.id}" data-area="${escHtml(a.area)}" data-origin="${origin}" style="background:#eef3f6; padding:5px 8px; font-size:12px;">${tr('地図を表示')}</button>`
+            : `<button class="choice-btn" style="background:#eef3f6; padding:5px 8px; font-size:12px;" onclick="enterAreaFromListOrigin_('${escHtml(a.area)}', '${origin}')">${tr('地図を表示')}</button>`;
         return `<div class="lend-row">`
             + `<div class="grow"><b style="font-size:16px;">${escHtml(a.area)}</b>${a.count !== '' && a.count != null ? `<span style="color:#888; font-size:12px;">${tr(`（${a.count}件）`)}</span>` : ''}<br>`
             + `<span style="color:#666; font-size:12px;">${tr('貸出開始:')} ${escHtml(a.lendDate || '-')}<br>${tr('返却期日:')} <span class="${dueClass(a.dueDate)}">${escHtml(a.dueDate || '-')}</span>${daysLeftLabel(a.dueDate)}</span></div>`
             + `<div style="display:flex; flex-direction:column; gap:4px; flex-shrink:0;">`
-            + `<button class="choice-btn" style="background:#eef3f6; padding:5px 8px; font-size:12px;" onclick="enterAreaFromListOrigin_('${escHtml(a.area)}', '${origin}')">${tr('地図を表示')}</button>`
+            + mapBtn
             + (canReturn ? `<button class="clear-btn return-hold-btn" data-aid="${a.id}" data-area="${escHtml(a.area)}" data-origin="${origin}" style="padding:5px 8px; font-size:12px;">${tr('長押しで返却')}</button>` : '')
             + `</div></div>`;
+    }
+    // 「地図を表示」ボタンのうち personal 起点のもの（show-map-btn）に長押しを割り当てる（区域一覧の描画後に呼ぶ）。
+    // タップ＝従来どおり地図表示／長押し＝QR時限共有の開始確認（shareAreaConfirm）。bindReturnHoldButtons と対称。
+    function bindShowMapButtons() {
+        document.querySelectorAll('#app-modal-body .show-map-btn').forEach(btn => {
+            if (btn._holdBound) return; btn._holdBound = true;
+            const area = btn.dataset.area, origin = btn.dataset.origin, areaId = Number(btn.dataset.aid);
+            attachLongPress(btn,
+                () => enterAreaFromListOrigin_(area, origin),
+                () => shareAreaConfirm(areaId, area));
+        });
     }
     // 「長押しで返却」ボタンに長押しを割り当てる（区域一覧の描画後に呼ぶ）。タップだけなら案内のみ＝押し間違いで返却が始まらない。
     function bindReturnHoldButtons() {
@@ -4499,6 +4550,7 @@
             html += distAccHtml_(mine, 'personal'); // 地区ごとのアコーディオン（全体利用と同じ見た目）
             body.innerHTML = html;
             bindReturnHoldButtons(); // 「長押しで返却」を有効化
+            bindShowMapButtons(); // 「地図を表示」タップ＝表示／長押し＝QR時限共有 を有効化
         };
         // 起動時取得や前回表示の区域データがあれば待たずに即表示し、裏で最新化（体感ゼロ待ち）
         // mineLoaded で「未取得」と「取得済みで空」を区別（B-4）：未取得のときだけ busy＋取得を出す。
@@ -4629,6 +4681,78 @@
             apiCall('exportCoverageSheet', {}).then(r => { showToast(`網羅シートを出力しました（${(r && r.areas) || 0} 区域）`, false); }).catch(handleServerError).finally(hideBusy);
         });
     }
+
+    /* ── 区域のQR時限共有（個人貸出中の区域を、QRコードを介して90分だけ他ユーザーと共用。§8.8 周辺機能） ── */
+    // 参加中の共有区域（期限内）。localStorage キャッシュへは保存しない＝期限切れ後の残留防止（rebuildVisibleAreaSet_ 参照）。
+    let qrSharedArea = null; // null または { area, areaId, exp }
+    // 長押し確認 → shareArea 呼び出し → QRモーダル表示。
+    function shareAreaConfirm(areaId, area) {
+        appConfirm(`「${area}」の地図を共有しますか？\nQRコードを読み取った人が90分間、この区域を一緒に使えます。`, { okLabel: '共有する' }).then(ok => {
+            if (!ok) return;
+            showBusy('共有を準備中…');
+            apiCall('shareArea', { areaId: areaId })
+                .then(d => {
+                    if (!d.reused) showToast(tr('共有を開始しました'), false);
+                    showShareQrModal(d.token, d.area, d.exp);
+                })
+                .catch(handleServerError).finally(hideBusy);
+        });
+    }
+    // "HH:MM" 形式（利用期限の表示用）
+    function hhmm_(ts) {
+        const d = new Date(ts);
+        return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+    }
+    function showShareQrModal(token, area, exp) {
+        openAppModal('地図を共有');
+        const url = location.origin + location.pathname + '?share=' + encodeURIComponent(token);
+        let qrSvg = '';
+        try {
+            const qr = qrcode(0, 'M');
+            qr.addData(url);
+            qr.make();
+            qrSvg = qr.createSvgTag({ scalable: true });
+        } catch (e) {}
+        document.getElementById('app-modal-body').innerHTML = `
+            <div style="text-align:center; padding:8px;">
+                <div style="font-size:13px; color:#555; margin-bottom:12px;">${tr('スマホのカメラでQRコードを読み取ると、この区域を90分間一緒に使えます')}</div>
+                <div style="width:260px; max-width:70vw; margin:8px auto;">${qrSvg}</div>
+                <div style="font-size:14px; color:#333; margin-top:12px;">${tr('利用期限:')} ${escHtml(hhmm_(exp))} ${tr('まで')}</div>
+                <div style="font-size:12px; color:#888; margin-top:10px;">${tr('この画面を閉じても、時間内は共有が続きます')}</div>
+            </div>`;
+    }
+    // URLから ?share= を除去する（共有終了時。リロードしても再参加させないため）。
+    function removeShareParam_() {
+        try { const u = new URL(location.href); u.searchParams.delete('share'); history.replaceState(null, '', u); } catch (e) {}
+    }
+    // 共有トークンで参加する（?share= のディープリンク・サインイン後の初期データ取得後に呼ぶ）。
+    function runShareDeepLink(token) {
+        apiCall('joinSharedArea', { token: token }).then(d => {
+            qrSharedArea = { area: d.area, areaId: d.areaId, exp: d.exp };
+            rebuildVisibleAreaSet_(); // lender以下の表示制限にも共有区域を反映
+            enterAreaFromList(d.area);
+            showToast(tr('共有区域に参加しました') + '（〜' + hhmm_(d.exp) + '）', false);
+        }).catch(err => {
+            if (err && err.code === 'ShareExpired') showToast(tr('この共有は終了しています'), false, true);
+            else handleServerError(err);
+            removeShareParam_();
+        });
+    }
+    // 60秒おきに参加中の共有の期限を確認し、超過したら表示制限・枠表示・URLを片付ける。
+    setInterval(() => {
+        if (!qrSharedArea || qrSharedArea.exp > Date.now()) return;
+        const expiredArea = qrSharedArea.area;
+        qrSharedArea = null;
+        rebuildVisibleAreaSet_();
+        if (currentBoxAddr === expiredArea) { // 共有区域を表示中（赤枠）なら、ラベルタップでの枠消去と同じ後始末（枠＋ラベル＋?area=）にする
+            clearBanchiBox();
+            const lbl = document.getElementById('area-label');
+            if (lbl) lbl.style.display = 'none';
+            setAreaUrl(null); // 復元用の ?area= もURLから消す（askClearAreaSelection と同型）
+        }
+        removeShareParam_();
+        showToast(tr('共有の利用時間が終了しました'), false, true);
+    }, 60000);
 
     // 貸出: サイトのQRコード（案内用）。apiCall不使用のため busy/toast なし。
     function showSiteQr() {
