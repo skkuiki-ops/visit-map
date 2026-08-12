@@ -183,7 +183,7 @@
         'コピーしました': 'Copiado', 'コピーに失敗しました': 'No se pudo copiar',
         '項目が選ばれていません': 'No hay nada seleccionado', '情報が見つかりませんでした': 'No se encontró la información'
     });
-    // ── 区域のQR時限共有（§8.8周辺機能） ──
+    // ── 区域のQR時限共有（仕様書§8.11b） ──
     Object.assign(I18N_ES, {
         '地図を共有': 'Compartir mapa', '共有する': 'Compartir',
         '共有を開始しました': 'Se inició la compartición',
@@ -192,7 +192,8 @@
         '共有の利用時間が終了しました': 'El tiempo de la compartición ha terminado',
         'スマホのカメラでQRコードを読み取ると、この区域を90分間一緒に使えます': 'Con la cámara del móvil, escanee el código QR para usar este territorio junto con otra persona durante 90 minutos',
         '利用期限:': 'Válido hasta:', 'まで': '',
-        'この画面を閉じても、時間内は共有が続きます': 'Aunque cierre esta pantalla, la compartición sigue activa durante el tiempo restante'
+        'この画面を閉じても、時間内は共有が続きます': 'Aunque cierre esta pantalla, la compartición sigue activa durante el tiempo restante',
+        'QRコードを表示できません。ページを再読み込みしてください。': 'No se pudo mostrar el código QR. Vuelva a cargar la página.'
     });
     // ── 報告フォーム（拒否・外国語） ──
     Object.assign(I18N_ES, {
@@ -326,6 +327,8 @@
         setText('#area-overview-exit');
         setText('#area-return-overview'); // 「↩ 区域選択に戻る」（区域一覧・一般画面のみ翻訳対象。管理系は対象外）
         setText('#shl-return-btn'); // 「↩ 集合住宅一覧に戻る」
+        // 戻る導線4種の✕（即時に消すだけ）のtitle（2026-08-08追加。「✕」自体は1文字のため翻訳不要）
+        document.querySelectorAll('.return-close-btn').forEach(el => { el.title = tr('閉じる'); });
         setText('#area-nav-btn');
         setText('#area-back-btn');
         setText('#area-modal-title');
@@ -620,7 +623,7 @@
     }
 
     // 外部リンク（URLパラメータ）：?area=東小岩3丁目5番 で番地表示、?pin=ID でそのIDのピンの吹き出しを開く、
-    // ?share=トークン でQR時限共有への参加（区域のQR時限共有・§8.8周辺機能。あれば area/pin より優先）
+    // ?share=トークン でQR時限共有への参加（区域のQR時限共有・仕様書§8.11b。あれば area/pin より優先）
     const _urlParams = new URLSearchParams(location.search);
     const DEEP_LINK_SHARE = _urlParams.get('share');
     const DEEP_LINK_AREA = DEEP_LINK_SHARE ? null : _urlParams.get('area');
@@ -3032,7 +3035,7 @@
         // 区域のQR共有: 期限切れ/終了済みトークンでの参加（ShareExpired）＝呼び出し元で個別処理する想定だが、
         // 経由し忘れても不安を煽らない案内にフォールバックする。
         if (err && err.code === 'ShareExpired') {
-            showToast(tr('この共有は終了しています'), false, true);
+            showToast('この共有は終了しています', false, true); // showToast内部でtrされる（二重tr除去）
             return;
         }
         // UserList読取障害（UserListUnavailable）＝サーバ側インフラ障害。ErrorLogはサーバ側で記録済みなので二重送信せず、
@@ -3210,7 +3213,7 @@
     }
     function closeAppModal() {
         document.getElementById('app-modal').style.display = 'none';
-        document.getElementById('lend-preview-back').style.display = 'none';
+        document.getElementById('lend-preview-back-wrap').style.display = 'none';
         var card = document.getElementById('app-modal-card'); if (card) card.className = ''; // テーマを残さない
     }
     // アプリの使い方（左下メニュー）。図解版＝マーカー凡例＋戸建て新規/集合住宅編集の吹き出し図解。
@@ -4311,18 +4314,18 @@
         areaReturnOverviewBucket = bucket;
         areaReturnOverviewLabel = label || null; // 戻り先カメラを「直前区域の少し広め」にするため保持
         areaReturnOverviewReturnTo = returnTo || null;
-        const btn = document.getElementById('area-return-overview');
-        if (btn) btn.style.display = '';
+        const wrap = document.getElementById('area-return-overview-wrap');
+        if (wrap) wrap.style.display = '';
         areaReturnOverviewTimer = setTimeout(hideAreaReturnOverviewButton, 60000);
     }
-    // ボタン押下時・サインアウト時・別の全体図/区域表示に入り直した時に呼ぶ（即時クリーンアップ）。
+    // ボタン押下時・サインアウト時・別の全体図/区域表示に入り直した時に呼ぶ（即時クリーンアップ）。✕タップでも呼ぶ（2026-08-08）。
     function hideAreaReturnOverviewButton() {
         clearAreaReturnOverviewTimer();
         areaReturnOverviewBucket = null;
         areaReturnOverviewLabel = null;
         areaReturnOverviewReturnTo = null; // F5: 退避分も破棄
-        const btn = document.getElementById('area-return-overview');
-        if (btn) btn.style.display = 'none';
+        const wrap = document.getElementById('area-return-overview-wrap');
+        if (wrap) wrap.style.display = 'none';
     }
     function clearAreaReturnOverviewTimer() {
         if (areaReturnOverviewTimer) { clearTimeout(areaReturnOverviewTimer); areaReturnOverviewTimer = null; }
@@ -4334,15 +4337,15 @@
         clearShlReturnTimer(); // 多重起動防止
         hideAreaReturnOverviewButton(); // 「区域選択に戻る」と同時表示させない
         hideScreenReturnButton(); // 汎用「↩ ○○に戻る」と同時表示させない
-        const btn = document.getElementById('shl-return-btn');
-        if (btn) btn.style.display = '';
+        const wrap = document.getElementById('shl-return-btn-wrap');
+        if (wrap) wrap.style.display = '';
         shlReturnTimer = setTimeout(hideShlReturnButton, 60000);
     }
-    // ボタン押下時・サインアウト時・別の画面表示に入り直した時に呼ぶ（即時クリーンアップ）。
+    // ボタン押下時・サインアウト時・別の画面表示に入り直した時に呼ぶ（即時クリーンアップ）。✕タップでも呼ぶ（2026-08-08）。
     function hideShlReturnButton() {
         clearShlReturnTimer();
-        const btn = document.getElementById('shl-return-btn');
-        if (btn) btn.style.display = 'none';
+        const wrap = document.getElementById('shl-return-btn-wrap');
+        if (wrap) wrap.style.display = 'none';
     }
     function clearShlReturnTimer() {
         if (shlReturnTimer) { clearTimeout(shlReturnTimer); shlReturnTimer = null; }
@@ -4363,15 +4366,17 @@
         hideShlReturnButton(); // 「集合住宅一覧に戻る」と同時表示させない
         screenReturnOnClick = onReturn;
         const btn = document.getElementById('screen-return-btn');
-        if (btn) { btn.textContent = tr('↩ ' + label + 'に戻る'); btn.style.display = ''; }
+        if (btn) btn.textContent = tr('↩ ' + label + 'に戻る');
+        const wrap = document.getElementById('screen-return-btn-wrap');
+        if (wrap) wrap.style.display = '';
         screenReturnTimer = setTimeout(hideScreenReturnButton, 60000);
     }
-    // ボタン押下時・サインアウト時・別の画面表示に入り直した時に呼ぶ（即時クリーンアップ）。
+    // ボタン押下時・サインアウト時・別の画面表示に入り直した時に呼ぶ（即時クリーンアップ）。✕タップでも呼ぶ（2026-08-08）。
     function hideScreenReturnButton() {
         clearScreenReturnTimer();
         screenReturnOnClick = null;
-        const btn = document.getElementById('screen-return-btn');
-        if (btn) btn.style.display = 'none';
+        const wrap = document.getElementById('screen-return-btn-wrap');
+        if (wrap) wrap.style.display = 'none';
     }
     function clearScreenReturnTimer() {
         if (screenReturnTimer) { clearTimeout(screenReturnTimer); screenReturnTimer = null; }
@@ -4682,7 +4687,7 @@
         });
     }
 
-    /* ── 区域のQR時限共有（個人貸出中の区域を、QRコードを介して90分だけ他ユーザーと共用。§8.8 周辺機能） ── */
+    /* ── 区域のQR時限共有（個人貸出中の区域を、QRコードを介して90分だけ他ユーザーと共用。仕様書§8.11b） ── */
     // 参加中の共有区域（期限内）。localStorage キャッシュへは保存しない＝期限切れ後の残留防止（rebuildVisibleAreaSet_ 参照）。
     let qrSharedArea = null; // null または { area, areaId, exp }
     // 長押し確認 → shareArea 呼び出し → QRモーダル表示。
@@ -4692,7 +4697,7 @@
             showBusy('共有を準備中…');
             apiCall('shareArea', { areaId: areaId })
                 .then(d => {
-                    if (!d.reused) showToast(tr('共有を開始しました'), false);
+                    showToast('共有を開始しました', false); // 再共有(reused)でも exp が「今から90分」に更新されるため常に出す（showToast内部でtr）
                     showShareQrModal(d.token, d.area, d.exp);
                 })
                 .catch(handleServerError).finally(hideBusy);
@@ -4713,10 +4718,13 @@
             qr.make();
             qrSvg = qr.createSvgTag({ scalable: true });
         } catch (e) {}
+        // QR生成に失敗した場合はURL文字列を出さず（トークン秘匿方針）、再読込を案内する枠だけ表示する。
+        const qrBlock = qrSvg || `<div style="padding:24px 8px; color:#a33; font-size:13px;">${tr('QRコードを表示できません。ページを再読み込みしてください。')}</div>`;
         document.getElementById('app-modal-body').innerHTML = `
             <div style="text-align:center; padding:8px;">
+                <div style="font-size:16px; font-weight:bold; margin-bottom:6px;">${escHtml(area)}</div>
                 <div style="font-size:13px; color:#555; margin-bottom:12px;">${tr('スマホのカメラでQRコードを読み取ると、この区域を90分間一緒に使えます')}</div>
-                <div style="width:260px; max-width:70vw; margin:8px auto;">${qrSvg}</div>
+                <div style="width:260px; max-width:70vw; margin:8px auto;">${qrBlock}</div>
                 <div style="font-size:14px; color:#333; margin-top:12px;">${tr('利用期限:')} ${escHtml(hhmm_(exp))} ${tr('まで')}</div>
                 <div style="font-size:12px; color:#888; margin-top:10px;">${tr('この画面を閉じても、時間内は共有が続きます')}</div>
             </div>`;
@@ -4727,16 +4735,26 @@
     }
     // 共有トークンで参加する（?share= のディープリンク・サインイン後の初期データ取得後に呼ぶ）。
     function runShareDeepLink(token) {
+        showBusy('共有に参加しています…');
         apiCall('joinSharedArea', { token: token }).then(d => {
             qrSharedArea = { area: d.area, areaId: d.areaId, exp: d.exp };
             rebuildVisibleAreaSet_(); // lender以下の表示制限にも共有区域を反映
+            // areaStore（getMyAreas/getSharedAreas）が未取得・取得失敗でも、参加直後に共有区域のピンを出す
+            //（rebuildVisibleAreaSet_ は両半分がそろうまで no-op のため、visibleAreaSet を直接補強する）。
+            if (visibleAreaSet instanceof Set) {
+                const k = addrWithoutGo(d.area);
+                if (k) { visibleAreaSet.add(k); applyZoomVisibility(); }
+            }
             enterAreaFromList(d.area);
             showToast(tr('共有区域に参加しました') + '（〜' + hhmm_(d.exp) + '）', false);
         }).catch(err => {
-            if (err && err.code === 'ShareExpired') showToast(tr('この共有は終了しています'), false, true);
-            else handleServerError(err);
-            removeShareParam_();
-        });
+            if (err && err.code === 'ShareExpired') {
+                showToast('この共有は終了しています', false, true); // showToast内部でtr（二重tr除去）
+                removeShareParam_(); // 終了済みトークンは無効＝リロードで再試行させない
+            } else {
+                handleServerError(err); // 通信の一時失敗等は ?share= を残す（?area= 既存ディープリンクと同じ扱い＝リロードで再試行できる）
+            }
+        }).finally(hideBusy);
     }
     // 60秒おきに参加中の共有の期限を確認し、超過したら表示制限・枠表示・URLを片付ける。
     setInterval(() => {
@@ -4751,7 +4769,7 @@
             setAreaUrl(null); // 復元用の ?area= もURLから消す（askClearAreaSelection と同型）
         }
         removeShareParam_();
-        showToast(tr('共有の利用時間が終了しました'), false, true);
+        showToast('共有の利用時間が終了しました', false, true); // showToast内部でtr（二重tr除去）
     }, 60000);
 
     // 貸出: サイトのQRコード（案内用）。apiCall不使用のため busy/toast なし。
@@ -4954,11 +4972,11 @@
         const a = lendState.areas.find(x => String(x.id) === String(areaId));
         if (!a) return;
         document.getElementById('app-modal').style.display = 'none';
-        document.getElementById('lend-preview-back').style.display = '';
+        document.getElementById('lend-preview-back-wrap').style.display = '';
         showAssignedArea(a.area);
     }
     function backToLendScreen() {
-        document.getElementById('lend-preview-back').style.display = 'none';
+        document.getElementById('lend-preview-back-wrap').style.display = 'none';
         document.getElementById('app-modal').style.display = 'flex'; // 選択状態は lendState に保持されている
     }
     function doLendArea(areaId, force) {

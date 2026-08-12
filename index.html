@@ -73,7 +73,7 @@
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-    <link rel="stylesheet" href="app.css?v=20260808a">
+    <link rel="stylesheet" href="app.css?v=20260808b">
 </head>
 <body>
 
@@ -163,16 +163,28 @@
 <!-- 印刷用表示（admin・PC/タブレット。赤枠内のピンを白黒のSVG図で表示）。Esc/✕で閉じる -->
 <div id="print-view"><div id="print-view-body"></div></div>
 
-<!-- 貸出プレビュー中の「戻る」ボタン（地図確認から貸出画面へ復帰） -->
-<button id="lend-preview-back" style="display:none;" onclick="backToLendScreen()">↩ 貸出画面に戻る</button>
+<!-- 貸出プレビュー中の「戻る」ボタン（地図確認から貸出画面へ復帰）。✕は戻らずボタンだけ即消す＋closeAppModalで隠れたモーダルを正式に閉じる -->
+<div class="return-btn-wrap" id="lend-preview-back-wrap" style="display:none;">
+    <button id="lend-preview-back" onclick="backToLendScreen()">↩ 貸出画面に戻る</button>
+    <button class="return-close-btn" onclick="closeAppModal()" title="閉じる">✕</button>
+</div>
 <!-- （区域一覧に戻るバーは廃止：番地を表示したら住所選択遷移と同じ＝下部バーなし） -->
-<!-- 全体図の番地ラベルをタップして区域表示に入った直後だけ表示。タップで同じ全体図に戻る。60秒で自動消滅 -->
-<button id="area-return-overview" style="display:none;" onclick="returnToAreaOverview()">↩ 区域選択に戻る</button>
-<!-- 集合住宅一覧(小規模除く)の🗺で地図へ移動した直後だけ表示。タップで一覧へ（開閉状態を保持して復元）。60秒で自動消滅 -->
-<button id="shl-return-btn" style="display:none;" onclick="returnToShugaList()">↩ 集合住宅一覧に戻る</button>
+<!-- 全体図の番地ラベルをタップして区域表示に入った直後だけ表示。タップで同じ全体図に戻る。60秒で自動消滅。✕は戻らずボタンだけ即消す -->
+<div class="return-btn-wrap" id="area-return-overview-wrap" style="display:none;">
+    <button id="area-return-overview" onclick="returnToAreaOverview()">↩ 区域選択に戻る</button>
+    <button class="return-close-btn" onclick="hideAreaReturnOverviewButton()" title="閉じる">✕</button>
+</div>
+<!-- 集合住宅一覧(小規模除く)の🗺で地図へ移動した直後だけ表示。タップで一覧へ（開閉状態を保持して復元）。60秒で自動消滅。✕は戻らずボタンだけ即消す -->
+<div class="return-btn-wrap" id="shl-return-btn-wrap" style="display:none;">
+    <button id="shl-return-btn" onclick="returnToShugaList()">↩ 集合住宅一覧に戻る</button>
+    <button class="return-close-btn" onclick="hideShlReturnButton()" title="閉じる">✕</button>
+</div>
 <!-- 汎用の戻る導線: 区域一覧(個人/グループ/合同)の「地図を表示」・利用状況/区域操作履歴の🗺で地図へ移動した直後だけ表示。
-     タップで登録された戻り先を再表示（showScreenReturnButton/returnFromScreenButton）。60秒で自動消滅 -->
-<button id="screen-return-btn" style="display:none;" onclick="returnFromScreenButton()"></button>
+     タップで登録された戻り先を再表示（showScreenReturnButton/returnFromScreenButton）。60秒で自動消滅。✕は戻らずボタンだけ即消す -->
+<div class="return-btn-wrap" id="screen-return-btn-wrap" style="display:none;">
+    <button id="screen-return-btn" onclick="returnFromScreenButton()"></button>
+    <button class="return-close-btn" onclick="hideScreenReturnButton()" title="閉じる">✕</button>
+</div>
 <!-- 区域オーバービュー（個人/グループ/全体利用の「全て表示」）中の操作バー。枠内ラベルで区域を選ぶか、✕で表示を終了 -->
 <div id="area-overview-bar" style="display:none;">
     <button id="area-overview-icons" onclick="toggleOverviewIcons()">アイコンを非表示</button>
@@ -215,8 +227,8 @@
     </div>
 </div>
 
-<script src="qrcode.js?v=20260808a"></script>
-<script src="app.js?v=20260808a"></script>
+<script src="qrcode.js?v=20260808a" defer></script> <!-- QR生成ライブラリ(56KB)。使用は操作時のみのため defer で起動時のパースブロックを回避（app.jsのトップレベルは未参照＝実行順逆転しても安全） -->
+<script src="app.js?v=20260808b"></script>
 
 </body>
 </html>
