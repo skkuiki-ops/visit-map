@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>s.k.visit-map — 新しいURLへ移動します</title>
+<!-- ============================================================================
+     移行用リダイレクトページ（旧 GitHub Pages 用）
+
+     使い方: 切替日に、旧サイトの index.html を「このファイルの中身」で置き換える。
+             app.js / app.css は消さずに残しておく（切り戻しを速くするため）。
+     切り戻し: 旧 index.html のバックアップを書き戻すだけ（データは旧スプレッドシートに
+               そのまま残っているので、それだけで元通り動く）。
+
+     このページがやること:
+       1. ?area= / ?pin= / ?share= などのクエリを引き継いで新URLへ転送する
+          （印刷済みQRコード・共有リンクを無駄にしないため。ここが最重要）
+       2. 旧オリジンの Service Worker を解除する（古いPWAが残り続けるのを防ぐ）
+       3. JSが動かない端末でも <meta refresh> と手動リンクで着地できるようにする
+     ============================================================================ -->
+<meta http-equiv="refresh" content="3;url=https://sk-visit-map.sk-kuiki.workers.dev/">
+<style>
+  body { margin:0; background:#faf7f2; color:#2c3e50; font-family:sans-serif;
+         display:flex; align-items:center; justify-content:center; min-height:100vh; padding:24px; box-sizing:border-box; }
+  .box { text-align:center; max-width:520px; }
+  h1 { font-size:20px; margin:0 0 14px; }
+  p { font-size:15px; line-height:1.8; margin:0 0 18px; }
+  .spin { width:34px; height:34px; margin:0 auto 20px; border:4px solid #d8d0c4; border-top-color:#2c3e50;
+          border-radius:50%; animation:sp 1s linear infinite; }
+  @keyframes sp { to { transform:rotate(360deg); } }
+  a.btn { display:inline-block; padding:12px 26px; font-size:16px; border-radius:24px;
+          background:#2c3e50; color:#fff; text-decoration:none; }
+  .note { font-size:12px; color:#888; margin-top:22px; line-height:1.7; }
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="spin"></div>
+  <h1>新しいアドレスへ移動します</h1>
+  <p>このアプリは新しいアドレスに移りました。<br>自動で移動します。数秒待っても変わらない場合は、下のボタンを押してください。</p>
+  <p><a class="btn" id="go" href="https://sk-visit-map.sk-kuiki.workers.dev/">新しいアプリを開く</a></p>
+  <p class="note">
+    ホーム画面のアイコンから開いた方へ：<br>
+    移動先のページで、ブラウザのメニューから「ホーム画面に追加」をしてください。<br>
+    そのあと、この古いアイコンは削除してかまいません。<br>
+    ※初回はGoogleアカウントのサインインを一度だけ求められます。
+  </p>
+</div>
+<script>
+/* ES5 のみで書く（古い端末でも確実に転送するため。ここで新しい文法を使わないこと） */
+(function () {
+  var NEW_ORIGIN = 'https://sk-visit-map.sk-kuiki.workers.dev/';
+
+  // 旧オリジンの Service Worker を解除する（古いPWAが生き続けるのを防ぐ）。
+  // 失敗しても転送は続行する。
+  try {
+    if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+      navigator.serviceWorker.getRegistrations().then(function (rs) {
+        for (var i = 0; i < rs.length; i++) { try { rs[i].unregister(); } catch (e) {} }
+      }).catch(function () {});
+    }
+  } catch (e) {}
+
+  // クエリ（?area= / ?pin= / ?share=）とハッシュをそのまま引き継ぐ。
+  // 例: 旧 .../visit-map/?pin=123 → 新 https://.../?pin=123
+  var target = NEW_ORIGIN + (location.search || '') + (location.hash || '');
+
+  var a = document.getElementById('go');
+  if (a) a.href = target;
+
+  // 履歴を汚さない（戻るボタンでこのページに戻ってループしないよう replace を使う）
+  setTimeout(function () {
+    try { location.replace(target); } catch (e) { location.href = target; }
+  }, 400);
+})();
+</script>
+</body>
+</html>
