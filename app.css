@@ -179,13 +179,21 @@
         .marker-star { border: none !important; border-radius: 0 !important; box-shadow: none !important; background: transparent;
             clip-path: polygon(50% 2%, 61% 35%, 96% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 4% 35%, 39% 35%);
             filter: drop-shadow(0 1px 2.5px rgba(0,0,0,0.55)); }
-        /* 施設マーカー＝絵文字のみ（丸・枠・影なし）。視認性のため drop-shadow だけ付ける。サイズは applyZoomScale が制御。
+        /* 施設マーカー＝自前SVGアイコンのみ（丸・枠・影なし）。色は種類ごとに styleFacilityMarker が el.style.color で当てる（SVGは currentColor）。
+           視認性のため drop-shadow だけ付ける。サイズ（width/height＝そのまま見た目サイズ）は applyZoomScale が制御。
            ※!important は付けない＝同名クラスの後勝ちで .custom-marker を上書きしつつ、移動中(.marker-moving)の金色グローは効かせる */
         .marker-facility { background: transparent; border: none; box-shadow: none; border-radius: 0; line-height: 1; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5)); }
         /* 施設の種類ピッカー（2列ボタン） */
         .fac-type-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin: 4px 0 8px; }
         .fac-type-btn { padding: 9px 6px; border: 1.5px solid #cdd6dd; border-radius: 8px; background: #f5f8fa; color: #2c3e50; font-size: 13px; font-weight: bold; cursor: pointer; text-align: center; }
         .fac-type-btn.fac-sel { background: #2c3e50; color: #fff; border-color: #2c3e50; }
+        /* ボタン内のSVGアイコン枠（幅を固定してラベルと揃える）。色はインラインの --fac-c で種類ごとに。
+           選択中(.fac-sel)は背景が濃色になるため、ボタン文字と同じく白にする（下の指定が詳細度で勝つ） */
+        .fac-btn-ic { display: inline-flex; width: 1.25em; height: 1.25em; vertical-align: -0.25em; flex-shrink: 0; color: var(--fac-c, currentColor); }
+        .fac-type-btn.fac-sel .fac-btn-ic { color: #fff; }
+        /* 吹き出し内の施設アイコン枠（em指定＝文字サイズ設定に追随）。fac-ic-lg はタイトル行用に少し大きく */
+        .fac-ic { display: inline-flex; width: 1.1em; height: 1.1em; vertical-align: -0.18em; flex-shrink: 0; }
+        .fac-ic-lg { width: 1.15em; height: 1.15em; vertical-align: -0.2em; }
 
         /* ── 文字サイズボタン（右下） ── */
         /* 右下のスケール操作（左=文字サイズ「文字」／右=ピン印サイズ「印」）。可変幅でも右下にきれいに並ぶよう flex でまとめる */
@@ -342,7 +350,8 @@
         .iff-opt { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1.5px solid #cdd6dd; border-radius: 8px; background: #f8fafc; font-size: 13px; cursor: pointer; user-select: none; -webkit-user-select: none; }
         .iff-opt.on { border-color: #2c3e50; background: #e7eef3; font-weight: bold; }
         .iff-sw { width: 15px; height: 15px; border-radius: 4px; border: 1px solid rgba(0,0,0,0.22); flex-shrink: 0; }
-        .iff-ic { font-size: 15px; line-height: 1; flex-shrink: 0; }
+        /* 種類アイコン枠。施設はSVG（親の width/height いっぱいに描く）なので箱サイズを固定する。font-size は絵文字（戸建て/集合住宅）用に残す */
+        .iff-ic { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; font-size: 15px; line-height: 1; flex-shrink: 0; }
         .iff-note { font-size: 11px; color: #888; margin-top: 8px; line-height: 1.6; }
         /* アプリの使い方（図解ヘルプ）。クラスは vmh- 接頭辞で既存と衝突回避。現物の配色に合わせる */
         #help-fs-header .vmh-lab { font-size: 10px; color: #9aa7ad; margin-right: 2px; }
@@ -391,6 +400,7 @@
         .vmh-chip { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; font-size: 12px; font-weight: bold; flex-shrink: 0; line-height: 1; box-shadow: 0 1px 2px rgba(0,0,0,.25); }
         .vmh-em { font-size: 13px; }  /* 🏢など絵文字チップ用（大モードで拡大できるようインライン指定をクラス化） */
         .vmh-ko { background: #fff; border: 2px solid #333; border-radius: 50%; }
+        .vmh-fac-ic { display: inline-flex; width: 72%; height: 72%; }  /* 施設凡例のSVGアイコン枠（チップ内に少し余白を残す。%指定で大モードのチップ拡大に追随） */
         .vmh-star { color: #fff; clip-path: polygon(50% 2%,61% 35%,96% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,4% 35%,39% 35%); box-shadow: none; }
         .vmh-sh { border: 2px solid #fff; border-radius: 6px; width: 27px; height: 24px; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
         .vmh-mk { display: grid; grid-template-columns: 1fr 1fr; gap: 9px 10px; }

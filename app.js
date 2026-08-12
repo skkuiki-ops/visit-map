@@ -911,30 +911,34 @@
         return (v === 'あり') ? '#2E5E33' : GRAY;                                 // 管理人 あり=深い緑
     }
 
-    // ── 施設（目印になる建物）の種類 ── 種別='施設'。種類は属性(I列)に保存。マーカーは絵文字のみ（丸なし）。
-    // color は未使用（マーカー色は styleFacilityMarker が単一の正。郵便局のみ〒赤太字）。
+    // ── 施設（目印になる建物）の種類 ── 種別='施設'。種類は属性(I列)に保存。マーカーは自前SVGのみ（丸なし）。
+    // icon は fill/stroke に currentColor を使う SVG（OS依存の絵文字を廃止）。色は color を親要素の color に当てて効かせる。
     const FACILITY_TYPES = [
-        { v: '区の施設',          icon: '🏛️' },
-        { v: 'コンビニ',          icon: '🏪' },
-        { v: 'スーパー',          icon: '🛍️' },
-        { v: '病院',             icon: '🏥' },
-        { v: '郵便局',           icon: '〒' }, // 〒マーク（マーカーは赤・太字で表示）
-        { v: '公園',             icon: '🌳' },
-        { v: '学校',             icon: '🏫' },
-        { v: 'カフェ・レストラン', icon: '🍴' },
-        { v: '銭湯',             icon: '♨️' },
-        { v: 'ドラッグストア',    icon: '💊' }
+        { v: '区の施設',          color: '#4A6D8C', icon: '<svg viewBox="0 0 24 24" style="width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;display:block;" aria-hidden="true"><polyline points="3,9 12,3 21,9"/><rect x="4" y="9" width="16" height="11"/><line x1="3" y1="20" x2="21" y2="20"/><line x1="8" y1="10" x2="8" y2="19"/><line x1="16" y1="10" x2="16" y2="19"/></svg>' },
+        { v: 'コンビニ',          color: '#2E7D8C', icon: '<svg viewBox="0 0 24 24" style="width:100%;height:100%;fill:currentColor;display:block;" aria-hidden="true"><rect x="0.5" y="7.4" width="15.5" height="2.6"/><path fill-rule="evenodd" d="M1.5 10 h13.5 v11 h-13.5 Z M3.5 12.5 h4 v3.5 h-4 Z M9.5 14.5 h3.5 v6.5 h-3.5 Z"/><rect x="19.5" y="9.4" width="2" height="11.6"/><rect x="17.2" y="3.8" width="6.6" height="5.6"/></svg>' },
+        { v: 'スーパー',          color: '#C77E3A', icon: '<svg viewBox="0 0 24 24" style="width:100%;height:100%;fill:currentColor;display:block;" aria-hidden="true"><rect x="8.6" y="6" width="2" height="6" rx="1"/><rect x="13.4" y="6" width="2" height="6" rx="1"/><rect x="4" y="11" width="16" height="10" rx="2.2"/></svg>' },
+        { v: '病院',             color: '#C0392B', icon: '<svg viewBox="0 0 24 24" style="width:100%;height:100%;fill:currentColor;display:block;" aria-hidden="true"><path fill-rule="evenodd" d="M8.5 2 h7 v6.5 h-7 Z M3 8.5 h18 v2.4 h-18 Z M4 10.9 h16 v10.1 h-16 Z M11.05 3.05 H12.95 V4.3 H14.2 V6.2 H12.95 V7.45 H11.05 V6.2 H9.8 V4.3 H11.05 Z M6 13 h3.2 v3.2 h-3.2 Z M14.8 13 h3.2 v3.2 h-3.2 Z M10.4 15.5 h3.2 v5.5 h-3.2 Z"/></svg>' },
+        { v: '郵便局',           color: '#E60012', icon: '<svg viewBox="0 0 24 24" style="width:100%;height:100%;fill:currentColor;display:block;" aria-hidden="true"><path d="M5 5 h14 v2.5 h-14 Z M5 10 h14 v2.5 h-14 Z M10.7 10 h2.6 v11 h-2.6 Z"/></svg>' },
+        { v: '公園',             color: '#2F6B3F', icon: '<svg viewBox="0 0 24 24" style="width:100%;height:100%;fill:currentColor;display:block;" aria-hidden="true"><path d="M9.7 8 A5.3 5.3 0 1 0 20.3 8 A5.3 5.3 0 1 0 9.7 8 Z M8.2 10.3 A3.3 3.3 0 1 0 14.8 10.3 A3.3 3.3 0 1 0 8.2 10.3 Z M16.5 10.5 A3 3 0 1 0 22.5 10.5 A3 3 0 1 0 16.5 10.5 Z M8.3 6.5 A3.2 3.2 0 1 0 14.7 6.5 A3.2 3.2 0 1 0 8.3 6.5 Z"/><rect x="14" y="12" width="2.3" height="9"/><path d="M1.2 16.3 h7.8 v2.4 h-7.8 Z M1.2 13 h7.8 v2.2 h-7.8 Z M1.8 18.7 h2.2 v2.5 h-2.2 Z M6.2 18.7 h2.2 v2.5 h-2.2 Z"/></svg>' },
+        { v: '学校',             color: '#8A6D3B', icon: '<svg viewBox="0 0 24 24" style="width:100%;height:100%;fill:currentColor;display:block;" aria-hidden="true"><path fill-rule="evenodd" d="M8.8 4.6 h6.4 v16.4 h-6.4 Z M1.5 11 h7.3 v10 h-7.3 Z M15.2 11 h7.3 v10 h-7.3 Z M9.7 7.8 A2.3 2.3 0 1 0 14.3 7.8 A2.3 2.3 0 1 0 9.7 7.8 Z M10.3 21 V17.7 A1.7 1.7 0 0 1 13.7 17.7 V21 Z M2.4 12.4 h2.8 v2.6 h-2.8 Z M5.8 12.4 h2.8 v2.6 h-2.8 Z M15.4 12.4 h2.8 v2.6 h-2.8 Z M18.8 12.4 h2.8 v2.6 h-2.8 Z M2.4 16.5 h2.8 v2.6 h-2.8 Z M5.8 16.5 h2.8 v2.6 h-2.8 Z M15.4 16.5 h2.8 v2.6 h-2.8 Z M18.8 16.5 h2.8 v2.6 h-2.8 Z"/></svg>' },
+        { v: 'カフェ・レストラン', color: '#7A4A2E', icon: '<svg viewBox="0 0 24 24" style="width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;display:block;" aria-hidden="true"><path d="M6,9 L18,9 L16,20 L8,20 Z"/><path d="M18,11 Q22,11 22,14 Q22,17 18,17"/><line x1="5" y1="21" x2="19" y2="21"/></svg>' },
+        { v: '銭湯',             color: '#C2591F', icon: '<svg viewBox="0 0 24 24" style="width:100%;height:100%;fill:currentColor;display:block;" aria-hidden="true"><path d="M4.42 10.412 A9.9 6.93 0 1 0 19.58 10.412 A8.864 5.656 0 1 1 4.42 10.412 Z"/><path d="M12 17.4 C7.75 13.14 13.55 8 11.7 4.2 C11.81 3.5 11.75 3 12 2.6 C12.25 3 12.72 3.6 13.1 4.4 C15.05 8.2 10.45 13.14 12 17.4 Z M6.6 15.5 C7.25 12.6 4.27 9.4 5.8 6.7 C6.08 6 6.35 5.5 6.6 5.1 C6.85 5.5 6.99 6.1 7.2 6.9 C5.83 9.6 9.75 12.6 6.6 15.5 Z M17.4 15.5 C14.25 12.6 18.18 9.4 16.8 6.7 C17.01 6 17.15 5.5 17.4 5.1 C17.65 5.5 17.92 6.1 18.2 6.9 C19.72 9.6 16.75 12.6 17.4 15.5 Z"/></svg>' },
+        { v: 'ドラッグストア',    color: '#3AA76D', icon: '<svg viewBox="0 0 24 24" style="width:100%;height:100%;fill:currentColor;display:block;" aria-hidden="true"><path transform="rotate(45 12 12)" fill-rule="evenodd" d="M7.7 8 H16.3 A4 4 0 0 1 16.3 16 H7.7 A4 4 0 0 1 7.7 8 Z M11.1 8 H12.9 V16 H11.1 Z"/></svg>' }
     ];
-    // 旧値「コンビニ・スーパー」の後方互換（🏪で表示。編集で「コンビニ」「スーパー」に付け替え可）
-    const FACILITY_LEGACY_ICON_ = { 'コンビニ・スーパー': '🏪' };
-    function facilityIcon(v) { const f = FACILITY_TYPES.find(t => t.v === v); return f ? f.icon : (FACILITY_LEGACY_ICON_[v] || '📍'); }
+    // 旧値「コンビニ・スーパー」の後方互換（コンビニのアイコン・色で表示。編集で「コンビニ」「スーパー」に付け替え可）
+    const FACILITY_LEGACY_ICON_ = { 'コンビニ・スーパー': FACILITY_TYPES.find(t => t.v === 'コンビニ').icon };
+    const FACILITY_LEGACY_COLOR_ = { 'コンビニ・スーパー': FACILITY_TYPES.find(t => t.v === 'コンビニ').color };
+    // 未知の種類のフォールバック（汎用ピン。他の10種と同じく fill:currentColor）
+    const FACILITY_FALLBACK_ICON_ = '<svg viewBox="0 0 24 24" style="width:100%;height:100%;fill:currentColor;display:block;" aria-hidden="true"><path fill-rule="evenodd" d="M12 2 A7 7 0 0 0 5 9 C5 14.2 12 22 12 22 C12 22 19 14.2 19 9 A7 7 0 0 0 12 2 Z M12 6.4 A2.6 2.6 0 1 0 12 11.6 A2.6 2.6 0 1 0 12 6.4 Z"/></svg>';
+    function facilityIcon(v) { const f = FACILITY_TYPES.find(t => t.v === v); return f ? f.icon : (FACILITY_LEGACY_ICON_[v] || FACILITY_FALLBACK_ICON_); }
+    function facilityColor(v) { const f = FACILITY_TYPES.find(t => t.v === v); return f ? f.color : (FACILITY_LEGACY_COLOR_[v] || '#666'); }
     function facilityLabel(v) { const f = FACILITY_TYPES.find(t => t.v === v); return f ? f.v : (v || '施設'); }
-    // 施設マーカーの見た目を種類に応じて設定（絵文字＋郵便局は〒を赤に。太字は .custom-marker の font-weight:900）。サイズ判定用に種類を保持。
+    // 施設マーカーの見た目を種類に応じて設定（SVGアイコン＋種類ごとの色。SVGは currentColor なので el.style.color で着色）。サイズ判定用に種類を保持。
     function styleFacilityMarker(el, type) {
         if (!el) return;
         el.innerHTML = facilityIcon(type);
         el.dataset.facType = type || '';
-        el.style.color = (type === '郵便局') ? '#E60012' : ''; // 〒は赤。絵文字は色指定なし（自前グリフ色）
+        el.style.color = facilityColor(type);
     }
     // 種類ごとのアイコンサイズ倍率。
     //  公園・区の施設：z14以上は等倍、z14から広域になるほど大きく（目印として。z14=1.0 / z13=1.5 / z12=2.0 …＝1段ごと+0.5）。
@@ -953,7 +957,7 @@
         { key: '種別', title: '種別', opts: [
             { v: '戸建て', label: '戸建て', icon: '🏠' },
             { v: '集合住宅', label: '集合住宅', icon: '🏢' },
-            { v: '施設', label: '施設', icon: '🏛️' }
+            { v: '施設', label: '施設', icon: facilityIcon('区の施設'), color: facilityColor('区の施設') } // 施設全体の代表として「区の施設」のアイコンを流用
         ] },
         { key: '訪問結果', title: '戸建て：訪問結果', opts: [
             { v: '未訪問', label: '未訪問', color: '#6FAEC0' },
@@ -990,7 +994,7 @@
             { v: 'なし', label: 'なし', color: '#E5E5E5' },
             { v: '不明', label: '不明', color: '#E2E2E2' }
         ] },
-        { key: '施設種類', title: '施設の種類', opts: FACILITY_TYPES.map(t => ({ v: t.v, label: t.v, icon: t.icon })) }
+        { key: '施設種類', title: '施設の種類', opts: FACILITY_TYPES.map(t => ({ v: t.v, label: t.v, icon: t.icon, color: t.color })) }
     ];
     const iconFilter = {}; ICON_FILTER_SECTIONS.forEach(s => { iconFilter[s.key] = new Set(); });
     function iconFilterActive() { return ICON_FILTER_SECTIONS.some(s => iconFilter[s.key].size > 0); }
@@ -1050,7 +1054,8 @@
         body.innerHTML = ICON_FILTER_SECTIONS.map(sec => {
             const opts = sec.opts.map(o => {
                 const on = iconFilter[sec.key].has(o.v);
-                const sw = o.icon ? `<span class="iff-ic">${o.icon}</span>` : `<span class="iff-sw" style="background:${o.color};"></span>`;
+                // アイコン付きの枠は色があれば currentColor で着色（施設＝SVG。戸建て/集合住宅の絵文字は色指定なし）
+                const sw = o.icon ? `<span class="iff-ic"${o.color ? ` style="color:${o.color};"` : ''}>${o.icon}</span>` : `<span class="iff-sw" style="background:${o.color};"></span>`;
                 return `<label class="iff-opt${on ? ' on' : ''}" onclick="toggleIconFilterOpt(this,'${sec.key}','${o.v}')">${sw}${escHtml(tr(o.label))}</label>`;
             }).join('');
             return `<div class="iff-sec"><div class="iff-sec-ttl">${escHtml(tr(sec.title))}</div><div class="iff-opts">${opts}</div></div>`;
@@ -1472,12 +1477,13 @@
                 el.style.width = el.style.height = Math.round(base.w * scale) + 'px';
                 el.style.fontSize = Math.round(base.f * scale) + 'px';
             } else if (el.classList.contains('marker-facility')) {
-                const base = iconLarge ? { w: 46, f: 38 } : { w: 30, f: 24 }; // 施設＝絵文字。fontSize が見た目サイズ
+                // 施設＝SVGアイコン（箱いっぱいに描く）。width/height がそのまま見た目サイズ（fontSize はSVGに効かないので設定しない）。
+                // 値は絵文字時代の fontSize（大38 / 通常24）を引き継ぎ、見た目の大きさを従来どおりに保つ。
+                const base = iconLarge ? { w: 38 } : { w: 24 };
                 // 施設は目印なので低ズームで大きく見せる：z13で2.5倍、z16で等倍、その間は段階的(線形)に縮める（z13以下は2.5倍／z16以上は等倍）。
                 const facMult = zoom <= 13 ? 2.5 : zoom >= 16 ? 1.0 : 2.5 - (zoom - 13) * 0.5;
                 const typeMult = facilitySizeMult(el.dataset.facType, zoom); // 公園・区の施設=等倍／他=低ズーム0.6→ズームイン等倍
                 el.style.width = el.style.height = Math.round(base.w * scale * facMult * typeMult) + 'px';
-                el.style.fontSize = Math.round(base.f * scale * facMult * typeMult) + 'px';
             }
         });
     }
@@ -2786,7 +2792,7 @@
         const prevName = (document.getElementById('new-name') || {}).value || ''; // 集合住宅フォームで入力済みなら引き継ぐ
         const prevMemo = (document.getElementById('new-memo') || {}).value || '';
         const picker = FACILITY_TYPES.map(t =>
-            `<button type="button" class="fac-type-btn" data-v="${escHtml(t.v)}" onclick="pickFacilityType(this)">${t.icon} ${escHtml(tr(t.v))}</button>`
+            `<button type="button" class="fac-type-btn" data-v="${escHtml(t.v)}" onclick="pickFacilityType(this)"><span class="fac-btn-ic" style="--fac-c:${t.color};">${t.icon}</span> ${escHtml(tr(t.v))}</button>`
         ).join('');
         container.innerHTML = `
             <div class="building-title">${tr('🏛 施設を新規登録')}</div>
@@ -3262,7 +3268,7 @@
             </div>
             <div class="vmh-sub">── 施設 ──</div>
             <div class="vmh-mk">
-              <div class="vmh-i vmh-full"><span class="vmh-chip vmh-ko vmh-em">🏪</span><span class="vmh-chip vmh-ko vmh-em">🏥</span>絵文字だけのマーク ＝ 目印の施設（訪問はしません）</div>
+              <div class="vmh-i vmh-full"><span class="vmh-chip vmh-ko"><span class="vmh-fac-ic" style="color:${facilityColor('コンビニ')};">${facilityIcon('コンビニ')}</span></span><span class="vmh-chip vmh-ko"><span class="vmh-fac-ic" style="color:${facilityColor('病院')};">${facilityIcon('病院')}</span></span>色つきの小さなマーク ＝ 目印の施設（訪問はしません）</div>
             </div>
         </div></details>`;
         // 戸建ての新規登録
@@ -5780,7 +5786,7 @@
                 popupHtml += createShugaViewHtml(items);
             } else if (firstItem.種別 === '施設') {
                 markerEl.className += ' marker-facility';
-                styleFacilityMarker(markerEl, firstItem.属性); // 絵文字（郵便局は〒赤太字）＋種類を保持（サイズ調整用）
+                styleFacilityMarker(markerEl, firstItem.属性); // SVGアイコン＋種類ごとの色。種類も保持（サイズ調整用）
                 popupHtml += createFacilityViewHtml(firstItem);
             } else {
                 styleKodateMarker(markerEl, firstItem);
@@ -5910,13 +5916,13 @@
 
     // 施設（目印になる建物）の詳細吹き出し。訪問結果・部屋・履歴は持たず、種類・住所・メモ・編集・削除のみ。
     function createFacilityViewHtml(item) {
-        const ic = facilityIcon(item.属性), lbl = facilityLabel(item.属性);
+        const ic = facilityIcon(item.属性), lbl = facilityLabel(item.属性), col = facilityColor(item.属性);
         const memoText = cleanMemo(item);
         const memoCls = memoText.trim() ? '' : ' memo-empty';
         return `
-            <div class="building-title">${ic} ${escHtml(item['建物名 / 世帯名'] || tr('施設'))}</div>
+            <div class="building-title"><span class="fac-ic fac-ic-lg" style="color:${col};">${ic}</span> ${escHtml(item['建物名 / 世帯名'] || tr('施設'))}</div>
             ${addrRowHtml(item)}
-            <div style="font-size:13px; color:#555; margin-bottom:6px;">${tr('種類:')} <b style="font-size:14px;">${ic} ${escHtml(tr(lbl))}</b></div>
+            <div style="font-size:13px; color:#555; margin-bottom:6px;">${tr('種類:')} <b style="font-size:14px;"><span class="fac-ic" style="color:${col};">${ic}</span> ${escHtml(tr(lbl))}</b></div>
             <div class="memo-section${memoCls}">
                 <label style="font-size:11px; font-weight:bold;">${tr('メモ')}</label>
                 <textarea id="memo-${item.rowNumber}" rows="1" style="width:100%; font-size:11px;" readonly onpointerdown="this.removeAttribute('readonly')">${escHtml(memoText)}</textarea>
@@ -5939,7 +5945,7 @@
         const marker = currentMarkers.find(m => m._rowNumber === rowNumber);
         const popup = marker ? marker.getPopup() : null;
         if (item && popup) {
-            if (marker.getElement()) styleFacilityMarker(marker.getElement(), item.属性); // 種類変更時はマーカー（絵文字・郵便局の赤）も更新
+            if (marker.getElement()) styleFacilityMarker(marker.getElement(), item.属性); // 種類変更時はマーカー（SVGアイコン・色）も更新
             popup.setHTML('<div class="popup-content">' + createFacilityViewHtml(item) + '</div>');
             fillDerivedAddress(popup.getElement());
             bindTitleCopy(popup.getElement(), rowNumber);
@@ -5955,7 +5961,7 @@
         const container = btn.closest('.popup-content');
         if (!container) return;
         const picker = FACILITY_TYPES.map(t =>
-            `<button type="button" class="fac-type-btn${item.属性 === t.v ? ' fac-sel' : ''}" data-v="${escHtml(t.v)}" onclick="pickFacilityType(this)">${t.icon} ${escHtml(tr(t.v))}</button>`
+            `<button type="button" class="fac-type-btn${item.属性 === t.v ? ' fac-sel' : ''}" data-v="${escHtml(t.v)}" onclick="pickFacilityType(this)"><span class="fac-btn-ic" style="--fac-c:${t.color};">${t.icon}</span> ${escHtml(tr(t.v))}</button>`
         ).join('');
         container.innerHTML = `
             <div class="building-title">${tr('✏️ 施設情報を編集')}</div>
