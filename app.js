@@ -2478,6 +2478,8 @@
     // 新規登録フォーム生成
     function handleMapClickOrTap(lngLat, forcedType) {
         if (overviewMode) return; // 表示モード中は新規登録不可（閲覧・区域選択のみ）
+        // 誤操作防止：拡大していないと新規登録しない（広域タップは座標がずれるため。ピン移動と同じ 18 以上＝17.9は不可/18.1は可）
+        if (map.getZoom() < 18) { showToast('新規登録は地図を拡大してから行ってください', false, true); return; }
         // 訪問地域の外（他の区・県）への新規登録は種別・ロールを問わず不可
         if (!withinVisitRegion(parseFloat(lngLat.lng), parseFloat(lngLat.lat))) {
             showToast('訪問地域の外には登録できません', true);
