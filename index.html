@@ -1,234 +1,78 @@
-﻿<!DOCTYPE html>
-<html>
+<!DOCTYPE html>
+<html lang="ja">
 <head>
-    <meta charset="utf-8">
-    <!-- CSP(段階的): connect-src で情報持ち出し(XSS時のトークン外部送信)を遮断、object-src/base-uri を厳格化。
-         script-src は 'unsafe-inline'/'unsafe-eval' を当面維持(既存のインラインハンドラ・互換チェッカーの eval 用)＝既存機能はそのまま・低リスク。
-         ※GitHub Pages はレスポンスヘッダ不可のため <meta> で付与。<meta> では仕様上 frame-ancestors と Report-Only は無効。
-         許可ドメインは監査で補完済み(GASの302先 script.googleusercontent.com / 国土地理院 / Mapbox tiles・worker / Firebase auth)。 -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://api.mapbox.com https://www.gstatic.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://api.mapbox.com; img-src 'self' data: blob: https://*.mapbox.com; font-src 'self' data:; connect-src 'self' https://script.google.com https://script.googleusercontent.com https://msearch.gsi.go.jp https://api.mapbox.com https://events.mapbox.com https://*.tiles.mapbox.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://*.firebaseapp.com; worker-src 'self' blob:; frame-src https://*.firebaseapp.com https://accounts.google.com https://apis.google.com; manifest-src 'self'; form-action 'self'; object-src 'none'; base-uri 'none'">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>s.k.visit-map</title>
-    <link rel="icon" type="image/png" href="icon-192.png">
-    <!-- ホーム画面アプリ(PWA)表示: 名前=s.k.visit-map / アイコン / 全画面(standalone)。Chrome で「アプリ(WebAPK)としてインストール」させ、毎回の「Chromeで開く？」確認を出さない(専用ウィンドウ起動)には fetchハンドラ付き Service Worker が必須。ただしキャッシュ干渉を避けるため sw.js は何もキャッシュしないネットワーク専用にしている -->
-    <link rel="manifest" href="manifest.webmanifest">
-    <meta name="theme-color" content="#ffffff">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="s.k.visit-map">
-    <link rel="apple-touch-icon" href="apple-touch-icon.png">
-    <script>
-    /* Chrome の「アプリとしてインストール」に必要な最小 Service Worker を登録（sw.js は何もキャッシュしない）。
-       古い端末でも壊れないよう ES5 文法のみ・失敗は握りつぶす。 */
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', function () {
-            navigator.serviceWorker.register('sw.js').catch(function () {});
-        });
-    }
-    </script>
-    <script>
-    /* ── 互換チェッカー（古い端末のセーフティネット） ──
-       本体スクリプトは新しい文法(ES6+)のため、古いブラウザでは「読み込み自体」が失敗して真っ白になる。
-       このブロックだけは古いブラウザでも必ず動くよう ES5 文法のみで書き、
-       NGの端末では理由つきの案内を表示する（変更時もこのブロック内に新しい文法を持ち込まないこと）。
-       チェック: ①ES6文法（evalでしか事前判定できないため意図的に使用） ②WebGL2（Mapbox GL JS v3 の必須要件） */
-    (function () {
-        var reason = '';
-        try { eval('var __es6test = () => {};'); } catch (e) { reason = 'ブラウザのバージョンが古い'; }
-        if (!reason) {
-            try {
-                if (!document.createElement('canvas').getContext('webgl2')) reason = '地図機能（WebGL2）に非対応';
-            } catch (e2) { reason = '地図機能（WebGL2）に非対応'; }
-        }
-        var shown = false;
-        function showBlock(msg) {
-            if (shown) return;
-            shown = true;
-            var d = document.createElement('div');
-            d.setAttribute('style', 'position:fixed; top:0; left:0; right:0; bottom:0; z-index:99999; background:#faf7f2; color:#2c3e50; font-family:sans-serif; text-align:center; padding:60px 24px; box-sizing:border-box;');
-            d.innerHTML = '<div style="font-size:20px; font-weight:bold; margin-bottom:14px;">この端末ではご利用いただけません。</div>'
-                + '<div style="font-size:15px; margin-bottom:28px;">管理者に相談してください。</div>'
-                + '<div style="font-size:11px; color:#888; line-height:1.7; word-break:break-all;">理由: ' + msg + '<br>' + (navigator.userAgent || '') + '</div>';
-            (document.body || document.documentElement).appendChild(d);
-        }
-        function onReady(fn) {
-            if (document.body) { fn(); return; }
-            document.addEventListener('DOMContentLoaded', fn);
-        }
-        if (reason) {
-            onReady(function () { showBlock(reason); });
-        } else {
-            // 文法チェックを通過しても本体の読み込み（パース）に失敗する端末向けの保険。
-            // 同一オリジンのスクリプトの SyntaxError のみ拾う（CDN等の読込失敗はここでは対象外）。
-            window.addEventListener('error', function (ev) {
-                if (ev && ev.error && Object.prototype.toString.call(ev.error) === '[object SyntaxError]') {
-                    onReady(function () { showBlock('アプリの読み込みに失敗'); });
-                }
-            });
-        }
-    })();
-    </script>
-    <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
-    <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
-    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-    <link rel="stylesheet" href="app.css?v=20260812c">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>s.k.visit-map — 新しいURLへ移動します</title>
+<!-- ============================================================================
+     移行用リダイレクトページ（旧 GitHub Pages 用）
+
+     使い方: 切替日に、旧サイトの index.html を「このファイルの中身」で置き換える。
+             app.js / app.css は消さずに残しておく（切り戻しを速くするため）。
+     切り戻し: 旧 index.html のバックアップを書き戻すだけ（データは旧スプレッドシートに
+               そのまま残っているので、それだけで元通り動く）。
+
+     このページがやること:
+       1. ?area= / ?pin= / ?share= などのクエリを引き継いで新URLへ転送する
+          （印刷済みQRコード・共有リンクを無駄にしないため。ここが最重要）
+       2. 旧オリジンの Service Worker を解除する（古いPWAが残り続けるのを防ぐ）
+       3. JSが動かない端末でも <meta refresh> と手動リンクで着地できるようにする
+     ============================================================================ -->
+<meta http-equiv="refresh" content="3;url=https://sk-visit-map.sk-kuiki.workers.dev/">
+<style>
+  body { margin:0; background:#faf7f2; color:#2c3e50; font-family:sans-serif;
+         display:flex; align-items:center; justify-content:center; min-height:100vh; padding:24px; box-sizing:border-box; }
+  .box { text-align:center; max-width:520px; }
+  h1 { font-size:20px; margin:0 0 14px; }
+  p { font-size:15px; line-height:1.8; margin:0 0 18px; }
+  .spin { width:34px; height:34px; margin:0 auto 20px; border:4px solid #d8d0c4; border-top-color:#2c3e50;
+          border-radius:50%; animation:sp 1s linear infinite; }
+  @keyframes sp { to { transform:rotate(360deg); } }
+  a.btn { display:inline-block; padding:12px 26px; font-size:16px; border-radius:24px;
+          background:#2c3e50; color:#fff; text-decoration:none; }
+  .note { font-size:12px; color:#888; margin-top:22px; line-height:1.7; }
+</style>
 </head>
 <body>
-
-<div id="map"></div>
-
-<!-- 起動中ローディング（認証解決まで表示。既定で表示し、解決後に地図 or ログインへ） -->
-<div id="startup-overlay">
-    <div class="su-spin"></div>
-    <div class="su-text">アプリを起動中です…</div>
+<div class="box">
+  <div class="spin"></div>
+  <h1>新しいアドレスへ移動します</h1>
+  <p>このアプリは新しいアドレスに移りました。<br>自動で移動します。数秒待っても変わらない場合は、下のボタンを押してください。</p>
+  <p><a class="btn" id="go" href="https://sk-visit-map.sk-kuiki.workers.dev/">新しいアプリを開く</a></p>
+  <p class="note">
+    ホーム画面のアイコンから開いた方へ：<br>
+    移動先のページで、ブラウザのメニューから「ホーム画面に追加」をしてください。<br>
+    そのあと、この古いアイコンは削除してかまいません。<br>
+    ※初回はGoogleアカウントのサインインを一度だけ求められます。
+  </p>
 </div>
+<script>
+/* ES5 のみで書く（古い端末でも確実に転送するため。ここで新しい文法を使わないこと） */
+(function () {
+  var NEW_ORIGIN = 'https://sk-visit-map.sk-kuiki.workers.dev/';
 
-<!-- ログイン画面（認証がNGのときだけ表示。既定は hidden） -->
-<div id="login-overlay" class="hidden">
-    <h1>map tool</h1>
-    <p>続行するには Google アカウントでサインインしてください。<br>利用者登録されたアカウントのみ利用できます。</p>
-    <button id="google-btn" onclick="signInWithGoogle()" style="padding:12px 26px; font-size:16px; border-radius:24px; border:none; background:#2c3e50; color:#fff; cursor:pointer;">Google でサインイン</button>
-    <div id="login-note">サインインできない場合は、管理者に利用者登録を依頼してください。</div>
-</div>
+  // 旧オリジンの Service Worker を解除する（古いPWAが生き続けるのを防ぐ）。
+  // 失敗しても転送は続行する。
+  try {
+    if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+      navigator.serviceWorker.getRegistrations().then(function (rs) {
+        for (var i = 0; i < rs.length; i++) { try { rs[i].unregister(); } catch (e) {} }
+      }).catch(function () {});
+    }
+  } catch (e) {}
 
-<div id="scale-group" style="display:none;">
-    <button id="text-btn" onclick="toggleTextScale()">文字 小</button>
-    <button id="scale-btn">印 小</button>
-</div>
-<button id="signout-btn" onclick="toggleMenu()" style="display:none;">☰ メニュー</button>
-<!-- ピンチ等のズーム中だけ薄く出る縮尺（ズームレベル）表示 -->
-<div id="zoom-indicator"></div>
+  // クエリ（?area= / ?pin= / ?share=）とハッシュをそのまま引き継ぐ。
+  // 例: 旧 .../visit-map/?pin=123 → 新 https://.../?pin=123
+  var target = NEW_ORIGIN + (location.search || '') + (location.hash || '');
 
-<!-- メニューパネル（割り当て区域／管理機能／サインアウト。管理項目は admin のみ表示） -->
-<div id="menu-panel">
-    <!-- 区域3ボタンのアイコンは自作SVG（白シルエット）。定義は app.js の MI_ICON（唯一の正）で、起動時に .mi-slot へ注入される -->
-    <button class="menu-item cat-personal" onclick="closeMenu(); showPersonalAreas();"><span class="mi-slot" data-mi="personal"></span>個人の区域</button>
-    <button class="menu-item cat-group" onclick="closeMenu(); showGroupAreas();"><span class="mi-slot" data-mi="group"></span>グループの区域</button>
-    <button class="menu-item cat-whole" onclick="closeMenu(); showSharedAreas();"><span class="mi-slot" data-mi="whole"></span>合同の区域</button>
-    <button class="menu-item cat-help" onclick="closeMenu(); showHelp();">❓ アプリの使い方</button>
-    <!-- 分析メニューはアコーディオン（基本閉じ・全員に表示）。集合住宅一覧(小規模除く)を格納 -->
-    <details class="menu-acc acc-analysis">
-        <summary class="menu-section sec-analysis">分析メニュー<span class="ms-chev">▾</span></summary>
-        <button id="menu-shugalist" class="menu-item item-analysis" onclick="closeMenu(); showShugaList();">🏢 集合住宅一覧(小規模除く)</button>
-    </details>
-    <!-- 貸出/管理メニューはアコーディオン（基本閉じ）。権限（role-lend/role-manage）が無いと details ごと非表示 -->
-    <details class="menu-acc acc-lend">
-        <summary class="menu-section sec-lend">貸出メニュー<span class="ms-chev">▾</span></summary>
-        <button class="menu-item need-lend" onclick="closeMenu(); showLendScreen();">🗂 区域の貸出・返却</button>
-        <button class="menu-item need-lend pc-only" onclick="closeMenu(); showPrintView();">🖨 印刷用表示（PC/タブレット）</button>
-        <button class="menu-item need-lend" onclick="closeMenu(); showSiteQr();">📱 サイトのQRコード</button>
-    </details>
-    <details class="menu-acc acc-manage">
-        <summary class="menu-section sec-manage">管理メニュー<span class="ms-chev">▾</span></summary>
-        <button class="menu-item need-manage" onclick="closeMenu(); showRelendCandidates();">⟳ 再貸出候補</button>
-        <button class="menu-item need-manage" onclick="closeMenu(); showProgress();">📈 進捗モニタリング</button>
-        <button class="menu-item need-manage" onclick="closeMenu(); showUserAdmin();">👥 ユーザー管理</button>
-        <button class="menu-item need-sys" onclick="closeMenu(); showUsageStatus();">📊 利用状況※</button>
-        <button class="menu-item need-sys" onclick="closeMenu(); showTargetListView();">📄 区域操作履歴※</button>
-        <button class="menu-item need-sys" onclick="closeMenu(); showMaintenance();">🧹 メンテナンス※</button>
-        <button class="menu-item need-sys" onclick="closeMenu(); showCoverage();">📋 網羅状況※</button>
-    </details>
-    <button class="menu-item" onclick="closeMenu(); signOut();">🚪 サインアウト</button>
-</div>
+  var a = document.getElementById('go');
+  if (a) a.href = target;
 
-<!-- 汎用モーダル（割り当て区域一覧・貸出画面・ユーザー管理で共用） -->
-<div id="app-modal" onclick="if(event.target===this)closeAppModal()">
-    <div id="app-modal-card">
-        <div id="app-modal-head">
-            <span id="app-modal-title"></span>
-            <button onclick="closeAppModal()">✕</button>
-        </div>
-        <div id="app-modal-body"></div>
-    </div>
-</div>
-
-<!-- 情報コピー（戸建て=吹き出しの「戸建て」長押し／集合住宅=部屋番号長押しで開く）。Esc/✕/背景で閉じる -->
-<div id="info-copy-modal" onclick="if(event.target===this)closeInfoCopy()">
-    <div id="info-copy-card">
-        <div id="info-copy-head"><span>📋 情報コピー</span><button onclick="closeInfoCopy()">✕</button></div>
-        <div id="info-copy-body"></div>
-    </div>
-</div>
-
-<!-- 報告フォーム（戸建て/集合住宅で属性を「訪問拒否」「外国語」にする時に開く。氏名等の個人情報は別の管理シートへ送る）。Esc/✕/背景で閉じる -->
-<div id="report-form-modal" onclick="if(event.target===this)closeReportForm()">
-    <div id="report-form-card">
-        <div id="report-form-head"><span id="report-form-title">報告フォーム</span><button onclick="closeReportForm()">✕</button></div>
-        <div id="report-form-body"></div>
-    </div>
-</div>
-
-<!-- 印刷用表示（admin・PC/タブレット。赤枠内のピンを白黒のSVG図で表示）。Esc/✕で閉じる -->
-<div id="print-view"><div id="print-view-body"></div></div>
-
-<!-- 貸出プレビュー中の「戻る」ボタン（地図確認から貸出画面へ復帰）。✕は戻らずボタンだけ即消す＋closeAppModalで隠れたモーダルを正式に閉じる -->
-<div class="return-btn-wrap" id="lend-preview-back-wrap" style="display:none;">
-    <button id="lend-preview-back" onclick="backToLendScreen()">↩ 貸出画面に戻る</button>
-    <button class="return-close-btn" onclick="closeAppModal()" title="閉じる">✕</button>
-</div>
-<!-- （区域一覧に戻るバーは廃止：番地を表示したら住所選択遷移と同じ＝下部バーなし） -->
-<!-- 全体図の番地ラベルをタップして区域表示に入った直後だけ表示。タップで同じ全体図に戻る。60秒で自動消滅。✕は戻らずボタンだけ即消す -->
-<div class="return-btn-wrap" id="area-return-overview-wrap" style="display:none;">
-    <button id="area-return-overview" onclick="returnToAreaOverview()">↩ 区域選択に戻る</button>
-    <button class="return-close-btn" onclick="hideAreaReturnOverviewButton()" title="閉じる">✕</button>
-</div>
-<!-- 集合住宅一覧(小規模除く)の🗺で地図へ移動した直後だけ表示。タップで一覧へ（開閉状態を保持して復元）。60秒で自動消滅。✕は戻らずボタンだけ即消す -->
-<div class="return-btn-wrap" id="shl-return-btn-wrap" style="display:none;">
-    <button id="shl-return-btn" onclick="returnToShugaList()">↩ 集合住宅一覧に戻る</button>
-    <button class="return-close-btn" onclick="hideShlReturnButton()" title="閉じる">✕</button>
-</div>
-<!-- 汎用の戻る導線: 区域一覧(個人/グループ/合同)の「地図を表示」・利用状況/区域操作履歴の🗺で地図へ移動した直後だけ表示。
-     タップで登録された戻り先を再表示（showScreenReturnButton/returnFromScreenButton）。60秒で自動消滅。✕は戻らずボタンだけ即消す -->
-<div class="return-btn-wrap" id="screen-return-btn-wrap" style="display:none;">
-    <button id="screen-return-btn" onclick="returnFromScreenButton()"></button>
-    <button class="return-close-btn" onclick="hideScreenReturnButton()" title="閉じる">✕</button>
-</div>
-<!-- 区域オーバービュー（個人/グループ/全体利用の「全て表示」）中の操作バー。枠内ラベルで区域を選ぶか、✕で表示を終了 -->
-<div id="area-overview-bar" style="display:none;">
-    <button id="area-overview-icons" onclick="toggleOverviewIcons()">アイコンを非表示</button>
-    <!-- 個人/グループ/合同カード・利用状況詳細の「🗺 全区域マップ」から入ったときだけ表示（overviewReturnTo。enterAreaOverview が showOverviewBar 直前に代入・出し分け）。
-         表示文言は showOverviewBar が「↩ 戻る」に固定し、戻り先ラベルは title 属性に入れる（幅溢れ対策。この初期テキストは非表示中のプレースホルダー） -->
-    <button id="area-overview-return" style="display:none;" onclick="returnFromOverviewBar()">↩ 戻る</button>
-    <button id="area-overview-exit" onclick="exitAreaOverview()" aria-label="表示を終了">✕ 終了</button>
-</div>
-<button id="area-nav-btn" onclick="openAreaNav()" style="display:none;">🔍住所</button>
-
-<!-- 移動後に表示する地域名ラベル（常時表示・タップで枠/表示を消去） -->
-<div id="area-label" style="display:none;"></div>
-
-<!-- アイコンのフィルタ（右下「印」ボタン長押しで開く）。枠外タップ/Escで閉じる -->
-<div id="icon-filter-modal" onclick="if(event.target===this)closeIconFilter()">
-    <div id="icon-filter-card">
-        <div id="icon-filter-head">
-            <span class="ttl">🔻 アイコンのフィルタ</span>
-            <button onclick="closeIconFilter()">✕</button>
-        </div>
-        <div id="icon-filter-actions">
-            <button onclick="iconFilterSelectAll()">全選択</button>
-            <button onclick="iconFilterClearAll()">選択解除</button>
-        </div>
-        <div id="icon-filter-body"></div>
-    </div>
-</div>
-
-<!-- 住所で移動（地区→丁目→番地）。枠外タップで閉じる -->
-<div id="area-modal" onclick="if(event.target===this)closeAreaNav()">
-    <div id="area-modal-card">
-        <div id="area-modal-head">
-            <button id="area-back-btn">← 戻る</button>
-            <span id="area-modal-title">地区を選択</span>
-            <button id="area-view-toggle" onclick="toggleAreaView()">☰ 一覧</button>
-            <button id="area-close-btn" onclick="closeAreaNav()">✕</button>
-        </div>
-        <div id="area-modal-body"></div>
-        <button id="area-chome-toggle" onclick="toggleChomeOverlay()" style="display:none;">☐ 丁目</button>
-    </div>
-</div>
-
-<script src="qrcode.js?v=20260808a" defer></script> <!-- QR生成ライブラリ(56KB)。使用は操作時のみのため defer で起動時のパースブロックを回避（app.jsのトップレベルは未参照＝実行順逆転しても安全） -->
-<script src="app.js?v=20260812c"></script>
-
+  // 履歴を汚さない（戻るボタンでこのページに戻ってループしないよう replace を使う）
+  setTimeout(function () {
+    try { location.replace(target); } catch (e) { location.href = target; }
+  }, 400);
+})();
+</script>
 </body>
 </html>
